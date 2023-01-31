@@ -11,7 +11,7 @@ async fn main() {
 
     // 设置日志
     let (log_appender, _guard) =
-        tracing_appender::non_blocking(tracing_appender::rolling::never("log", "webhook-log"));
+        tracing_appender::non_blocking(tracing_appender::rolling::daily("log", "webhook-log"));
  
     Registry::default()
         .with(EnvFilter::from_default_env().add_directive(Level::DEBUG.into()))
