@@ -10,11 +10,8 @@ pub mod item_area_public;
 pub mod item_type;
 pub mod item_type_link;
 pub mod marker;
-pub mod marker_extra;
-pub mod marker_extra_punctuate;
 pub mod marker_item_link;
 pub mod marker_punctuate;
-pub mod oauth_client_details;
 pub mod sys_role;
 pub mod sys_user;
 pub mod sys_user_archive;
@@ -109,22 +106,6 @@ pub async fn register(db: DatabaseConnection) -> Result<(), Box<dyn std::error::
     db.execute(
         builder.build(
             Schema::new(builder)
-                .create_table_from_entity(marker_extra::Entity)
-                .if_not_exists(),
-        ),
-    )
-    .await?;
-    db.execute(
-        builder.build(
-            Schema::new(builder)
-                .create_table_from_entity(marker_extra_punctuate::Entity)
-                .if_not_exists(),
-        ),
-    )
-    .await?;
-    db.execute(
-        builder.build(
-            Schema::new(builder)
                 .create_table_from_entity(marker_item_link::Entity)
                 .if_not_exists(),
         ),
@@ -134,14 +115,6 @@ pub async fn register(db: DatabaseConnection) -> Result<(), Box<dyn std::error::
         builder.build(
             Schema::new(builder)
                 .create_table_from_entity(marker_punctuate::Entity)
-                .if_not_exists(),
-        ),
-    )
-    .await?;
-    db.execute(
-        builder.build(
-            Schema::new(builder)
-                .create_table_from_entity(oauth_client_details::Entity)
                 .if_not_exists(),
         ),
     )
