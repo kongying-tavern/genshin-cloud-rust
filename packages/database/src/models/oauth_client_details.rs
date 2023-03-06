@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "sys_user", schema_name = "genshin_map")]
+#[sea_orm(table_name = "oauth_client_details", schema_name = "genshin_map")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -14,12 +14,16 @@ pub struct Model {
     pub update_time: Option<DateTime>,
     pub del_flag: i16,
 
-    pub username: String,
-    pub password: String,
-    pub nickname: Option<String>,
-    pub qq: Option<String>,
-    pub phone: Option<String>,
-    pub logo: Option<String>,
+    pub client_id: String,
+    pub client_secret: String,
+    pub scope: Option<String>,
+    pub authorized_grant_types: Option<String>,
+    pub web_server_redirect_uri: Option<String>,
+    pub authorities: Option<String>,
+    pub access_token_validity: Option<i32>,
+    pub refresh_token_validity: Option<i32>,
+    pub additional_information: Option<String>,
+    pub auto_approve: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

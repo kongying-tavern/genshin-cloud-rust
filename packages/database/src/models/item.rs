@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "sys_user", schema_name = "genshin_map")]
+#[sea_orm(table_name = "item", schema_name = "genshin_map")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -14,12 +14,17 @@ pub struct Model {
     pub update_time: Option<DateTime>,
     pub del_flag: i16,
 
-    pub username: String,
-    pub password: String,
-    pub nickname: Option<String>,
-    pub qq: Option<String>,
-    pub phone: Option<String>,
-    pub logo: Option<String>,
+    pub name: String,
+    pub area_id: i64,
+    pub default_refresh_time: i64,
+    pub default_content: Option<String>,
+    pub default_count: i32,
+    pub icon_tag: String,
+    pub icon_style_type: i32,
+    pub hidden_flag: i32,
+    pub sort_index: i32,
+    pub special_flag: Option<i32>,
+    pub sync_tag: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

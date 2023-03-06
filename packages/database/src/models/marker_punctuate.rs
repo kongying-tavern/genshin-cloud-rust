@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "marker", schema_name = "genshin_map")]
+#[sea_orm(table_name = "marker_punctuate", schema_name = "genshin_map")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -14,17 +14,22 @@ pub struct Model {
     pub update_time: Option<DateTime>,
     pub del_flag: i16,
 
-    pub marker_stamp: Option<String>,
+    pub punctuate_id: i64,
+    pub original_marker_id: Option<i64>,
     pub marker_title: Option<String>,
+    pub item_list: String,
     pub position: String,
     pub content: String,
     pub picture: Option<String>,
     pub marker_creator_id: i64,
     pub picture_creator_id: Option<i64>,
     pub video_path: Option<String>,
+    pub author: i64,
+    pub status: i32,
+    pub audit_remark: Option<String>,
+    pub method_type: i32,
     pub refresh_time: i64,
     pub hidden_flag: i32,
-    pub sync_tag: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

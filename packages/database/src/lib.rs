@@ -3,7 +3,8 @@ pub mod models;
 use log::info;
 use std::time::Duration;
 
-use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, Schema, Statement};
+use models::register;
+use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
 pub struct DatabaseNetworkConfig {
     pub host: String,
@@ -29,34 +30,7 @@ pub async fn init(
         .sqlx_logging_level(log::LevelFilter::Trace);
     let db = Database::connect(opt).await?;
 
-    let builder = db.get_database_backend();
-
-    info!(
-        "{:?}",
-        db.execute(Statement::from_string(
-            sea_orm::DatabaseBackend::Postgres,
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'genshin_map';"
-                .to_owned(),
-        ))
-        .await?
-    );
-
-    db.execute(
-        builder.build(
-            Schema::new(builder)
-                .create_table_from_entity(models::sys_user::Entity)
-                .if_not_exists(),
-        ),
-    )
-    .await?;
-    db.execute(
-        builder.build(
-            Schema::new(builder)
-                .create_table_from_entity(models::marker::Entity)
-                .if_not_exists(),
-        ),
-    )
-    .await?;
+    register(db.clone()).await?;
 
     info!("Database is ready");
     Ok(Box::new(db))
