@@ -1,0 +1,26 @@
+FROM rust:latest as stage-deps
+
+RUN cargo new --name _router /home/packages/router
+COPY ./packages/router/Cargo.toml /home/packages/router/Cargo.toml
+RUN cargo new --name _database /home/packages/database
+COPY ./packages/database/Cargo.toml /home/packages/database/Cargo.toml
+RUN cargo new --name _functions /home/packages/functions
+COPY ./packages/functions/Cargo.toml /home/packages/functions/Cargo.toml
+COPY ./Cargo.toml /home/Cargo.toml
+
+FROM stage-deps as stage-server-build1
+
+WORKDIR /home
+RUN cargo build --package _router --release
+
+RUN rm -r /home/packages
+COPY ./packages /home/packages
+WORKDIR /home/packages/router
+RUN cargo build --release
+
+FROM ubuntu:22.10 as stage-server-build2
+
+COPY --from=stage-server-build1 /home/target/release/_router /home/a
+WORKDIR /home
+ENTRYPOINT [ "./a" ]
+EXPOSE 80

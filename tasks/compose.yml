@@ -1,0 +1,34 @@
+version: '3'
+
+volumes:
+  genshin-cloud-db:
+
+services:
+  dynamic:
+    build:
+      context: ../
+      dockerfile: ./tasks/dockerfile
+    expose:
+      - 80
+    env_file:
+      - ../.env
+    networks:
+      - backend
+    restart: always
+    depends_on:
+      - database
+  database:
+    image: postgres:latest
+    expose:
+      - 5432
+    volumes:
+      - genshin-cloud-db:/var/lib/mysql
+    env_file:
+      - ../.env
+    networks:
+      - backend
+    restart: always
+
+networks:
+  backend:
+    driver: bridge

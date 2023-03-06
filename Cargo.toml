@@ -1,26 +1,4 @@
 [workspace]
 members = [
-    "api_system",
-    "api_base"
+  "packages/*",
 ]
-
-[workspace.dependencies]
-tokio = { version = "1", features = ["full"] }
-axum = "0.6"
-tower-http = { version = "0.3", features = ["trace"] }
-
-log = "0.4"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing-appender = "0.2"
-
-state = "0.5"
-# rbatis序列化框架及依赖
-serde = { version = "1", features = ["derive"] }
-rbs = { version = "0.1"}
-# rbatis数据库ORM框架
-rbatis = { version = "4.0"}
-# rbatis数据库驱动
-# rbdc-sqlite = { version = "0.1" }
-# rbdc-mysql={ version="0.1"}
-rbdc-pg = { version="0.1" }
