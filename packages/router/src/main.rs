@@ -4,7 +4,7 @@ use log::info;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
-use _functions::query_all_users;
+use _functions::query_all_positions;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,14 +17,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(80);
 
-    let db_conn = _database::init(_database::DatabaseConfig::PostgreSQL({
-        _database::DatabaseNetworkConfig {
-            host: "localhost".into(),
-            port: 5432,
-            username: std::env::var("POSTGRES_USER").unwrap_or("postgres".into()),
-            password: std::env::var("POSTGRES_PASSWORD").unwrap_or("root".into()),
-        }
-    }))
+    let db_conn = _database::init(_database::DatabaseNetworkConfig {
+        host: "localhost".into(),
+        port: 5432,
+        username: std::env::var("POSTGRES_USER").unwrap_or("genshin_map".into()),
+        password: std::env::var("POSTGRES_PASSWORD").unwrap_or("root".into()),
+    })
     .await?;
 
     let middleware_stack = ServiceBuilder::new()
@@ -36,10 +34,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/test",
             get(|| async {
-                query_all_users(db_conn)
-                    .await
-                    .ok()
-                    .unwrap_or("Failed to get data".into())
+                match query_all_positions(db_conn).await {
+                    Ok(res) => res,
+                    Err(e) => format!("{:?}", e),
+                }
             }),
         )
         .layer(middleware_stack);

@@ -1,6 +1,5 @@
 pub mod models;
 
-use anyhow::Context;
 use log::info;
 use std::time::Duration;
 
@@ -13,78 +12,13 @@ pub struct DatabaseNetworkConfig {
     pub password: String,
 }
 
-pub enum DatabaseLocalConfig {
-    FilePath(Box<std::path::Path>),
-    InMemory,
-}
-
-pub enum DatabaseConfig {
-    MySQL(DatabaseNetworkConfig),
-    SQLite(DatabaseLocalConfig),
-    PostgreSQL(DatabaseNetworkConfig),
-}
-
 pub async fn init(
-    config: DatabaseConfig,
+    config: DatabaseNetworkConfig,
 ) -> Result<Box<DatabaseConnection>, Box<dyn std::error::Error>> {
-    {
-        match &config {
-            DatabaseConfig::MySQL(config) => {
-                let db = Database::connect(format!(
-                    "mysql://{}:{}@{}:{}",
-                    config.username, config.password, config.host, config.port
-                ))
-                .await?;
-                db.execute(Statement::from_string(
-                    db.get_database_backend(),
-                    format!(
-                        r#"CREATE DATABASE IF NOT EXISTS genshin_map DEFAULT CHARACTER SET utf8mb4;"#
-                    ),
-                ))
-                .await?;
-            }
-            DatabaseConfig::PostgreSQL(config) => {
-                let db = Database::connect(format!(
-                    "postgres://{}:{}@{}:{}",
-                    config.username, config.password, config.host, config.port
-                ))
-                .await?;
-                db.execute(Statement::from_string(
-                    db.get_database_backend(),
-                    format!(
-                        r#"CREATE DATABASE IF NOT EXISTS genshin_map DEFAULT CHARACTER SET utf8mb4;"#
-                    ),
-                ))
-                .await?;
-            }
-            DatabaseConfig::SQLite(_) => {}
-        };
-    }
-
-    let mut opt = ConnectOptions::new(match &config {
-        DatabaseConfig::MySQL(config) => {
-            format!(
-                "mysql://{}:{}@{}:{}/genshin_map",
-                config.username, config.password, config.host, config.port
-            )
-        }
-        DatabaseConfig::PostgreSQL(config) => {
-            format!(
-                "postgres://{}:{}@{}:{}/genshin_map",
-                config.username, config.password, config.host, config.port
-            )
-        }
-        DatabaseConfig::SQLite(config) => match config {
-            DatabaseLocalConfig::FilePath(path) => {
-                format!(
-                    "sqlite:///{}",
-                    path.to_str()
-                        .context("Failed to convert database file path to string")?
-                )
-            }
-            DatabaseLocalConfig::InMemory => "sqlite::memory:".into(),
-        },
-    });
+    let mut opt = ConnectOptions::new(format!(
+        "postgres://{}:{}@{}:{}/kongyin",
+        config.username, config.password, config.host, config.port
+    ));
     opt.max_connections(100)
         .min_connections(5)
         .connect_timeout(Duration::from_secs(8))
@@ -97,10 +31,28 @@ pub async fn init(
 
     let builder = db.get_database_backend();
 
+    info!(
+        "{:?}",
+        db.execute(Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'genshin_map';"
+                .to_owned(),
+        ))
+        .await?
+    );
+
     db.execute(
         builder.build(
             Schema::new(builder)
                 .create_table_from_entity(models::sys_user::Entity)
+                .if_not_exists(),
+        ),
+    )
+    .await?;
+    db.execute(
+        builder.build(
+            Schema::new(builder)
+                .create_table_from_entity(models::marker::Entity)
                 .if_not_exists(),
         ),
     )
