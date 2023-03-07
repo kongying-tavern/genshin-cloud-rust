@@ -2,6 +2,7 @@ mod routes;
 
 use std::sync::Arc;
 
+use anyhow::Result;
 use axum::Extension;
 use hyper::server::Server;
 use log::info;
@@ -12,7 +13,7 @@ pub struct SharedDatabaseConnection {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

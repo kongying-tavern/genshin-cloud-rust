@@ -1,3 +1,4 @@
+use anyhow::Result;
 use sea_orm::{ConnectionTrait, DatabaseConnection, Schema};
 
 pub mod area;
@@ -20,7 +21,7 @@ pub mod tag;
 pub mod tag_type;
 pub mod tag_type_link;
 
-pub async fn register(db: DatabaseConnection) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn register(db: DatabaseConnection) -> Result<()> {
     let builder = db.get_database_backend();
 
     db.execute(
