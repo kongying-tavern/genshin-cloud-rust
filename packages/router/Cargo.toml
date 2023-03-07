@@ -28,3 +28,7 @@ url = "^2"
 [dependencies.tower-http]
 features = ["fs", "trace", "compression-gzip"]
 version = "^0.3"
+
+[dependencies.sea-orm]
+features = ["sqlx-postgres", "runtime-tokio-rustls", "with-uuid", "with-chrono", "with-json"]
+version = "^0.11"

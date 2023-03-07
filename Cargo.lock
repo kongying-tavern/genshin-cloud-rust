@@ -56,6 +56,7 @@ dependencies = [
  "futures",
  "hyper",
  "log",
+ "sea-orm",
  "serde",
  "serde_json",
  "tokio",
