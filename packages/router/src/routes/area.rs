@@ -35,10 +35,12 @@ pub async fn register() -> Result<Router, Box<dyn std::error::Error>> {
         .route(
             "/get/list",
             post(
-                |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
+                |Extension(db): Extension<Arc<SharedDatabaseConnection>>,
                  Form(_params): Form<AreaGetForm>| async move {
                     // 列出地区，可根据父级地区id列出子地区列表
-                    ""
+                    _functions::functions::area::list_area(db.conn.clone())
+                        .await
+                        .unwrap_or("Error".into())
                 },
             ),
         )
