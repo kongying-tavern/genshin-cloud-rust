@@ -14,13 +14,15 @@ pub struct Model {
     pub update_time: Option<DateTime>,
     pub del_flag: i16,
 
-    pub username: String,
-    pub password: String,
-
-    pub nickname: Option<String>,
-    pub qq: Option<String>,
-    pub phone: Option<String>,
-    pub logo: Option<String>,
+    pub name: String,
+    pub code: Option<String>,
+    pub content: Option<String>,
+    pub icon_tag: String,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub hidden_flag: i32,
+    pub sort_index: i32,
+    pub sync_tag: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
