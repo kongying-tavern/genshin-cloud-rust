@@ -1,10 +1,15 @@
-use axum::{routing::get, Router};
+mod routes;
+
+use std::sync::Arc;
+
+use axum::Extension;
 use hyper::server::Server;
 use log::info;
-use tower::ServiceBuilder;
-use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use sea_orm::DatabaseConnection;
 
-use _functions::query_all_positions;
+pub struct SharedDatabaseConnection {
+    pub conn: Box<DatabaseConnection>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,35 +22,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(80);
 
-    let db_conn = _database::init(_database::DatabaseNetworkConfig {
-        host: "localhost".into(),
-        port: 5432,
-        username: std::env::var("POSTGRES_USER").unwrap_or("genshin_map".into()),
-        password: std::env::var("POSTGRES_PASSWORD").unwrap_or("root".into()),
-    })
-    .await?;
-
-    let middleware_stack = ServiceBuilder::new()
-        .layer(TraceLayer::new_for_http())
-        .layer(CompressionLayer::new())
-        .into_inner();
-
-    let app = Router::new()
-        .route(
-            "/test",
-            get(|| async {
-                match query_all_positions(db_conn).await {
-                    Ok(res) => res,
-                    Err(e) => format!("{:?}", e),
-                }
-            }),
-        )
-        .layer(middleware_stack);
-
     info!("Site will run on port {}", port);
 
     Server::bind(&format!("0.0.0.0:{}", port).parse()?)
-        .serve(app.into_make_service())
+        .serve(
+            routes::register()
+                .await?
+                .layer(Extension(Arc::new(SharedDatabaseConnection {
+                    conn: _database::init(_database::DatabaseNetworkConfig {
+                        host: std::env::var("POSTGRES_HOST").unwrap_or("localhost".into()),
+                        port: std::env::var("POSTGRES_PORT")
+                            .map(|str| str.parse::<u16>().unwrap())
+                            .unwrap_or(5432),
+                        username: std::env::var("POSTGRES_USER").unwrap_or("genshin_map".into()),
+                        password: std::env::var("POSTGRES_PASSWORD").unwrap_or("root".into()),
+                    })
+                    .await?,
+                })))
+                .into_make_service(),
+        )
         .await?;
 
     Ok(())
