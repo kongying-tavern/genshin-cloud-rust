@@ -1,5 +1,6 @@
 pub mod models;
 
+use anyhow::Result;
 use log::info;
 use std::time::Duration;
 
@@ -13,9 +14,7 @@ pub struct DatabaseNetworkConfig {
     pub password: String,
 }
 
-pub async fn init(
-    config: DatabaseNetworkConfig,
-) -> Result<Box<DatabaseConnection>, Box<dyn std::error::Error>> {
+pub async fn init(config: DatabaseNetworkConfig) -> Result<Box<DatabaseConnection>> {
     let mut opt = ConnectOptions::new(format!(
         "postgres://{}:{}@{}:{}/kongyin",
         config.username, config.password, config.host, config.port

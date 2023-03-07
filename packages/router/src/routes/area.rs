@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Result;
 use axum::{
     extract::Path,
     routing::{delete, post, put},
@@ -30,7 +31,7 @@ pub struct AreaGetForm {
 }
 
 // 地区 API
-pub async fn register() -> Result<Router, Box<dyn std::error::Error>> {
+pub async fn register() -> Result<Router> {
     let router = Router::new()
         .route(
             "/get/list",
