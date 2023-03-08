@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 图标 ID 列表
     pub iconIdList: Option<Vec<i64>>,
     // 创建者 ID
@@ -15,7 +15,7 @@ pub struct DTO {
     pub size: Option<i64>,
 }
 
-impl DTO {
+impl Schema {
     #[allow(dead_code)]
     fn default() -> Self {
         Self {

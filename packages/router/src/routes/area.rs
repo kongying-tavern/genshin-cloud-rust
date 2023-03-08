@@ -10,19 +10,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::SharedDatabaseConnection;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AreaDto {
-    pub name: String,
-    pub code: Option<String>,
-    pub content: Option<String>,
-    pub icon_tag: String,
-    pub parent_id: i64,
-    pub is_final: bool,
-    pub hidden_flag: i32,
-    pub sort_index: i32,
-    pub sync_tag: Option<String>,
-}
+use _functions::schemas::area::Schema as AreaSchema;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[allow(non_snake_case)]
@@ -62,7 +50,7 @@ pub async fn register() -> Result<Router> {
             "/add",
             put(
                 |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
-                 Json(frm): Json<AreaDto>| async move {
+                 Json(frm): Json<AreaSchema>| async move {
                     // 新增地区，返回新增地区ID
                     format!("{:?}", frm)
                 },
@@ -72,7 +60,7 @@ pub async fn register() -> Result<Router> {
             "/",
             post(
                 |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
-                 Json(frm): Json<AreaDto>| async move {
+                 Json(frm): Json<AreaSchema>| async move {
                     // 修改地区
                     format!("{:?}", frm)
                 },

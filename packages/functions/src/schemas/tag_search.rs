@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 标签名列表
     pub tagList: Option<Vec<String>>,
     // 图标标签分类列表
@@ -13,7 +13,7 @@ pub struct DTO {
     pub size: Option<i64>,
 }
 
-impl DTO {
+impl Schema {
     #[allow(dead_code)]
     fn default() -> Self {
         Self {

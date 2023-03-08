@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 路线名称的模糊搜索字段
     pub namePart: Option<String>,
     // 创建人昵称的模糊搜索字段，不能与创建人 ID 字段共存
@@ -15,7 +15,7 @@ pub struct DTO {
     pub size: Option<i64>,
 }
 
-impl DTO {
+impl Schema {
     #[allow(dead_code)]
     fn default() -> Self {
         Self {

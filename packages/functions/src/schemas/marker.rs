@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 乐观锁，修改次数
     pub version: Option<i64>,
     // 点位 ID
@@ -12,7 +12,7 @@ pub struct DTO {
     // 点位坐标
     pub position: Option<String>,
     // 点位物品列表
-    pub itemList: Option<Vec<super::marker_item_link::DTO>>,
+    pub itemList: Option<Vec<super::marker_item_link::Schema>>,
     // 点位说明
     pub content: Option<String>,
     // 点位图片
