@@ -14,16 +14,3 @@ pub struct Schema {
     // 数据等级，即 hidden_flag 范围
     pub hiddenFlagList: Option<Vec<i32>>,
 }
-
-impl Schema {
-    #[allow(dead_code)]
-    fn default() -> Self {
-        Self {
-            typeIdList: None,
-            areaIdList: None,
-            current: Some(0),
-            size: Some(10),
-            hiddenFlagList: None,
-        }
-    }
-}

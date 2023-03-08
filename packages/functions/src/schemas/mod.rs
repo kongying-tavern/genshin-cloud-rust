@@ -11,6 +11,8 @@ pub mod item_type;
 pub mod marker;
 pub mod marker_item_link;
 pub mod marker_punctuate;
+pub mod marker_search;
+pub mod punctuate_search;
 pub mod route;
 pub mod route_search;
 pub mod score_stat;

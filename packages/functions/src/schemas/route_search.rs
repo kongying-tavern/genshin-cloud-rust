@@ -14,16 +14,3 @@ pub struct Schema {
     // 每页大小，默认为 10
     pub size: Option<i64>,
 }
-
-impl Schema {
-    #[allow(dead_code)]
-    fn default() -> Self {
-        Self {
-            namePart: None,
-            creatorId: None,
-            creatorNicknamePart: None,
-            current: Some(0),
-            size: Some(10),
-        }
-    }
-}
