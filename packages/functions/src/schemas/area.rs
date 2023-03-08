@@ -23,6 +23,6 @@ pub struct Schema {
     pub hiddenFlag: Option<i32>,
     // 地区排序
     pub sortIndex: Option<i32>,
-    // 特殊物品标记
+    // 特殊物品标记，低位第 1 位为 1 时则逻辑删除
     pub specialFlag: Option<i32>,
 }

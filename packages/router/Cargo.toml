@@ -9,7 +9,6 @@ _database = {path = "../database", version = "^0"}
 _functions = {path = "../functions", version = "^0"}
 
 anyhow = "^1"
-axum = {version = "^0.6", features = ["query"]}
 base64 = "^0.21"
 chrono = "^0.4"
 clap = {version = "^3", features = ["derive"]}
@@ -24,6 +23,10 @@ tower = {version = "^0.4", features = ["make"]}
 tracing = "^0.1"
 tracing-subscriber = "^0.3"
 url = "^2"
+
+[dependencies.axum]
+features = ["query", "headers", "multipart"]
+version = "^0.6"
 
 [dependencies.tower-http]
 features = ["fs", "trace", "compression-gzip"]
