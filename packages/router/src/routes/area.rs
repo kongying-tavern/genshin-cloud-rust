@@ -13,7 +13,7 @@ use _functions::{
     schemas::{area::Schema as AreaSchema, area_search::Schema as AreaSearchSchema},
 };
 
-// 地区 API
+/// 地区 API
 pub async fn register() -> Result<Router> {
     let router = Router::new()
         .route(

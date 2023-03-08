@@ -12,15 +12,3 @@ pub struct Schema {
     // 记录类型，不传时默认查询全部数据
     pub id: Option<Vec<i32>>,
 }
-
-impl Schema {
-    #[allow(dead_code)]
-    fn default() -> Self {
-        Self {
-            current: Some(0),
-            size: Some(10),
-            r#type: None,
-            id: Some(vec![]),
-        }
-    }
-}
