@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 末端物品类型 ID 列表
     pub typeIdList: Option<Vec<i64>>,
     // 末端地区 ID 列表
@@ -15,7 +15,7 @@ pub struct DTO {
     pub hiddenFlagList: Option<Vec<i32>>,
 }
 
-impl DTO {
+impl Schema {
     #[allow(dead_code)]
     fn default() -> Self {
         Self {

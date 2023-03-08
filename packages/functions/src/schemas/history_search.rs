@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 当前页，从 0 开始
     pub current: Option<i64>,
     // 每页大小，默认为10
@@ -13,7 +13,7 @@ pub struct DTO {
     pub id: Option<Vec<i32>>,
 }
 
-impl DTO {
+impl Schema {
     #[allow(dead_code)]
     fn default() -> Self {
         Self {

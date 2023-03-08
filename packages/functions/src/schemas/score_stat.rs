@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
-pub struct DTO {
+pub struct Schema {
     // 统计 ID
     pub id: Option<i64>,
     // 统计范围
