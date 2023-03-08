@@ -4,19 +4,14 @@ use anyhow::Result;
 use axum::{
     extract::Path,
     routing::{delete, post, put},
-    Extension, Form, Json, Router,
+    Extension, Json, Router,
 };
-use log::info;
-use serde::{Deserialize, Serialize};
 
 use crate::SharedDatabaseConnection;
-use _functions::schemas::area::Schema as AreaSchema;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[allow(non_snake_case)]
-pub struct AreaGetForm {
-    pub userDataLevel: Option<String>,
-}
+use _functions::{
+    functions::{RequestData, DEFAULT_ERROR_JSON_MSG},
+    schemas::{area::Schema as AreaSchema, area_search::Schema as AreaSearchSchema},
+};
 
 // 地区 API
 pub async fn register() -> Result<Router> {
@@ -25,24 +20,33 @@ pub async fn register() -> Result<Router> {
             "/get/list",
             post(
                 |Extension(db): Extension<Arc<SharedDatabaseConnection>>,
-                 Form(_params): Form<AreaGetForm>| async move {
+                 Json(_frm): Json<AreaSearchSchema>| async move {
                     // 列出地区，可根据父级地区id列出子地区列表
-                    _functions::functions::area::list_area(db.conn.clone())
-                        .await
-                        .unwrap_or("Error".into())
+                    serde_json::to_string(&RequestData::new(
+                        _functions::functions::area::list_area(db.conn.clone()).await,
+                    ))
+                    .unwrap_or(DEFAULT_ERROR_JSON_MSG.into())
                 },
             ),
         )
         .route(
             "/get/:id",
             post(
-                |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
-                 Path(id): Path<String>,
-                 Form(params): Form<AreaGetForm>| async move {
+                |Extension(db): Extension<Arc<SharedDatabaseConnection>>,
+                 Path(id): Path<String>| async move {
                     // 获取单个地区信息
-                    info!("id: {}", id);
-                    info!("form: {:?}", params);
-                    id
+                    match id.parse::<i64>() {
+                        Ok(id) => {
+                            let area =
+                                _functions::functions::area::get_area(db.conn.clone(), id).await;
+                            serde_json::to_string(&RequestData::new(area))
+                                .unwrap_or(DEFAULT_ERROR_JSON_MSG.into())
+                        }
+                        Err(_) => serde_json::to_string(&RequestData::<()>::new(Err(
+                            anyhow::anyhow!("The parameter is not a number"),
+                        )))
+                        .unwrap_or(DEFAULT_ERROR_JSON_MSG.into()),
+                    }
                 },
             ),
         )

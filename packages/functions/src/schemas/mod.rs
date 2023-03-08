@@ -1,4 +1,5 @@
 pub mod area;
+pub mod area_search;
 pub mod history;
 pub mod history_search;
 pub mod icon;

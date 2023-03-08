@@ -27,7 +27,7 @@ pub struct Schema {
     pub sortIndex: Option<i32>,
     // 默认物品数量
     pub defaultCount: Option<i32>,
-    // 特殊物品标记
+    // 特殊物品标记，低位第 1 位为 1 时则逻辑删除
     pub specialFlag: Option<i32>,
     // 查询条件下物品总数
     pub count: Option<i32>,
