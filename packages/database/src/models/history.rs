@@ -6,12 +6,15 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-
+    #[sea_orm(version)]
     pub version: i64,
+    #[sea_orm(create_time)]
+    pub create_time: DateTime,
+    #[sea_orm(update_time)]
+    pub update_time: Option<DateTime>,
+
     pub creator_id: Option<i64>,
     pub updater_id: Option<i64>,
-    pub create_time: DateTime,
-    pub update_time: Option<DateTime>,
     pub del_flag: i16,
 
     pub content: String,
