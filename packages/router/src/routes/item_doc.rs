@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{routing::get, Extension, Router};
 
-use crate::SharedDatabaseConnection;
+use _functions::SharedDatabaseConnection;
 
 /// 公用物品 API
 pub async fn register() -> Result<Router> {

@@ -7,7 +7,7 @@ use axum::{
     Extension, Json, Router,
 };
 
-use crate::SharedDatabaseConnection;
+use _functions::SharedDatabaseConnection;
 use _functions::{
     functions::{RequestData, DEFAULT_ERROR_JSON_MSG},
     schemas::{area::Schema as AreaSchema, area_search::Schema as AreaSearchSchema},
@@ -23,7 +23,7 @@ pub async fn register() -> Result<Router> {
                  Json(_frm): Json<AreaSearchSchema>| async move {
                     // 列出地区，可根据父级地区id列出子地区列表
                     serde_json::to_string(&RequestData::new(
-                        _functions::functions::area::list_area(db.conn.clone()).await,
+                        _functions::functions::area::list_area(&db).await,
                     ))
                     .unwrap_or(DEFAULT_ERROR_JSON_MSG.into())
                 },
@@ -37,8 +37,7 @@ pub async fn register() -> Result<Router> {
                     // 获取单个地区信息
                     match id.parse::<i64>() {
                         Ok(id) => {
-                            let area =
-                                _functions::functions::area::get_area(db.conn.clone(), id).await;
+                            let area = _functions::functions::area::get_area(&db, id).await;
                             serde_json::to_string(&RequestData::new(area))
                                 .unwrap_or(DEFAULT_ERROR_JSON_MSG.into())
                         }

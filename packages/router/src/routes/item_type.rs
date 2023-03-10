@@ -7,8 +7,8 @@ use axum::{
     Extension, Json, Router,
 };
 
-use crate::SharedDatabaseConnection;
 use _functions::schemas::item_type::Schema as ItemTypeSchema;
+use _functions::SharedDatabaseConnection;
 
 /// 物品分类 API
 pub async fn register() -> Result<Router> {

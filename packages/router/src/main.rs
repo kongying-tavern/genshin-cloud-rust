@@ -6,11 +6,6 @@ use anyhow::Result;
 use axum::Extension;
 use hyper::server::Server;
 use log::info;
-use sea_orm::DatabaseConnection;
-
-pub struct SharedDatabaseConnection {
-    pub conn: Box<DatabaseConnection>,
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,7 +24,7 @@ async fn main() -> Result<()> {
         .serve(
             routes::register()
                 .await?
-                .layer(Extension(Arc::new(SharedDatabaseConnection {
+                .layer(Extension(Arc::new(_functions::SharedDatabaseConnection {
                     conn: _database::init(_database::DatabaseNetworkConfig {
                         host: std::env::var("POSTGRES_HOST").unwrap_or("localhost".into()),
                         port: std::env::var("POSTGRES_PORT")
@@ -39,6 +34,7 @@ async fn main() -> Result<()> {
                         password: std::env::var("POSTGRES_PASSWORD").unwrap_or("root".into()),
                     })
                     .await?,
+                    cache: _database::cache::new(),
                 })))
                 .into_make_service(),
         )

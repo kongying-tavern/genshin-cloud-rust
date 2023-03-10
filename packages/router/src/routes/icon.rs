@@ -7,8 +7,8 @@ use axum::{
     Extension, Json, Router,
 };
 
-use crate::SharedDatabaseConnection;
 use _functions::schemas::{icon::Schema as IconSchema, icon_search::Schema as IconSearchSchema};
+use _functions::SharedDatabaseConnection;
 
 /// 图标 API
 pub async fn register() -> Result<Router> {

@@ -8,10 +8,10 @@ use axum::{
 };
 
 use super::PageSearchParams;
-use crate::SharedDatabaseConnection;
 use _functions::schemas::{
     marker::Schema as MarkerSchema, marker_search::Schema as MarkerSearchSchema,
 };
+use _functions::SharedDatabaseConnection;
 
 /// 点位 API
 pub async fn register() -> Result<Router> {

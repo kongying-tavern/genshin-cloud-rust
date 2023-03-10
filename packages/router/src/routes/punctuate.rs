@@ -8,8 +8,8 @@ use axum::{
 };
 
 use super::PageSearchParams;
-use crate::SharedDatabaseConnection;
 use _functions::schemas::punctuate_search::Schema as PunctuateSearchSchema;
+use _functions::SharedDatabaseConnection;
 
 /// 打点 API
 pub async fn register() -> Result<Router> {
