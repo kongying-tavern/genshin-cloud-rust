@@ -4,8 +4,8 @@ use anyhow::Result;
 use axum::{extract::Query, routing::post, Extension, Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::SharedDatabaseConnection;
 use _functions::schemas::history_search::Schema as HistorySearchSchema;
+use _functions::SharedDatabaseConnection;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]

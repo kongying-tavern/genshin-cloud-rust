@@ -8,7 +8,7 @@ use axum::{
 };
 
 use super::PageSearchParams;
-use crate::SharedDatabaseConnection;
+use _functions::SharedDatabaseConnection;
 
 /// 公用物品 API
 pub async fn register() -> Result<Router> {

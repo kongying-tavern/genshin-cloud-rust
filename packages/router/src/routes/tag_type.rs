@@ -8,8 +8,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::SharedDatabaseConnection;
 use _functions::schemas::tag_type::Schema as TagTypeSchema;
+use _functions::SharedDatabaseConnection;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]
