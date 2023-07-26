@@ -11,7 +11,7 @@ _functions = { path = "../functions", version = "^0" }
 anyhow = "^1"
 base64 = "^0.21"
 chrono = "^0.4"
-clap = { version = "^3", features = ["derive"] }
+clap = { version = "^4", features = ["derive"] }
 env_logger = "^0.10"
 futures = { version = "^0.3", features = ["std"], default-features = false }
 hyper = { version = "^0.14", features = ["server", "http1"] }
