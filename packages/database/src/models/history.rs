@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "history", schema_name = "genshin_map")]
+#[sea_orm(table_name = "history")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,

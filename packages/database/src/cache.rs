@@ -33,26 +33,28 @@ pub struct CacheObject {
     pub tag_type_link: Cache<i64, TagTypeLink>,
 }
 
-pub fn new() -> CacheObject {
-    CacheObject {
-        area: Cache::new(10_000),
-        history: Cache::new(10_000),
-        icon: Cache::new(10_000),
-        icon_type: Cache::new(10_000),
-        icon_type_link: Cache::new(10_000),
-        item: Cache::new(10_000),
-        item_area_public: Cache::new(10_000),
-        item_type: Cache::new(10_000),
-        item_type_link: Cache::new(10_000),
-        marker: Cache::new(10_000),
-        marker_item_link: Cache::new(10_000),
-        marker_punctuate: Cache::new(10_000),
-        sys_role: Cache::new(10_000),
-        sys_user: Cache::new(10_000),
-        sys_user_archive: Cache::new(10_000),
-        sys_user_role_link: Cache::new(10_000),
-        tag: Cache::new(10_000),
-        tag_type: Cache::new(10_000),
-        tag_type_link: Cache::new(10_000),
+impl Default for CacheObject {
+    fn default() -> Self {
+        Self {
+            area: Cache::new(10_000),
+            history: Cache::new(10_000),
+            icon: Cache::new(10_000),
+            icon_type: Cache::new(10_000),
+            icon_type_link: Cache::new(10_000),
+            item: Cache::new(10_000),
+            item_area_public: Cache::new(10_000),
+            item_type: Cache::new(10_000),
+            item_type_link: Cache::new(10_000),
+            marker: Cache::new(10_000),
+            marker_item_link: Cache::new(10_000),
+            marker_punctuate: Cache::new(10_000),
+            sys_role: Cache::new(10_000),
+            sys_user: Cache::new(10_000),
+            sys_user_archive: Cache::new(10_000),
+            sys_user_role_link: Cache::new(10_000),
+            tag: Cache::new(10_000),
+            tag_type: Cache::new(10_000),
+            tag_type_link: Cache::new(10_000),
+        }
     }
 }
