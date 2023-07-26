@@ -1,40 +1,44 @@
 version: '3'
 
 volumes:
-  db:
+  db-dev:
+  build-cache:
 
 services:
   dynamic:
     build:
       context: ../
-      dockerfile: ./tasks/build.dockerfile
+      dockerfile: ./tasks/dev.dockerfile
     ports:
       - 80:80
+    volumes:
+      - ../packages/database:/home/packages/database
+      - ../packages/functions:/home/packages/functions
+      - ../packages/router:/home/packages/router
+      - build-cache:/home/target
     environment:
       - DB_HOST=database
       - DB_USERNAME=$DB_USERNAME
       - DB_PASSWORD=$DB_PASSWORD
       - DB_DATABASE=$DB_DATABASE
     networks:
-      - backend
-    restart: always
+      - backend-dev
     depends_on:
       - database
   database:
     image: mariadb:lts
-    expose:
-      - 3306
+    ports:
+      - 3306:3306
     volumes:
-      - db:/var/lib/mysql
+      - db-dev:/var/lib/mysql
     environment:
       - MARIADB_USER=$DB_USERNAME
       - MARIADB_PASSWORD=$DB_PASSWORD
       - MARIADB_DATABASE=$DB_DATABASE
       - MARIADB_RANDOM_ROOT_PASSWORD=yes
     networks:
-      - backend
-    restart: always
+      - backend-dev
 
 networks:
-  backend:
+  backend-dev:
     driver: bridge
