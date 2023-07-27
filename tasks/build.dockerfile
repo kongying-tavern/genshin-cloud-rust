@@ -10,6 +10,8 @@ RUN cargo new --lib --name _database /home/packages/database
 COPY ./packages/database/Cargo.toml /home/packages/database/Cargo.toml
 RUN cargo new --lib --name _functions /home/packages/functions
 COPY ./packages/functions/Cargo.toml /home/packages/functions/Cargo.toml
+RUN cargo new --name _utils /home/packages/utils
+COPY ./packages/utils/Cargo.toml /home/packages/utils/Cargo.toml
 RUN cargo new --name _router /home/packages/router
 COPY ./packages/router/Cargo.toml /home/packages/router/Cargo.toml
 

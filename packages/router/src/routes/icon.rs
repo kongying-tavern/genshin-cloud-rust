@@ -7,8 +7,8 @@ use axum::{
     Extension, Json, Router,
 };
 
-use _functions::schemas::{icon::Schema as IconSchema, icon_search::Schema as IconSearchSchema};
 use _functions::SharedDatabaseConnection;
+use _utils::schemas::{icon::Schema as IconSchema, icon_search::Schema as IconSearchSchema};
 
 /// 图标 API
 pub async fn register() -> Result<Router> {

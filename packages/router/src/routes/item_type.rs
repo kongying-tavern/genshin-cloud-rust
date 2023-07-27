@@ -7,8 +7,8 @@ use axum::{
     Extension, Json, Router,
 };
 
-use _functions::schemas::item_type::Schema as ItemTypeSchema;
 use _functions::SharedDatabaseConnection;
+use _utils::schemas::item_type::Schema as ItemTypeSchema;
 
 /// 物品分类 API
 pub async fn register() -> Result<Router> {

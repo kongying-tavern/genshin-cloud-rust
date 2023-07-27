@@ -7,11 +7,11 @@ use axum::{
     Extension, Json, Router,
 };
 
-use _functions::SharedDatabaseConnection;
 use _functions::{
     functions::{RequestData, DEFAULT_ERROR_JSON_MSG},
-    schemas::{area::Schema as AreaSchema, area_search::Schema as AreaSearchSchema},
+    SharedDatabaseConnection,
 };
+use _utils::schemas::{area::Schema as AreaSchema, area_search::Schema as AreaSearchSchema};
 
 /// 地区 API
 pub async fn register() -> Result<Router> {
