@@ -17,8 +17,6 @@ pub enum PunctuateMethod {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct Schema {
-    // 乐观锁，修改次数
-    pub version: Option<i64>,
     // 打点 ID
     pub punctuateId: Option<i64>,
     // 原有点位 ID

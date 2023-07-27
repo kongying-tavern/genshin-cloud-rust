@@ -8,8 +8,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use _functions::schemas::icon_type::Schema as IconTypeSchema;
 use _functions::SharedDatabaseConnection;
+use _utils::schemas::icon_type::Schema as IconTypeSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(non_snake_case)]

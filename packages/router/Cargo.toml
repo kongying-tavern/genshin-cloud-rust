@@ -5,8 +5,9 @@ name = "_router"
 version = "0.1.0"
 
 [dependencies]
-_database = { path = "../database", version = "^0" }
-_functions = { path = "../functions", version = "^0" }
+_database = { path = "../database", version = "*" }
+_functions = { path = "../functions", version = "*" }
+_utils = { path = "../utils", version = "*" }
 
 anyhow = "^1"
 base64 = "^0.21"

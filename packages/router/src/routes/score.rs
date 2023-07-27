@@ -3,8 +3,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::{routing::post, Extension, Json, Router};
 
-use _functions::schemas::score_stat::Schema as ScoreStatSchema;
 use _functions::SharedDatabaseConnection;
+use _utils::schemas::score_stat::Schema as ScoreStatSchema;
 
 /// 评分统计 API
 pub async fn register() -> Result<Router> {

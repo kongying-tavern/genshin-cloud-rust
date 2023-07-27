@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct Schema {
-    // 乐观锁，修改次数
-    pub version: Option<i64>,
     // 路线 ID
     pub id: Option<i64>,
     // 路线名称

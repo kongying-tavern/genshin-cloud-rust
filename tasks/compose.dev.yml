@@ -15,6 +15,7 @@ services:
       - ../packages/database:/home/packages/database
       - ../packages/functions:/home/packages/functions
       - ../packages/router:/home/packages/router
+      - ../packages/utils:/home/packages/utils
       - build-cache:/home/target
     environment:
       - DB_HOST=database

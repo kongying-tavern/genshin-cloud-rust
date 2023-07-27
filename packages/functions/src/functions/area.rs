@@ -1,8 +1,9 @@
 use anyhow::Result;
 use sea_orm::EntityTrait;
 
-use crate::{schemas::area::Schema as AreaSchema, SharedDatabaseConnection};
+use crate::SharedDatabaseConnection;
 use _database::models::area as Area;
+use _utils::schemas::area::Schema as AreaSchema;
 
 pub async fn list_area(db: &SharedDatabaseConnection) -> Result<Vec<AreaSchema>> {
     let mut res = Vec::<AreaSchema>::new();
@@ -12,8 +13,9 @@ pub async fn list_area(db: &SharedDatabaseConnection) -> Result<Vec<AreaSchema>>
             continue;
         }
         db.cache.area.insert(cc.id, cc.clone()).await;
+
+        todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
         res.push(AreaSchema {
-            version: Some(cc.version),
             name: Some(cc.name),
             areaId: Some(cc.id),
             code: cc.code,
@@ -37,8 +39,9 @@ pub async fn get_area(db: &SharedDatabaseConnection, id: i64) -> Result<AreaSche
             .area
             .get(&id)
             .ok_or(anyhow::anyhow!("Cache item has been deleted"))?;
+
+        todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
         return Ok(AreaSchema {
-            version: Some(res.version),
             name: Some(res.name),
             areaId: Some(res.id),
             code: res.code,
@@ -61,8 +64,8 @@ pub async fn get_area(db: &SharedDatabaseConnection, id: i64) -> Result<AreaSche
     }
 
     db.cache.area.insert(res.id, res.clone()).await;
+    todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
     Ok(AreaSchema {
-        version: Some(res.version),
         name: Some(res.name),
         areaId: Some(res.id),
         code: res.code,

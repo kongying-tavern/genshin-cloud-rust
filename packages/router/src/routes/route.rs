@@ -8,10 +8,8 @@ use axum::{
 };
 
 use super::PageSearchParams;
-use _functions::schemas::{
-    route::Schema as RouteSchema, route_search::Schema as RouteSearchSchema,
-};
 use _functions::SharedDatabaseConnection;
+use _utils::schemas::{route::Schema as RouteSchema, route_search::Schema as RouteSearchSchema};
 
 /// 路线 API
 pub async fn register() -> Result<Router> {

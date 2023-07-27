@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct Schema {
-    // 乐观锁，修改次数
-    pub version: Option<i64>,
     // 地区 ID
     pub areaId: Option<i64>,
     // 地区名称
@@ -25,4 +23,22 @@ pub struct Schema {
     pub sortIndex: Option<i32>,
     // 特殊物品标记，低位第 1 位为 1 时则逻辑删除
     pub specialFlag: Option<i32>,
+}
+
+// TODO - 完善所有 Schema 的初始化标签
+impl Default for Schema {
+    fn default() -> Self {
+        Self {
+            areaId: Default::default(),
+            name: Default::default(),
+            code: Default::default(),
+            content: Default::default(),
+            iconTag: Default::default(),
+            parentId: Default::default(),
+            isFinal: Default::default(),
+            hiddenFlag: Default::default(),
+            sortIndex: Default::default(),
+            specialFlag: Default::default(),
+        }
+    }
 }
