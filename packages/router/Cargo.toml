@@ -2,6 +2,7 @@
 authors = ["langyo <langyo.china@gmail.com>"]
 edition = "2021"
 name = "_router"
+publish = false
 version = "0.1.0"
 
 [dependencies]
