@@ -1,10 +1,9 @@
-pub mod cache;
 pub mod models;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
 use log::info;
-use std::{cell::Cell, time::Duration};
+use std::{cell::RefCell, time::Duration};
 use tokio::sync::Mutex;
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -34,7 +33,7 @@ pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
         .sqlx_logging_level(log::LevelFilter::Trace);
     let db = Database::connect(opt).await?;
 
-    register(db.clone()).await?;
+    register().await?;
 
     info!("Database is ready");
     DB_CONN.lock().await.replace(db);
@@ -43,6 +42,5 @@ pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
 }
 
 lazy_static! {
-    static ref DB_CONN: Mutex<Cell<DatabaseConnection>> = Default::default();
-    static ref DB_CACHE: Mutex<Cell<cache::CacheObject>> = Default::default();
+    pub static ref DB_CONN: Mutex<RefCell<DatabaseConnection>> = Default::default();
 }

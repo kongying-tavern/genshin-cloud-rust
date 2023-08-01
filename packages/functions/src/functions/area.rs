@@ -1,20 +1,36 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
+use std::cell::RefCell;
+use tokio::sync::Mutex;
+
+use moka::future::Cache;
 use sea_orm::EntityTrait;
 
-use crate::SharedDatabaseConnection;
-use _database::models::area as Area;
+use _database::{models::area::area as Area, DB_CONN};
 use _utils::schemas::area::Schema as AreaSchema;
 
-pub async fn list_area(db: &SharedDatabaseConnection) -> Result<Vec<AreaSchema>> {
+lazy_static! {
+    static ref CACHE_AREA: Mutex<RefCell<Cache<i64, Area::Model>>> =
+        Mutex::new(RefCell::new(Cache::new(1_000)));
+}
+
+pub async fn list_area() -> Result<Vec<AreaSchema>> {
+    let db = DB_CONN.lock().await.get_mut().clone();
+
     let mut res = Vec::<AreaSchema>::new();
 
-    for cc in Area::Entity::find().all(&*db.conn).await? {
+    for cc in Area::Entity::find().all(&db).await? {
         if cc.del_flag != 0 {
             continue;
         }
-        db.cache.area.insert(cc.id, cc.clone()).await;
+        CACHE_AREA
+            .lock()
+            .await
+            .get_mut()
+            .insert(cc.id, cc.clone())
+            .await;
 
-        todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
+        // TODO - 直接使用 AreaSchema 到 Area 自己的转换
         res.push(AreaSchema {
             name: Some(cc.name),
             areaId: Some(cc.id),
@@ -32,15 +48,18 @@ pub async fn list_area(db: &SharedDatabaseConnection) -> Result<Vec<AreaSchema>>
     Ok(res)
 }
 
-pub async fn get_area(db: &SharedDatabaseConnection, id: i64) -> Result<AreaSchema> {
-    if db.cache.area.contains_key(&id) {
-        let res = db
-            .cache
-            .area
+pub async fn get_area(id: i64) -> Result<AreaSchema> {
+    let db = DB_CONN.lock().await.get_mut().clone();
+
+    if CACHE_AREA.lock().await.get_mut().contains_key(&id) {
+        let res = CACHE_AREA
+            .lock()
+            .await
+            .get_mut()
             .get(&id)
             .ok_or(anyhow::anyhow!("Cache item has been deleted"))?;
 
-        todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
+        // TODO - 直接使用 AreaSchema 到 Area 自己的转换
         return Ok(AreaSchema {
             name: Some(res.name),
             areaId: Some(res.id),
@@ -56,15 +75,20 @@ pub async fn get_area(db: &SharedDatabaseConnection, id: i64) -> Result<AreaSche
     }
 
     let res = Area::Entity::find_by_id(id)
-        .one(&*db.conn)
+        .one(&db)
         .await?
         .ok_or(anyhow::anyhow!("Area not found"))?;
     if res.del_flag != 0 {
         return Err(anyhow::anyhow!("Area not found"));
     }
 
-    db.cache.area.insert(res.id, res.clone()).await;
-    todo!("直接使用 AreaSchema 到 Area 自己的转换，.into()");
+    CACHE_AREA
+        .lock()
+        .await
+        .get_mut()
+        .insert(res.id, res.clone())
+        .await;
+    // TODO - 直接使用 AreaSchema 到 Area 自己的转换
     Ok(AreaSchema {
         name: Some(res.name),
         areaId: Some(res.id),

@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type_link")]
+#[sea_orm(table_name = "sys_user")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -15,11 +15,15 @@ pub struct Model {
 
     pub creator_id: Option<i64>,
     pub updater_id: Option<i64>,
+    #[sea_orm(default_value = 0)]
     pub del_flag: i16,
 
-    pub type_id: i64,
-    pub icon_id: i64,
-    pub sync_tag: Option<String>,
+    pub username: String,
+    pub password: String,
+    pub nickname: Option<String>,
+    pub qq: Option<String>,
+    pub phone: Option<String>,
+    pub logo: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

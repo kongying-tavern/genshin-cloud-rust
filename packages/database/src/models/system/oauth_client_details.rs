@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "item_area_public")]
+#[sea_orm(table_name = "sys_role")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -15,9 +15,20 @@ pub struct Model {
 
     pub creator_id: Option<i64>,
     pub updater_id: Option<i64>,
+    #[sea_orm(default_value = 0)]
     pub del_flag: i16,
 
-    pub item_id: i64,
+    pub client_id: String,
+    pub client_secret: String,
+    pub scope: String,
+    pub authorized_grant_types: String,
+    pub web_server_redirect_uri: String,
+    pub authorities: String,
+
+    pub access_token_validity: i64,
+    pub refresh_token_validity: i64,
+    pub additional_information: String,
+    pub auto_approve: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
