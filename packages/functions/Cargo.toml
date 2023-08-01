@@ -11,12 +11,15 @@ _utils = { path = "../utils", version = "*" }
 
 anyhow = "^1"
 chrono = "^0.4"
+lazy_static = "*"
 env_logger = "^0.10"
 log = "^0.4"
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
 tokio = { version = "^1", features = ["macros"] }
 uuid = "^1"
+
+moka = { version = "^0.11", features = ["future"] }
 
 [dependencies.sea-orm]
 features = [

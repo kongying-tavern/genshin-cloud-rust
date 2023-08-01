@@ -1,10 +1,7 @@
-use std::sync::Arc;
-
 use anyhow::Result;
-use axum::{extract::Query, routing::post, Extension, Json, Router};
+use axum::{extract::Query, routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 
-use _functions::SharedDatabaseConnection;
 use _utils::schemas::history_search::Schema as HistorySearchSchema;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,23 +15,17 @@ pub async fn register() -> Result<Router> {
     let router = Router::new()
         .route(
             "/get/list",
-            post(
-                |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
-                 Json(_frm): Json<HistorySearchSchema>| async move {
-                    // 历史记录分页
-                    ""
-                },
-            ),
+            post(|Json(_frm): Json<HistorySearchSchema>| async move {
+                // 历史记录分页
+                ""
+            }),
         )
         .route(
             "/rollback",
-            post(
-                |Extension(_db): Extension<Arc<SharedDatabaseConnection>>,
-                 Query(_query): Query<RollbackQueryParams>| async move {
-                    // 回滚记录
-                    ""
-                },
-            ),
+            post(|Query(_query): Query<RollbackQueryParams>| async move {
+                // 回滚记录
+                ""
+            }),
         );
 
     Ok(router)
