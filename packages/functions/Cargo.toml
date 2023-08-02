@@ -23,10 +23,10 @@ moka = { version = "^0.11", features = ["future"] }
 
 [dependencies.sea-orm]
 features = [
-  "sqlx-postgres",
+  "sqlx-mysql",
   "runtime-tokio-rustls",
   "with-uuid",
   "with-chrono",
   "with-json",
 ]
-version = "^0.11"
+version = "^0.12"

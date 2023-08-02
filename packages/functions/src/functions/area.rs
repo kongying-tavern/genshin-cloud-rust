@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use tokio::sync::Mutex;
 
 use moka::future::Cache;
-use sea_orm::EntityTrait;
+use sea_orm::entity::EntityTrait;
 
 use _database::{models::area::area as Area, DB_CONN};
 use _utils::schemas::area::Schema as AreaSchema;
