@@ -27,15 +27,16 @@ services:
     depends_on:
       - database
   database:
-    image: postgres:15
+    image: mariadb:lts
     ports:
-      - 5432:5432
+      - 3306:3306
     volumes:
-      - db-dev:/var/lib/posgresql
+      - db-dev:/var/lib/mysql
     environment:
-      - POSTGRES_USER=$DB_USERNAME
-      - POSTGRES_PASSWORD=$DB_PASSWORD
-      - POSTGRES_DB=$DB_DATABASE
+      - MARIADB_USER=$DB_USERNAME
+      - MARIADB_PASSWORD=$DB_PASSWORD
+      - MARIADB_DATABASE=$DB_DATABASE
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
     networks:
       - backend-dev
 

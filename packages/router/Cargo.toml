@@ -20,7 +20,7 @@ hyper = { version = "^0.14", features = ["server", "http1"] }
 log = "^0.4"
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
-tokio = { version = "^1", features = ["macros"] }
+tokio = { version = "^1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "^0.4", features = ["make"] }
 tracing = "^0.1"
 tracing-subscriber = "^0.3"
@@ -36,10 +36,10 @@ version = "^0.4"
 
 [dependencies.sea-orm]
 features = [
-  "sqlx-postgres",
+  "sqlx-mysql",
   "runtime-tokio-rustls",
   "with-uuid",
   "with-chrono",
   "with-json",
 ]
-version = "^0.11"
+version = "^0.12"

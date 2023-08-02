@@ -20,7 +20,7 @@ pub struct DatabaseNetworkConfig {
 
 pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
     let mut opt = ConnectOptions::new(format!(
-        "postgres://{}:{}@{}:{}/{}",
+        "mysql://{}:{}@{}:{}/{}",
         config.username, config.password, config.host, config.port, config.database
     ));
     opt.max_connections(100)
@@ -33,10 +33,10 @@ pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
         .sqlx_logging_level(log::LevelFilter::Trace);
     let db = Database::connect(opt).await?;
 
-    register().await?;
-
-    info!("Database is ready");
     DB_CONN.lock().await.replace(db);
+    info!("Database is registering");
+    register().await?;
+    info!("Database is ready");
 
     Ok(())
 }

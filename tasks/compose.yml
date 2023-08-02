@@ -21,15 +21,16 @@ services:
     depends_on:
       - database
   database:
-    image: postgres:15
+    image: mariadb:lts
     expose:
-      - 5432
+      - 3306
     volumes:
-      - db:/var/lib/posgresql
+      - db:/var/lib/mysql
     environment:
-      - POSTGRES_USER=$DB_USERNAME
-      - POSTGRES_PASSWORD=$DB_PASSWORD
-      - POSTGRES_DB=$DB_DATABASE
+      - MARIADB_USER=$DB_USERNAME
+      - MARIADB_PASSWORD=$DB_PASSWORD
+      - MARIADB_DATABASE=$DB_DATABASE
+      - MARIADB_RANDOM_ROOT_PASSWORD=yes
     networks:
       - backend
     restart: always
