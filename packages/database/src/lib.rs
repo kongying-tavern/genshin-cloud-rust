@@ -20,7 +20,7 @@ pub struct DatabaseNetworkConfig {
 
 pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
     let mut opt = ConnectOptions::new(format!(
-        "mysql://{}:{}@{}:{}/{}",
+        "postgres://{}:{}@{}:{}/{}",
         config.username, config.password, config.host, config.port, config.database
     ));
     opt.max_connections(100)

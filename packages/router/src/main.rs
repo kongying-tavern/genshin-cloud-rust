@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
         host: std::env::var("DB_HOST").unwrap_or("localhost".into()),
         port: std::env::var("DB_PORT")
             .map(|str| str.parse::<u16>().unwrap())
-            .unwrap_or(3306),
+            .unwrap_or(5432),
         username: std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
         password: std::env::var("DB_PASSWORD").unwrap_or("root".into()),
         database: std::env::var("DB_DATABASE").unwrap_or("backend".into()),
