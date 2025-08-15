@@ -4,45 +4,43 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[allow(non_snake_case)]
-pub struct RequestData<T> {
-    pub error: Option<bool>,
-    pub errorStatus: Option<i32>,
-    pub errorData: Option<()>, // 这儿真没法写，咱不像 JVAV 那样有泛型擦除
-    pub message: Option<String>,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommonResponse<T> {
+    pub error: bool,
+    pub error_status: u16,
+    pub error_data: Option<serde_json::Value>,
+    pub message: String,
     pub data: Option<T>,
-    pub time: Option<NaiveDateTime>,
+    pub time: NaiveDateTime,
 }
 
-impl<T> RequestData<T> {
+impl<T> CommonResponse<T> {
     pub fn new(result: Result<T>) -> Self {
         match result {
             Ok(data) => Self {
-                error: Some(false),
+                error: false,
                 data: Some(data),
                 ..Default::default()
             },
             Err(err) => Self {
-                error: Some(true),
-                message: Some(err.to_string()),
+                error: true,
+                message: err.to_string(),
                 ..Default::default()
             },
         }
     }
 }
 
-impl<T> Default for RequestData<T> {
+impl<T> Default for CommonResponse<T> {
     fn default() -> Self {
         Self {
-            error: None,
-            errorStatus: None,
-            errorData: None,
-            message: None,
+            error: false,
+            error_status: 200,
+            error_data: None,
+            message: "".to_string(),
             data: None,
-            time: Some(chrono::Local::now().naive_local()),
+            time: chrono::Local::now().naive_local(),
         }
     }
 }
-
-pub const DEFAULT_ERROR_JSON_MSG: &str = r#"{ "error": true, "message": "Unknown error" }"#;

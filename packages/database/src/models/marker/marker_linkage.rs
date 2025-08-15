@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "marker_linkage", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,
@@ -20,13 +20,23 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 分类名
-    pub name: String,
-    /// 父级分类 ID
-    /// -1 为根分类
-    pub parent_id: i64,
-    /// 是否为末端类型
-    pub is_final: bool,
+    /// 组 ID
+    pub group_id: Option<String>,
+    /// 起始点点位 ID
+    /// 会根据是否反向与 to_id 交换
+    pub from_id: Option<i64>,
+    /// 终止点点位 ID
+    /// 会根据是否反向与 from_id 交换
+    pub to_id: Option<i64>,
+    /// 关联操作类型
+    pub link_action: Option<String>,
+    /// 是否反向
+    pub link_reverse: Option<bool>,
+    /// 路线
+    /// 默认为空数组
+    pub path: Option<serde_json::Value>,
+    /// 额外数据
+    pub extra: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
