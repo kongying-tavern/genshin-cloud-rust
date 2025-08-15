@@ -1,25 +1,31 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "tag_type")]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
+#[sea_orm(table_name = "tag_type", schema_name = "genshin_map")]
 pub struct Model {
+    /// 乐观锁
+    pub version: i64,
+    /// ID
     #[sea_orm(primary_key)]
     pub id: i64,
-    #[sea_orm(version)]
-    pub version: i64,
-    #[sea_orm(create_time)]
+    /// 创建时间
     pub create_time: DateTime,
-    #[sea_orm(update_time)]
+    /// 更新时间
     pub update_time: Option<DateTime>,
-
+    /// 创建人
     pub creator_id: Option<i64>,
+    /// 更新人
     pub updater_id: Option<i64>,
-    #[sea_orm(default_value = 0)]
-    pub del_flag: i16,
+    /// 逻辑删除
+    pub del_flag: bool,
 
+    /// 分类名称
     pub name: String,
-    pub parent: i64,
+    /// 父级分类 ID
+    /// -1 为根分类
+    pub parent_id: i64,
+    /// 是否为末端类型
     pub is_final: bool,
 }
 

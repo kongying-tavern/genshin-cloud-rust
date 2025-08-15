@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
 
     info!("Site will run on port {}", port);
 
-    let _ = _database::init(_database::DatabaseNetworkConfig {
+    _database::init(_database::DatabaseNetworkConfig {
         host: std::env::var("DB_HOST").unwrap_or("localhost".into()),
         port: std::env::var("DB_PORT")
             .map(|str| str.parse::<u16>().unwrap())

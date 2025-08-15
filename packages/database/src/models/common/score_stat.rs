@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "score_stat", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,
@@ -20,13 +20,18 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 分类名
-    pub name: String,
-    /// 父级分类 ID
-    /// -1 为根分类
-    pub parent_id: i64,
-    /// 是否为末端类型
-    pub is_final: bool,
+    /// 统计范围
+    pub scope: String,
+    /// 统计颗粒度
+    pub span: String,
+    /// 统计开始时间
+    pub span_start_time: DateTime,
+    /// 统计终止时间
+    pub span_end_time: DateTime,
+    /// 用户 ID
+    pub user_id: Option<i64>,
+    /// 统计内容 JSON
+    pub content: serde_json::Value,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

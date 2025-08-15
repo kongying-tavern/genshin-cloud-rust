@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "sys_user_device", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,
@@ -20,13 +20,17 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 分类名
-    pub name: String,
-    /// 父级分类 ID
-    /// -1 为根分类
-    pub parent_id: i64,
-    /// 是否为末端类型
-    pub is_final: bool,
+    /// 用户 ID
+    pub user_id: Option<i64>,
+    /// 设备编码
+    /// 记录设备 User Agent 信息
+    pub device_id: String,
+    /// IPv4
+    pub ipv4: Option<String>,
+    /// 设备状态
+    pub status: i32,
+    /// 上次登录时间
+    pub last_login_time: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

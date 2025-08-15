@@ -2,7 +2,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "route", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,
@@ -20,13 +20,21 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 分类名
+    /// 路线名称
     pub name: String,
-    /// 父级分类 ID
-    /// -1 为根分类
-    pub parent_id: i64,
-    /// 是否为末端类型
-    pub is_final: bool,
+    /// 路线描述
+    pub content: Option<String>,
+    /// 点位顺序数组
+    pub marker_list: serde_json::Value,
+    /// 权限屏蔽标记
+    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
+    pub hidden_flag: i32,
+    /// 视频地址
+    pub video: Option<String>,
+    /// 额外信息
+    pub extra: serde_json::Value,
+    /// 创建人昵称
+    pub creator_nickname: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
