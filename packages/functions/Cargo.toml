@@ -9,24 +9,34 @@ version = "0.1.0"
 _database = { path = "../database", version = "*" }
 _utils = { path = "../utils", version = "*" }
 
-anyhow = "^1"
-chrono = "^0.4"
-lazy_static = "*"
-env_logger = "^0.10"
-log = "^0.4"
-serde = { version = "^1", features = ["derive"] }
-serde_json = "^1"
-tokio = { version = "^1", features = ["macros"] }
-uuid = "^1"
 
-moka = { version = "^0.11", features = ["future"] }
+anyhow = { workspace = true }
+derive_more = { workspace = true }
+once_cell = { workspace = true }
 
-[dependencies.sea-orm]
-features = [
-  "sqlx-postgres",
-  "runtime-tokio-rustls",
-  "with-uuid",
-  "with-chrono",
-  "with-json",
-]
-version = "^0.12"
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+percent-encoding = { workspace = true }
+
+flume = { workspace = true }
+futures = { workspace = true }
+oneshot = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+uuid = { workspace = true }
+yuuka = { workspace = true }
+
+image = { workspace = true }
+sqids = { workspace = true }
+
+bcrypt = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+env_logger = { workspace = true }
+log = { workspace = true }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
