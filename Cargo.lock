@@ -23,6 +23,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -55,6 +56,7 @@ dependencies = [
  "serde_json",
  "sqids",
  "strum 0.27.2",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -89,6 +91,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tokio",
  "tower-http",
  "tracing",
  "tracing-appender",
@@ -103,6 +106,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "bcrypt",
  "bytes",
  "chrono",
  "derive_more 2.0.1",
@@ -110,6 +114,7 @@ dependencies = [
  "flume",
  "futures",
  "image",
+ "jsonwebtoken",
  "log",
  "once_cell",
  "oneshot",
@@ -118,6 +123,7 @@ dependencies = [
  "serde_json",
  "sqids",
  "strum 0.27.2",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -1673,7 +1679,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
- "webpki-roots",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -3112,7 +3118,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots",
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
@@ -3302,9 +3308,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm"
-version = "2.0.0-rc.3"
+version = "1.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b16db229e071fef1ffcbba7980fbb9eee2ec9839a1fe008826ad7117201ee04"
+checksum = "34963b2d68331ef5fbc8aa28a53781471c15f90ba1ad4f2689d21ce8b9a9d1f1"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3317,11 +3323,11 @@ dependencies = [
  "rust_decimal",
  "sea-orm-macros",
  "sea-query",
- "sea-query-sqlx",
+ "sea-query-binder",
  "serde",
  "serde_json",
  "sqlx",
- "strum 0.27.2",
+ "strum 0.26.3",
  "thiserror 2.0.14",
  "time",
  "tracing",
@@ -3331,9 +3337,9 @@ dependencies = [
 
 [[package]]
 name = "sea-orm-macros"
-version = "2.0.0-rc.3"
+version = "1.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3e809a2190d54157edee5801a276635b35b5ad86e7b5fa2c8c4296e8382c20c"
+checksum = "a489127c872766445b4e28f846825f89a076ac3af2591d1365503a68f93e974c"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -3345,9 +3351,9 @@ dependencies = [
 
 [[package]]
 name = "sea-query"
-version = "1.0.0-rc.9"
+version = "0.32.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa6a49d47916bc2f384c2aa3ff07ef8a9eac12a367f63274e6db5c9e96f508c8"
+checksum = "8a5d1c518eaf5eda38e5773f902b26ab6d5e9e9e2bb2349ca6c64cf96f80448c"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -3360,10 +3366,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "sea-query-sqlx"
-version = "0.8.0-rc.8"
+name = "sea-query-binder"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5eb19495858d8ae3663387a4f5298516c6f0171a7ca5681055450f190236b8"
+checksum = "b0019f47430f7995af63deda77e238c17323359af241233ec768aba1faea7608"
 dependencies = [
  "bigdecimal",
  "chrono",
@@ -3518,6 +3524,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a4719bff48cee6b39d12c020eeb490953ad2443b7055bd0b21fca26bd8c28b"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "signature"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3665,15 +3680,19 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "rust_decimal",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
  "smallvec",
  "thiserror 2.0.14",
  "time",
+ "tokio",
+ "tokio-stream",
  "tracing",
  "url",
  "uuid",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -3710,6 +3729,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn 2.0.105",
+ "tokio",
  "url",
 ]
 
@@ -4136,7 +4156,9 @@ dependencies = [
  "io-uring",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "slab",
  "socket2 0.6.0",
  "tokio-macros",
@@ -4171,6 +4193,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
 dependencies = [
  "rustls",
+ "tokio",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eca58d7bba4a75707817a2c44174253f9236b2d5fbd055602e9d5c07c139a047"
+dependencies = [
+ "futures-core",
+ "pin-project-lite",
  "tokio",
 ]
 
@@ -4651,6 +4684,15 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.2",
 ]
 
 [[package]]
