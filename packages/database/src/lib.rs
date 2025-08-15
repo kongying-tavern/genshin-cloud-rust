@@ -1,14 +1,17 @@
 pub mod models;
 
-use anyhow::Result;
-use lazy_static::lazy_static;
+use anyhow::{anyhow, Result};
 use log::info;
-use std::{cell::RefCell, time::Duration};
-use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
-use models::register;
+pub static DB_CONN: Lazy<Arc<Mutex<Option<DatabaseConnection>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 pub struct DatabaseNetworkConfig {
     pub host: String,
@@ -33,14 +36,11 @@ pub async fn init(config: DatabaseNetworkConfig) -> Result<()> {
         .sqlx_logging_level(log::LevelFilter::Trace);
     let db = Database::connect(opt).await?;
 
-    DB_CONN.lock().await.replace(db);
-    info!("Database is registering");
-    register().await?;
+    DB_CONN
+        .lock()
+        .map_err(|err| anyhow!(format!("Failed to lock DB_CONN: {}", err)))?
+        .replace(db);
     info!("Database is ready");
 
     Ok(())
-}
-
-lazy_static! {
-    pub static ref DB_CONN: Mutex<RefCell<DatabaseConnection>> = Default::default();
 }
