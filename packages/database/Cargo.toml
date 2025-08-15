@@ -8,29 +8,30 @@ version = "0.1.0"
 [dependencies]
 _utils = { path = "../utils", version = "*" }
 
-anyhow = "^1"
-chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
-env_logger = "^0.10"
-lazy_static = "*"
-log = "^0.4"
-strum = "^0.25"
-strum_macros = "^0.25"
-uuid = { version = "^1", features = [
-  'v4',
-  'fast-rng',
-  'macro-diagnostics',
-  'serde',
-] }
-tokio = { version = "^1", features = ["macros"] }
-serde = { version = "^1", features = ["derive"] }
-serde_json = "^1"
 
-[dependencies.sea-orm]
-features = [
-  "sqlx-postgres",
-  "runtime-tokio-rustls",
-  "with-uuid",
-  "with-chrono",
-  "with-json",
-]
-version = "^0.12"
+anyhow = { workspace = true }
+derive_more = { workspace = true }
+once_cell = { workspace = true }
+
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+percent-encoding = { workspace = true }
+
+flume = { workspace = true }
+futures = { workspace = true }
+oneshot = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+uuid = { workspace = true }
+yuuka = { workspace = true }
+
+env_logger = { workspace = true }
+log = { workspace = true }
+tracing = { workspace = true }
+tracing-appender = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+sea-orm = { workspace = true }
