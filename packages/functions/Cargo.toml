@@ -32,6 +32,7 @@ yuuka = { workspace = true }
 
 image = { workspace = true }
 sqids = { workspace = true }
+bzip2 = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }

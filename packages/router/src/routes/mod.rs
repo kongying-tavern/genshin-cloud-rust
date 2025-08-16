@@ -1,5 +1,5 @@
-mod oauth;
-mod user;
+mod api;
+mod system;
 
 use anyhow::Result;
 
@@ -10,8 +10,8 @@ use axum::{
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
-        .nest("/oauth", oauth::router().await?)
-        .nest("/user", user::router().await?)
+        .merge(system::router().await?)
+        .merge(api::router().await?)
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())

@@ -34,6 +34,7 @@ jsonwebtoken = { workspace = true }
 
 image = { workspace = true }
 sqids = { workspace = true }
+bzip2 = { workspace = true }
 
 env_logger = { workspace = true }
 log = { workspace = true }
