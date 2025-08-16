@@ -46,6 +46,7 @@ yuuka = "^0.6"
 
 image = { version = "^0.25", features = ["gif", "jpeg", "png", "webp"] }
 sqids = "^0.4"
+bzip2 = "^0.6"
 
 bcrypt = "^0.17"
 jsonwebtoken = "^9"
