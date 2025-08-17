@@ -1,4 +1,3 @@
-pub mod oauth_client_details;
 pub mod sys_action_log;
 pub mod sys_user;
 pub mod sys_user_archive;
