@@ -22,16 +22,7 @@ async fn main() -> Result<()> {
 
     log::info!("Site will run on port {}", port);
 
-    _database::init(_database::DatabaseNetworkConfig {
-        host: std::env::var("DB_HOST").unwrap_or("localhost".into()),
-        port: std::env::var("DB_PORT")
-            .map(|str| str.parse::<u16>().unwrap())
-            .unwrap_or(5432),
-        username: std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
-        password: std::env::var("DB_PASSWORD").unwrap_or("".into()),
-        database: std::env::var("DB_DATABASE").unwrap_or("genshin_map".into()),
-    })
-    .await?;
+    _database::init().await?;
 
     let router = router()
         .await?

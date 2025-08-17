@@ -10,7 +10,6 @@ exec docker build -t kongying-tavern-backend .
 '''
 
 [tasks.dev]
-env = { DB_HOST = "ddns.minemc.top", DB_PORT = "13432", DB_USERNAME = "genshin_map", DB_DATABASE = "genshin_map" }
 env_files = ["./.env"] # 密码需要自行创建 .env 文件，并写入 DB_PASSWORD 变量，仓库本身不保存也不能保存任何密码
 watch = { no_git_ignore = true, ignore_pattern = "Cargo.lock", watch = [
   "./packages/",
@@ -20,3 +19,12 @@ script = '''
 
 exec cargo run
 '''
+
+[tasks.dev.env]
+DB_HOST = "ddns.minemc.top"
+DB_PORT = "13432"
+DB_USERNAME = "genshin_map"
+DB_DATABASE = "genshin_map"
+
+MINIO_KEY = "KYJG_UPLOAD_KEY"
+MINIO_SECRET = "KYJG_UPLOAD_SECRET"
