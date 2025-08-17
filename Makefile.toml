@@ -17,6 +17,7 @@ watch = { no_git_ignore = true, ignore_pattern = "Cargo.lock", watch = [
 script = '''
 #!@duckscript
 
+exec docker compose -f dev.compose.yml up -d
 exec cargo run
 '''
 
@@ -26,5 +27,13 @@ DB_PORT = "13432"
 DB_USERNAME = "genshin_map"
 DB_DATABASE = "genshin_map"
 
-MINIO_KEY = "KYJG_UPLOAD_KEY"
-MINIO_SECRET = "KYJG_UPLOAD_SECRET"
+MINIO_ACCESS_KEY = "genshin_cloud"
+MINIO_SECRET_KEY = "genshin_cloud"
+
+[tasks.clean]
+script = '''
+#!@duckscript
+
+exec cargo clean
+exec docker compose -f dev.compose.yml down
+'''

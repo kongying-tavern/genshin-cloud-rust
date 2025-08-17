@@ -1,3 +1,5 @@
+# 请注意，该集群配置**不是**生产环境配置，只用于本地测试环境
+
 services:
   redis:
     image: redis:latest
@@ -6,6 +8,8 @@ services:
       - "6379:6379"
     environment:
       REDIS_PORT: 6379
+    volumes:
+      - redis-data:/data
     restart: unless-stopped
 
   minio:
@@ -17,12 +21,6 @@ services:
     environment:
       MINIO_ROOT_USER: genshin_cloud
       MINIO_ROOT_PASSWORD: genshin_cloud
-      MINIO_BUCKET_IMAGE: images
-      MINIO_KEY: KYJG_UPLOAD_KEY
-      MINIO_SECRET: KYJG_UPLOAD_SECRET
-      MINIO_IMG2WEBP_TZ: Asia/Shanghai
-      MINIO_IMG2WEBP_QUALITY: 80
-      MINIO_IMG2WEBP_MODE: 0
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -38,5 +36,6 @@ services:
   #   restart: unless-stopped
 
 volumes:
+  redis-data:
   minio-data:
-  alist-data:
+  # alist-data:
