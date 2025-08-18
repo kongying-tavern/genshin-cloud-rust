@@ -25,12 +25,34 @@ pub struct Model {
     /// 槽位顺序
     pub slot_index: i32,
     /// 用户 ID
+    #[sea_orm(indexed)]
     pub user_id: i64,
     /// 存档信息
+    /// TODO: 绑定一个完整的存档数据结构
     pub data: serde_json::Value,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UserId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UserId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

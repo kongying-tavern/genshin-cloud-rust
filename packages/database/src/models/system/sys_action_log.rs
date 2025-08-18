@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::SystemActionLogAction;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_action_log", schema_name = "genshin_map")]
 pub struct Model {
@@ -27,14 +29,35 @@ pub struct Model {
     /// 设备编码
     pub device_id: String,
     /// 操作名
-    pub action: String,
+    pub action: SystemActionLogAction,
     /// 是否发生错误
     pub is_error: bool,
     /// 附加信息
+    /// TODO: 原客户端的设计中，这个值似乎总是为 {"accessPaths":[]}
     pub extra_data: Option<serde_json::Value>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UserId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UserId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -21,14 +21,42 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 物品 ID
+    #[sea_orm(indexed)]
     pub item_id: i64,
     /// 点位 ID
+    #[sea_orm(indexed)]
     pub marker_id: i64,
     /// 物品于该点位数量
     pub count: i32,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::item::item::Entity",
+        from = "Column::ItemId",
+        to = "super::super::item::item::Column::Id"
+    )]
+    ItemId,
+    #[sea_orm(
+        belongs_to = "super::marker::Entity",
+        from = "Column::MarkerId",
+        to = "super::marker::Column::Id"
+    )]
+    MarkerId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

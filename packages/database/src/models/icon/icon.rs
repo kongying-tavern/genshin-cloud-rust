@@ -21,12 +21,26 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 图标名称
+    #[sea_orm(indexed)]
     pub name: String,
     /// 图标 URL
     pub url: String,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

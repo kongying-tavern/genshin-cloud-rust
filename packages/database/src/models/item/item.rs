@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::{HiddenFlag, IconStyleType};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "item", schema_name = "genshin_map")]
 pub struct Model {
@@ -24,30 +26,60 @@ pub struct Model {
     pub name: String,
     /// 地区 ID
     /// 须确保是末端地区
+    #[sea_orm(indexed)]
     pub area_id: i64,
     /// 默认刷新时间
     /// 单位为毫秒
+    #[sea_orm(default_value = 0)]
     pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
     pub default_content: Option<String>,
     /// 默认数量
+    #[sea_orm(default_value = 1)]
     pub default_count: i32,
     /// 图标标签
     pub icon_tag: String,
     /// 图标样式类型
-    pub icon_style_type: i32,
+    pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
-    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
-    pub hidden_flag: i32,
+    #[sea_orm(indexed)]
+    pub hidden_flag: HiddenFlag,
     /// 物品排序
+    #[sea_orm(indexed)]
     pub sort_index: i32,
     /// 特殊物品标记
     /// 低位第一位: 前台是否显示
     pub special_flag: Option<i32>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::area::area::Entity",
+        from = "Column::AreaId",
+        to = "super::super::area::area::Column::Id"
+    )]
+    AreaId,
+    #[sea_orm(
+        belongs_to = "super::super::icon::icon::Entity",
+        from = "Column::IconTag",
+        to = "super::super::icon::icon::Column::Name"
+    )]
+    IconTag,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

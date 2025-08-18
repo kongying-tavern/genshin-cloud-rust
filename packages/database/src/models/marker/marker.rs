@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::HiddenFlag;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "marker", schema_name = "genshin_map")]
 pub struct Model {
@@ -22,10 +24,12 @@ pub struct Model {
 
     /// 点位签戳
     /// 用于兼容旧点位 ID
+    #[deprecated = "仅用于兼容旧数据，现已不再使用"]
     pub marker_stamp: Option<String>,
     /// 点位名称
     pub marker_title: Option<String>,
     /// 点位坐标
+    /// 形如 "{x},{y}" 的格式，其中 x 与 y 均为浮点数文本
     pub position: String,
     /// 点位说明
     pub content: String,
@@ -41,13 +45,26 @@ pub struct Model {
     /// 单位为毫秒
     pub refresh_time: i64,
     /// 权限屏蔽标记
-    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
-    pub hidden_flag: i32,
+    #[sea_orm(indexed)]
+    pub hidden_flag: HiddenFlag,
     /// 额外特殊字段
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

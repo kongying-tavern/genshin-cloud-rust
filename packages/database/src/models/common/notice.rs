@@ -1,4 +1,4 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, FromJsonQueryResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
@@ -21,8 +21,8 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 频道
-    /// 值为一个包含若干字符串的数组，默认为一个空数组
-    pub channel: serde_json::Value,
+    #[sea_orm(column_type = "Json")]
+    pub channel: ChannelWrapper,
     /// 标题
     pub title: String,
     /// 内容
@@ -35,7 +35,23 @@ pub struct Model {
     pub sort_index: i32,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+pub struct ChannelWrapper(Vec<String>);
+
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -28,12 +28,33 @@ pub struct Model {
     /// IPv4
     pub ipv4: Option<String>,
     /// 设备状态
+    /// TODO: 测试数据库里，这个值似乎全是 0
     pub status: i32,
     /// 上次登录时间
     pub last_login_time: Option<DateTime>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UserId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UserId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

@@ -1,5 +1,7 @@
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, FromJsonQueryResult};
 use serde::{Deserialize, Serialize};
+
+use _utils::types::enums::HiddenFlag;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "route", schema_name = "genshin_map")]
@@ -25,10 +27,11 @@ pub struct Model {
     /// 路线描述
     pub content: Option<String>,
     /// 点位顺序数组
-    pub marker_list: serde_json::Value,
+    #[sea_orm(column_type = "Json")]
+    pub marker_list: MarkerListWrapper,
     /// 权限屏蔽标记
-    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
-    pub hidden_flag: i32,
+    #[sea_orm(indexed)]
+    pub hidden_flag: HiddenFlag,
     /// 视频地址
     pub video: Option<String>,
     /// 额外信息
@@ -37,7 +40,23 @@ pub struct Model {
     pub creator_nickname: String,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
+pub struct MarkerListWrapper(Vec<i64>);
+
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

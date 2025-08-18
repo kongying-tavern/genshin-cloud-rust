@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::ScopeStatType;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "score_stat", schema_name = "genshin_map")]
 pub struct Model {
@@ -21,20 +23,38 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 统计范围
+    #[sea_orm(indexed)]
     pub scope: String,
     /// 统计颗粒度
+    #[sea_orm(indexed)]
     pub span: String,
     /// 统计开始时间
+    #[sea_orm(indexed)]
     pub span_start_time: DateTime,
     /// 统计终止时间
+    #[sea_orm(indexed)]
     pub span_end_time: DateTime,
     /// 用户 ID
+    #[sea_orm(indexed)]
     pub user_id: Option<i64>,
     /// 统计内容 JSON
-    pub content: serde_json::Value,
+    pub content: ScopeStatType,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

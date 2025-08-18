@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::SystemUserRole;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_user_invitation", schema_name = "genshin_map")]
 pub struct Model {
@@ -25,14 +27,27 @@ pub struct Model {
     /// 用户名
     pub username: String,
     /// 角色 ID
-    pub role_id: Option<i32>,
+    pub role_id: Option<SystemUserRole>,
     /// 备注
     pub remark: Option<String>,
     /// 权限策略
     pub access_policy: Option<serde_json::Value>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

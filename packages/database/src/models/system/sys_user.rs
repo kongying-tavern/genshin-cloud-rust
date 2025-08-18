@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::SystemUserRole;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_user", schema_name = "genshin_map")]
 pub struct Model {
@@ -21,6 +23,7 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 用户名
+    #[sea_orm(indexed)]
     pub username: String,
     /// 密码
     /// 格式形如 {bcrypt}$2a$10$xxxxxxxxxxxxxxxxxxxx
@@ -28,21 +31,36 @@ pub struct Model {
     /// 昵称
     pub nickname: Option<String>,
     /// QQ
+    #[sea_orm(indexed)]
     pub qq: Option<String>,
     /// 手机号
+    #[sea_orm(indexed)]
     pub phone: Option<String>,
     /// 头像链接
     pub logo: Option<String>,
 
     /// 角色 ID
-    pub role_id: i32,
+    pub role_id: SystemUserRole,
     /// 权限策略
     pub access_policy: Option<serde_json::Value>,
     /// 备注
     pub remark: Option<String>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}
