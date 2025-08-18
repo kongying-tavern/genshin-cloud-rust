@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::{HistoryEditType, HistoryOperationType};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "history", schema_name = "genshin_map")]
 pub struct Model {
@@ -25,19 +27,31 @@ pub struct Model {
     /// MD5
     pub md5: Option<String>,
     /// 原 ID
+    #[sea_orm(indexed)]
     pub t_id: i64,
     /// 操作数据类型
-    /// 1: 地区, 2: 图标, 3: 物品, 4: 点位, 5: 标签
-    #[sea_orm(column_name = "type")]
-    pub history_type: Option<String>,
+    #[sea_orm(column_name = "type", indexed)]
+    pub history_type: Option<HistoryOperationType>,
     /// IPv4
     pub ipv4: Option<String>,
     /// 修改类型
-    /// 0: 未知, 1: 新增, 2: 修改, 3: 删除
-    pub edit_type: i32,
+    pub edit_type: HistoryEditType,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

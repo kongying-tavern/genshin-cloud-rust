@@ -24,10 +24,37 @@ pub struct Model {
     /// 此处必须为末端类型
     pub type_id: i64,
     /// 物品 ID
+    #[sea_orm(indexed)]
     pub item_id: i64,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::item_type::Entity",
+        from = "Column::TypeId",
+        to = "super::item_type::Column::Id"
+    )]
+    TypeId,
+    #[sea_orm(
+        belongs_to = "super::item::Entity",
+        from = "Column::ItemId",
+        to = "super::item::Column::Id"
+    )]
+    ItemId,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

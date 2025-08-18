@@ -24,12 +24,39 @@ pub struct Model {
     pub name: String,
     /// 父级分类 ID
     /// -1 为根分类
+    #[sea_orm(indexed)]
     pub parent_id: i64,
     /// 是否为末端类型
     pub is_final: bool,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(belongs_to = "Entity", from = "Column::ParentId", to = "Column::Id")]
+    ParentId,
+}
+
+pub struct ParentReferencingLink;
+impl Linked for ParentReferencingLink {
+    type FromEntity = Entity;
+    type ToEntity = Entity;
+
+    fn link(&self) -> Vec<RelationDef> {
+        vec![Relation::ParentId.def()]
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

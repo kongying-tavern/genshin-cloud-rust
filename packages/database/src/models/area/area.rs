@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::HiddenFlag;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "area", schema_name = "genshin_map")]
 pub struct Model {
@@ -34,16 +36,43 @@ pub struct Model {
     /// 是否为末端地区
     pub is_final: bool,
     /// 权限屏蔽标记
-    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
-    pub hidden_flag: i32,
+    #[sea_orm(indexed)]
+    pub hidden_flag: HiddenFlag,
     /// 排序
+    #[sea_orm(indexed)]
     pub sort_index: i32,
     /// 额外标记
     /// 低位第一位：前台是否显示
     pub special_flag: i32,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(belongs_to = "Entity", from = "Column::ParentId", to = "Column::Id")]
+    ParentId,
+}
+
+pub struct ParentReferencingLink;
+impl Linked for ParentReferencingLink {
+    type FromEntity = Entity;
+    type ToEntity = Entity;
+
+    fn link(&self) -> Vec<RelationDef> {
+        vec![Relation::ParentId.def()]
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}

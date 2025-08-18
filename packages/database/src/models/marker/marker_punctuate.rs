@@ -1,6 +1,8 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use _utils::types::enums::{HiddenFlag, MarkerPunctuateMethodType, MarkerPunctuateStatus};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "marker_punctuate", schema_name = "genshin_map")]
 pub struct Model {
@@ -23,6 +25,8 @@ pub struct Model {
     /// 点位提交 ID
     pub punctuate_id: i64,
     /// 原有点位 ID
+    /// 该列的数值仅当操作为修改或删除时才有意义
+    #[sea_orm(indexed)]
     pub original_marker_id: Option<i64>,
     /// 点位名称
     pub marker_title: Option<String>,
@@ -43,23 +47,41 @@ pub struct Model {
     /// 点位提交者 ID
     pub author: i64,
     /// 状态
-    /// 0: 暂存, 1: 审核中, 2: 不通过
-    pub status: i32,
+    pub status: MarkerPunctuateStatus,
     /// 审核备注
     pub audit_remark: Option<String>,
     /// 操作类型
-    /// 1: 新增, 2: 修改, 3: 删除
-    pub method_type: i32,
+    pub method_type: MarkerPunctuateMethodType,
     /// 点位刷新时间
     pub refresh_time: i64,
     /// 权限屏蔽标记
-    /// 0: 可见, 1: 隐藏, 2: 内鬼, 3: 彩蛋
-    pub hidden_flag: i32,
+    #[sea_orm(indexed)]
+    pub hidden_flag: HiddenFlag,
     /// 额外特殊字段
     pub extra: Option<serde_json::Value>,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::CreatorId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    CreatorId,
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::UpdaterId",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    UpdaterId,
+
+    #[sea_orm(
+        belongs_to = "super::super::system::sys_user::Entity",
+        from = "Column::Author",
+        to = "super::super::system::sys_user::Column::Id"
+    )]
+    Author,
+}
 
 impl ActiveModelBehavior for ActiveModel {}
