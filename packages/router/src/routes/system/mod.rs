@@ -11,7 +11,7 @@ use anyhow::Result;
 use axum::{routing::post, Router};
 
 pub async fn router() -> Result<Router> {
-    let ret = Router::new().route("/oauth", post(oauth::oauth));
+    let ret = Router::new().route("/oauth/token", post(oauth::oauth));
 
     Ok(ret)
 }
