@@ -1,6 +1,7 @@
 mod middlewares;
 mod routes;
 
+use _database::DB_CONN;
 use anyhow::Result;
 use std::net::SocketAddr;
 
@@ -22,7 +23,7 @@ async fn main() -> Result<()> {
 
     log::info!("Site will run on port {}", port);
 
-    _database::init().await?;
+    DB_CONN.pg_conn.ping().await?;
 
     let router = router()
         .await?

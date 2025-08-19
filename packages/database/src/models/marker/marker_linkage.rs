@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::enums::MarkerLinkageLinkAction;
+use _utils::types::MarkerLinkageLinkAction;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "marker_linkage", schema_name = "genshin_map")]

@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::enums::ScopeStatType;
+use _utils::types::ScopeStatType;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "score_stat", schema_name = "genshin_map")]

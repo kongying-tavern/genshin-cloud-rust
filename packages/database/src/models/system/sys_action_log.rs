@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::enums::SystemActionLogAction;
+use _utils::types::SystemActionLogAction;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_action_log", schema_name = "genshin_map")]

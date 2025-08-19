@@ -55,6 +55,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "percent-encoding",
+ "sea-orm",
  "serde",
  "serde_json",
  "sqids",

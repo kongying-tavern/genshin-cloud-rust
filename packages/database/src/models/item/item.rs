@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::enums::{HiddenFlag, IconStyleType};
+use _utils::types::{HiddenFlag, IconStyleType};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "item", schema_name = "genshin_map")]
