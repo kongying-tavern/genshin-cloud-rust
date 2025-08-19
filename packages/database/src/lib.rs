@@ -1,9 +1,8 @@
 pub mod models;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use log::info;
 use minio::s3::types::S3Api;
-use once_cell::sync::Lazy;
 use std::{sync::Arc, time::Duration};
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
@@ -15,18 +14,18 @@ pub struct DatabaseConnectionMap {
     pub minio_conn: minio::s3::Client,
 }
 
-pub static DB_CONN: Lazy<Arc<DatabaseConnectionMap>> = Lazy::new(|| {
-    Arc::new({
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime")
-            .block_on(init())
-            .expect("Failed to initialize database connections")
-    })
-});
+use once_cell::sync::OnceCell;
 
-pub async fn init() -> Result<DatabaseConnectionMap> {
+pub static DB_CONN: OnceCell<Arc<DatabaseConnectionMap>> = OnceCell::new();
+
+pub async fn init_db_conn() -> anyhow::Result<()> {
+    let conn_map = Arc::new(build_db_map().await?);
+    DB_CONN
+        .set(conn_map)
+        .map_err(|_| anyhow!("DB_CONN already initialized"))
+}
+
+async fn build_db_map() -> Result<DatabaseConnectionMap> {
     // Postgres
     let pg_conn = {
         let mut opt = ConnectOptions::new(format!(

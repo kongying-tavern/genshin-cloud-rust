@@ -1,7 +1,6 @@
 mod middlewares;
 mod routes;
 
-use _database::DB_CONN;
 use anyhow::Result;
 use std::net::SocketAddr;
 
@@ -9,6 +8,7 @@ use axum::serve;
 use tokio::net::TcpListener;
 
 use crate::routes::router;
+use _database::init_db_conn;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -22,8 +22,7 @@ async fn main() -> Result<()> {
         .unwrap_or(80);
 
     log::info!("Site will run on port {}", port);
-
-    DB_CONN.pg_conn.ping().await?;
+    init_db_conn().await?;
 
     let router = router()
         .await?

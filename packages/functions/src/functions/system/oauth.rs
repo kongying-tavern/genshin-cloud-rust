@@ -11,7 +11,7 @@ pub async fn oauth_password_login(
 ) -> Result<OauthLoginResponse> {
     let user = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::Username.eq(username))
-        .one(&DB_CONN.pg_conn)
+        .one(&DB_CONN.wait().pg_conn)
         .await?;
 
     // Continue with the login logic
