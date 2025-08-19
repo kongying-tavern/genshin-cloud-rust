@@ -1,74 +1,74 @@
 pub mod models;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use log::info;
 use minio::s3::types::S3Api;
 use once_cell::sync::Lazy;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 
-pub static PG_CONN: Lazy<Arc<Mutex<Option<DatabaseConnection>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
-pub static REDIS_CONN: Lazy<Arc<Mutex<Option<redis::Client>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
-pub static MINIO_CONN: Lazy<Arc<Mutex<Option<minio::s3::Client>>>> =
-    Lazy::new(|| Arc::new(Mutex::new(None)));
+#[derive(Debug, Clone)]
+pub struct DatabaseConnectionMap {
+    pub pg_conn: DatabaseConnection,
+    pub redis_conn: redis::Client,
+    pub minio_conn: minio::s3::Client,
+}
 
-pub async fn init() -> Result<()> {
-    PG_CONN
-        .lock()
-        .map_err(|err| anyhow!(format!("Failed to lock PG_CONN: {}", err)))?
-        .replace(
-            Database::connect({
-                let mut opt = ConnectOptions::new(format!(
-                    "postgres://{}:{}@{}:{}/{}",
-                    std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
-                    std::env::var("DB_PASSWORD").unwrap_or("".into()),
-                    std::env::var("DB_HOST").unwrap_or("localhost".into()),
-                    std::env::var("DB_PORT")
-                        .map(|str| str.parse::<u16>().unwrap())
-                        .unwrap_or(5432),
-                    std::env::var("DB_DATABASE").unwrap_or("genshin_map".into()),
-                ));
-                opt.max_connections(100)
-                    .min_connections(5)
-                    .connect_timeout(Duration::from_secs(8))
-                    .acquire_timeout(Duration::from_secs(8))
-                    .idle_timeout(Duration::from_secs(8))
-                    .max_lifetime(Duration::from_secs(8))
-                    .sqlx_logging(true)
-                    .sqlx_logging_level(log::LevelFilter::Trace);
-                opt
-            })
-            .await?,
-        );
+pub static DB_CONN: Lazy<Arc<DatabaseConnectionMap>> = Lazy::new(|| {
+    Arc::new({
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime")
+            .block_on(init())
+            .expect("Failed to initialize database connections")
+    })
+});
+
+pub async fn init() -> Result<DatabaseConnectionMap> {
+    // Postgres
+    let pg_conn = {
+        let mut opt = ConnectOptions::new(format!(
+            "postgres://{}:{}@{}:{}/{}",
+            std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
+            std::env::var("DB_PASSWORD").unwrap_or("".into()),
+            std::env::var("DB_HOST").unwrap_or("localhost".into()),
+            std::env::var("DB_PORT")
+                .map(|str| str.parse::<u16>().unwrap())
+                .unwrap_or(5432),
+            std::env::var("DB_DATABASE").unwrap_or("genshin_map".into()),
+        ));
+        opt.max_connections(100)
+            .min_connections(5)
+            .connect_timeout(Duration::from_secs(8))
+            .acquire_timeout(Duration::from_secs(8))
+            .idle_timeout(Duration::from_secs(8))
+            .max_lifetime(Duration::from_secs(8))
+            .sqlx_logging(true)
+            .sqlx_logging_level(log::LevelFilter::Trace);
+        Database::connect(opt).await?
+    };
     info!("Postgres is ready");
 
-    REDIS_CONN
-        .lock()
-        .map_err(|err| anyhow!(format!("Failed to lock REDIS_CONN: {}", err)))?
-        .replace(redis::Client::open(format!(
-            "redis://{}{}@{}:{}/{}",
-            std::env::var("REDIS_USERNAME").unwrap_or("".into()),
-            std::env::var("REDIS_PASSWORD")
-                .map(|p| format!(":{}", p))
-                .unwrap_or_default(),
-            std::env::var("REDIS_HOST").unwrap_or("localhost".into()),
-            std::env::var("REDIS_PORT")
-                .map(|str| str.parse::<u16>().unwrap())
-                .unwrap_or(6379),
-            1,
-        ))?);
+    // Redis
+    let redis_conn = redis::Client::open(format!(
+        "redis://{}{}@{}:{}/{}",
+        std::env::var("REDIS_USERNAME").unwrap_or("".into()),
+        std::env::var("REDIS_PASSWORD")
+            .map(|p| format!(":{}", p))
+            .unwrap_or_default(),
+        std::env::var("REDIS_HOST").unwrap_or("localhost".into()),
+        std::env::var("REDIS_PORT")
+            .map(|str| str.parse::<u16>().unwrap())
+            .unwrap_or(6379),
+        1,
+    ))?;
     info!("Redis is ready");
 
-    MINIO_CONN
-        .lock()
-        .map_err(|err| anyhow!(format!("Failed to lock MINIO_CONN: {}", err)))?
-        .replace(minio::s3::Client::new(
+    // MinIO
+    let minio_conn = {
+        let client = minio::s3::Client::new(
             std::env::var("MINIO_BASE_URL")
                 .unwrap_or("http://localhost:9000".into())
                 .parse()?,
@@ -79,57 +79,40 @@ pub async fn init() -> Result<()> {
             ))),
             None,
             None,
-        )?);
-    if let Some(conn) = MINIO_CONN
-        .lock()
-        .map_err(|err| anyhow!(format!("Failed to lock MINIO_CONN: {}", err)))?
-        .as_mut()
-    {
-        if !conn.bucket_exists("images").send().await?.exists {
-            conn.create_bucket("images").send().await?;
-            let config = serde_json::json!({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": [
-                            "s3:GetObject"
-                        ],
-                        "Resource": "arn:aws:s3:::images/*"
-                    }
-                ]
-            })
-            .to_string();
-            conn.put_bucket_policy("images")
-                .config(config)
-                .send()
-                .await?;
-        }
+        )?;
 
-        if !conn.bucket_exists("bz2doc").send().await?.exists {
-            conn.create_bucket("bz2doc").send().await?;
-            let config = serde_json::json!({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": [
-                            "s3:GetObject"
-                        ],
-                        "Resource": "arn:aws:s3:::bz2doc/*"
-                    }
-                ]
-            })
-            .to_string();
-            conn.put_bucket_policy("bz2doc")
-                .config(config)
-                .send()
-                .await?;
+        // Ensure buckets exist and set policy
+        for bucket in ["images", "bz2doc"] {
+            if !client.bucket_exists(bucket).send().await?.exists {
+                client.create_bucket(bucket).send().await?;
+                let config = serde_json::json!({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject"
+                            ],
+                            "Resource": format!("arn:aws:s3:::{}/*", bucket)
+                        }
+                    ]
+                })
+                .to_string();
+                client
+                    .put_bucket_policy(bucket)
+                    .config(config)
+                    .send()
+                    .await?;
+            }
         }
-    }
+        client
+    };
     info!("MinIO is ready");
 
-    Ok(())
+    Ok(DatabaseConnectionMap {
+        pg_conn,
+        redis_conn,
+        minio_conn,
+    })
 }

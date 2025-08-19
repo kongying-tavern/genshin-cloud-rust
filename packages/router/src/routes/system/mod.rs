@@ -8,10 +8,10 @@ mod user;
 
 use anyhow::Result;
 
-use axum::Router;
+use axum::{routing::post, Router};
 
 pub async fn router() -> Result<Router> {
-    let ret = Router::new();
+    let ret = Router::new().route("/oauth", post(oauth::oauth));
 
     Ok(ret)
 }

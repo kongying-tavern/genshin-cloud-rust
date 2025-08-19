@@ -11,7 +11,7 @@ use axum_extra::{
 };
 
 use _functions::functions::CommonResponse;
-use _utils::types::auth::{verify_token, AuthInfo};
+use _utils::jwt::{verify_token, AuthInfo};
 
 pub struct ExtractAuthInfo(pub Option<AuthInfo>);
 

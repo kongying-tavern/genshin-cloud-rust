@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::enums::{HistoryEditType, HistoryOperationType};
+use _utils::types::{HistoryEditType, HistoryOperationType};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "history", schema_name = "genshin_map")]
