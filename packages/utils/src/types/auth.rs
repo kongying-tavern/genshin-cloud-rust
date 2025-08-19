@@ -36,7 +36,7 @@ pub struct OauthAnonymousResponse {
     Debug, Clone, Copy, PartialEq, Default, EnumIter, Display, AsRefStr, Serialize, Deserialize,
 )]
 #[strum(serialize_all = "snake_case")]
-#[serde(rename_all = "snake_case", untagged)]
+#[serde(rename_all = "snake_case")]
 pub enum OauthTokenType {
     /// Bearer
     #[default]
@@ -47,7 +47,7 @@ pub enum OauthTokenType {
     Debug, Clone, Copy, PartialEq, Default, EnumIter, Display, AsRefStr, Serialize, Deserialize,
 )]
 #[strum(serialize_all = "snake_case")]
-#[serde(rename_all = "snake_case", untagged)]
+#[serde(rename_all = "snake_case")]
 pub enum OauthScopeType {
     /// 全局
     #[default]

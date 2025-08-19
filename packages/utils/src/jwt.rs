@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 
@@ -47,25 +48,25 @@ mod jwt_numeric_date {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Claims {
-    pub user_id: i64,
+    pub sub: i64,
+    pub jti: Uuid,
     #[serde(with = "jwt_numeric_date")]
     pub iat: DateTime<Utc>,
     #[serde(with = "jwt_numeric_date")]
     pub exp: DateTime<Utc>,
 }
 
-pub async fn generate_token(user_id: i64) -> Result<(String, DateTime<Utc>)> {
-    let now = chrono::Utc::now();
+pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
+
+pub async fn generate_token(now: DateTime<Utc>, user_id: i64, jti: Uuid) -> Result<String> {
     let claims = Claims {
-        user_id,
+        sub: user_id,
+        jti,
         iat: now,
-        exp: now + chrono::Duration::days(15),
+        exp: now + EXPIRED_APPEND_DURATION,
     };
 
-    Ok((
-        encode(&Header::default(), &claims, &JWT_SECRET.0).context("Failed to encode token")?,
-        now,
-    ))
+    Ok(encode(&Header::default(), &claims, &JWT_SECRET.0).context("Failed to encode token")?)
 }
 
 pub async fn verify_token(token: &str) -> Result<Claims> {
