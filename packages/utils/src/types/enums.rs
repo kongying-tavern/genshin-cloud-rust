@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::ops::BitOr;
 use strum::EnumIter;
 
 use sea_orm::prelude::*;
@@ -18,7 +17,7 @@ pub enum HiddenFlag {
     Spy = 2,
     /// 彩蛋
     #[sea_orm(num_value = 3)]
-    Superise = 3,
+    Suprise = 3,
 }
 
 #[derive(
@@ -155,91 +154,33 @@ pub enum SystemActionLogAction {
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {
     /// 系统管理员
-    Admin = 2,
+    Admin = 0,
     /// 地图管理员
-    MapManager = 3,
+    MapManager = 1,
     /// 测试打点员
-    MapNeigui = 4,
+    MapNeigui = 2,
     /// 地图打点员
-    MapPunctuate = 5,
+    MapPunctuate = 3,
     /// 地图用户
-    MapUser = 6,
+    MapUser = 4,
     /// 匿名用户
-    Visitor = 100,
+    Visitor = 5,
 }
 
-impl From<i32> for SystemUserRole {
-    fn from(v: i32) -> Self {
-        match v {
-            2 => SystemUserRole::Admin,
-            3 => SystemUserRole::MapManager,
-            4 => SystemUserRole::MapNeigui,
-            5 => SystemUserRole::MapPunctuate,
-            6 => SystemUserRole::MapUser,
-            100 => SystemUserRole::Visitor,
-            x if x < 2 => SystemUserRole::Admin,
-            _ => SystemUserRole::Visitor,
+impl SystemUserRole {
+    fn is_available(self, flag: HiddenFlag) -> bool {
+        if matches!(flag, HiddenFlag::Visible | HiddenFlag::Suprise) {
+            return true;
         }
-    }
-}
 
-/// `HiddenFlag` 的掩码枚举，从低到高分别分配一个二进制位，用于配合权限等级的掩码计算
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
-#[repr(u8)]
-pub enum HiddenFlagMask {
-    Visible = 1 << 0,
-    Hidden = 1 << 1,
-    Spy = 1 << 2,
-    Superise = 1 << 3,
-}
-
-impl BitOr for HiddenFlagMask {
-    type Output = u8;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
-        (self as u8) | (rhs as u8)
-    }
-}
-
-impl BitOr<u8> for HiddenFlagMask {
-    type Output = u8;
-
-    fn bitor(self, rhs: u8) -> Self::Output {
-        (self as u8) | rhs
-    }
-}
-
-impl BitOr<HiddenFlagMask> for u8 {
-    type Output = u8;
-
-    fn bitor(self, rhs: HiddenFlagMask) -> Self::Output {
-        self | (rhs as u8)
-    }
-}
-
-impl Into<u8> for SystemUserRole {
-    fn into(self) -> u8 {
         match self {
-            SystemUserRole::Admin => {
-                HiddenFlagMask::Visible
-                    | HiddenFlagMask::Hidden
-                    | HiddenFlagMask::Spy
-                    | HiddenFlagMask::Superise
-            } // 1|2|4|8 = 15
-            SystemUserRole::MapManager => {
-                HiddenFlagMask::Visible | HiddenFlagMask::Hidden | HiddenFlagMask::Superise
-            } // 1|2|8 = 11
-            SystemUserRole::MapNeigui => {
-                HiddenFlagMask::Visible
-                    | HiddenFlagMask::Hidden
-                    | HiddenFlagMask::Spy
-                    | HiddenFlagMask::Superise
-            } // 1|2|4|8 = 15
-            SystemUserRole::MapPunctuate => {
-                HiddenFlagMask::Visible | HiddenFlagMask::Hidden | HiddenFlagMask::Superise
-            } // 1|2|8 = 11
-            SystemUserRole::MapUser => HiddenFlagMask::Visible | HiddenFlagMask::Superise, // 1|8 = 9
-            SystemUserRole::Visitor => HiddenFlagMask::Visible | HiddenFlagMask::Superise, // 1|8 = 9
+            SystemUserRole::Admin | SystemUserRole::MapNeigui => {
+                matches!(flag, HiddenFlag::Hidden | HiddenFlag::Spy)
+            }
+            SystemUserRole::MapManager | SystemUserRole::MapPunctuate => {
+                matches!(flag, HiddenFlag::Hidden)
+            }
+            SystemUserRole::MapUser | SystemUserRole::Visitor => false,
         }
     }
 }
