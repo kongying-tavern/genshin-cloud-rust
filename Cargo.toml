@@ -94,5 +94,6 @@ redis = { version = "^0.32", features = [
   "ahash",
   "uuid",
   "json",
+  "aio",
 ] }
 minio = "^0.3"

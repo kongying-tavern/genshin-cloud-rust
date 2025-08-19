@@ -37,7 +37,7 @@ where
 
             return Ok(Self(Some(AuthInfo {
                 token,
-                user_id: claims.user_id,
+                user_id: claims.sub,
                 created_at: claims.iat,
                 expires_at: claims.exp,
             })));
