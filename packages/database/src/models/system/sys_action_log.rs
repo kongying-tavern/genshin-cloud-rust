@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::SystemActionLogAction;
+use _utils::types::{SysActionLogExtra, SystemActionLogAction};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_action_log", schema_name = "genshin_map")]
@@ -33,8 +33,8 @@ pub struct Model {
     /// 是否发生错误
     pub is_error: bool,
     /// 附加信息
-    /// TODO: 原客户端的设计中，这个值似乎总是为 {"accessPaths":[]}
-    pub extra_data: Option<serde_json::Value>,
+    #[sea_orm(column_type = "Json")]
+    pub extra_data: SysActionLogExtra,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

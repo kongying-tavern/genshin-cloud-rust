@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
 
 use axum::{
-    extract::{ConnectInfo, Form, Json, Multipart, Query},
+    extract::{ConnectInfo, Json, Multipart, Query},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -78,7 +78,7 @@ pub async fn oauth(
             .remove("password")
             .ok_or((StatusCode::BAD_REQUEST, "Password is required".into()))?;
         return Ok(Json(
-            oauth_password_login(username, password)
+            oauth_password_login(username, password, ip, user_agent)
                 .await
                 .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
         )

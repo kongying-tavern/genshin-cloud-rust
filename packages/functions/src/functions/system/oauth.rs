@@ -1,28 +1,25 @@
 use anyhow::{anyhow, Result};
+use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::prelude::*;
+use sea_orm::{prelude::*, ActiveValue::Set};
 
 use _database::{models, DB_CONN};
 use _utils::{
     bcrypt::verify_hash,
     jwt::{generate_token, EXPIRED_APPEND_DURATION},
-    types::auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
+    types::{
+        auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
+        SystemActionLogAction,
+    },
 };
 
-pub async fn oauth_password_login(
-    username: String,
-    password: String,
+async fn oauth_password_login_inner(
+    item: models::system::sys_user::Model,
+    password_raw: String,
 ) -> Result<OauthLoginResponse> {
-    let item = models::system::sys_user::Entity::find()
-        .filter(models::system::sys_user::Column::DelFlag.eq(false))
-        .filter(models::system::sys_user::Column::Username.eq(username))
-        .one(&DB_CONN.wait().pg_conn)
-        .await?
-        .ok_or(anyhow!("User not found"))?;
-
     if !verify_hash(
-        password,
+        password_raw,
         item.password
             .strip_prefix("{bcrypt}")
             .ok_or(anyhow!("Failed to strip bcrypt prefix"))?,
@@ -71,6 +68,38 @@ pub async fn oauth_password_login(
         scope: OauthScopeType::All,
         jti,
     })
+}
+
+pub async fn oauth_password_login(
+    username: String,
+    password_raw: String,
+    ip: SocketAddr,
+    user_agent: String,
+) -> Result<OauthLoginResponse> {
+    let item = models::system::sys_user::Entity::find()
+        .filter(models::system::sys_user::Column::DelFlag.eq(false))
+        .filter(models::system::sys_user::Column::Username.eq(username))
+        .one(&DB_CONN.wait().pg_conn)
+        .await?
+        .ok_or(anyhow!("User not found"))?;
+    let user_id = item.id;
+
+    // TODO: 根据 access_policy 指定的模式，对请求做各种检查
+    let ret = oauth_password_login_inner(item, password_raw).await;
+
+    models::system::sys_action_log::ActiveModel {
+        user_id: Set(Some(user_id)),
+        ipv4: Set(Some(ip.to_string())),
+        device_id: Set(user_agent),
+        action: Set(SystemActionLogAction::Login),
+        is_error: Set(ret.is_err()),
+        extra_data: Set(Default::default()),
+        ..Default::default()
+    }
+    .insert(&DB_CONN.wait().pg_conn)
+    .await?;
+
+    ret
 }
 
 pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
