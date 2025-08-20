@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::SystemUserRole;
+use _utils::types::{AccessPolicyList, SystemUserRole};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "sys_user", schema_name = "genshin_map")]
@@ -42,7 +42,8 @@ pub struct Model {
     /// 角色 ID
     pub role_id: SystemUserRole,
     /// 权限策略
-    pub access_policy: Option<serde_json::Value>,
+    #[sea_orm(column_type = "Json")]
+    pub access_policy: AccessPolicyList,
     /// 备注
     pub remark: Option<String>,
 }

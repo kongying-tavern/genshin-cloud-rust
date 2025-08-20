@@ -3,6 +3,7 @@ use strum::{AsRefStr, Display, EnumIter};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct OauthLoginResponse {
     /// 访问令牌
     pub access_token: String,
@@ -19,6 +20,7 @@ pub struct OauthLoginResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct OauthAnonymousResponse {
     /// 访问令牌
     pub access_token: String,
