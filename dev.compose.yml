@@ -1,6 +1,20 @@
-# 请注意，该集群配置**不是**生产环境配置，只用于本地测试环境
+# Attention: This cluster configuration is **not** for production use!
+# 注意：该集群配置**不是**生产环境配置！
 
 services:
+  postgres:
+    image: postgres:latest
+    container_name: test-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: genshin_map
+      POSTGRES_PASSWORD: genshin_map
+      POSTGRES_DB: genshin_map
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   redis:
     image: redis:latest
     container_name: test-redis
@@ -36,6 +50,7 @@ services:
   #   restart: unless-stopped
 
 volumes:
+  postgres-data:
   redis-data:
   minio-data:
   # alist-data:
