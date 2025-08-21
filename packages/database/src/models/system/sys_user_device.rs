@@ -1,3 +1,4 @@
+use _utils::impl_safe_operation;
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -57,4 +58,9 @@ pub enum Relation {
     UserId,
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl_safe_operation! {
+    active_model_ty: ActiveModel,
+    updated_at_column_name: update_time,
+    updated_at_column_init_expr: chrono::Utc::now().naive_utc(),
+    del_flag_column: Column::DelFlag
+}

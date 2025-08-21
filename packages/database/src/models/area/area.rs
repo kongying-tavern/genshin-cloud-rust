@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::types::HiddenFlag;
+use _utils::{impl_safe_operation, types::HiddenFlag};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "area", schema_name = "genshin_map")]
@@ -75,4 +75,9 @@ impl Linked for ParentReferencingLink {
     }
 }
 
-impl ActiveModelBehavior for ActiveModel {}
+impl_safe_operation! {
+    active_model_ty: ActiveModel,
+    updated_at_column_name: update_time,
+    updated_at_column_init_expr: chrono::Utc::now().naive_utc(),
+    del_flag_column: Column::DelFlag
+}
