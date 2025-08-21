@@ -19,6 +19,7 @@ edition = "2024"
 
 [workspace.dependencies]
 anyhow = { version = "^1", features = ["backtrace"] }
+async-trait = "^0.1"
 derive_more = { version = "^2", features = ["full"] }
 once_cell = "^1"
 
