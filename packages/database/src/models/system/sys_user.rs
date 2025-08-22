@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use _utils::{
     impl_safe_operation,
+    models::SysUserVO,
     types::{AccessPolicyList, SystemUserRole},
 };
 
@@ -10,18 +11,18 @@ use _utils::{
 #[sea_orm(table_name = "sys_user", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: i64,
+    pub version: u64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: i64,
+    pub id: u64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<i64>,
+    pub creator_id: Option<u64>,
     /// 更新人
-    pub updater_id: Option<i64>,
+    pub updater_id: Option<u64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -72,4 +73,19 @@ impl_safe_operation! {
     updated_at_column_name: update_time,
     updated_at_column_init_expr: chrono::Utc::now().naive_utc(),
     del_flag_column: Column::DelFlag
+}
+
+impl Into<SysUserVO> for Model {
+    fn into(self) -> SysUserVO {
+        SysUserVO {
+            id: self.id,
+            username: self.username,
+            nickname: self.nickname,
+            qq: self.qq,
+            phone: self.phone,
+            logo: self.logo,
+            access_policy: self.access_policy,
+            remark: self.remark,
+        }
+    }
 }

@@ -7,18 +7,18 @@ use _utils::{impl_safe_operation, types::MarkerLinkageLinkAction};
 #[sea_orm(table_name = "marker_linkage", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: i64,
+    pub version: u64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: i64,
+    pub id: u64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<i64>,
+    pub creator_id: Option<u64>,
     /// 更新人
-    pub updater_id: Option<i64>,
+    pub updater_id: Option<u64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -28,11 +28,11 @@ pub struct Model {
     /// 起始点点位 ID
     /// 会根据是否反向与 to_id 交换
     /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
-    pub from_id: i64,
+    pub from_id: u64,
     /// 终止点点位 ID
     /// 会根据是否反向与 from_id 交换
     /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
-    pub to_id: i64,
+    pub to_id: u64,
     /// 关联操作类型
     /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub link_action: MarkerLinkageLinkAction,

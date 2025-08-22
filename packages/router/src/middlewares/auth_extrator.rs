@@ -10,8 +10,10 @@ use axum_extra::{
     TypedHeader,
 };
 
-use _functions::functions::CommonResponse;
-use _utils::jwt::{verify_token, AuthInfo};
+use _utils::{
+    jwt::{verify_token, AuthInfo},
+    models::CommonResponse,
+};
 
 pub struct ExtractAuthInfo(pub Option<AuthInfo>);
 

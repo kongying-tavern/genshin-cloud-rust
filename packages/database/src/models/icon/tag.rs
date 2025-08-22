@@ -6,18 +6,18 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "tag", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: i64,
+    pub version: u64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: i64,
+    pub id: u64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<i64>,
+    pub creator_id: Option<u64>,
     /// 更新人
-    pub updater_id: Option<i64>,
+    pub updater_id: Option<u64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -26,7 +26,7 @@ pub struct Model {
     pub tag: String,
     /// 图标 ID
     #[sea_orm(indexed)]
-    pub icon_id: i64,
+    pub icon_id: u64,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
