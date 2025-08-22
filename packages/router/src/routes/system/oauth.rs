@@ -115,6 +115,5 @@ pub async fn oauth(
                 .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
             return Ok(StatusCode::NO_CONTENT.into_response());
         }
-        _ => return Err((StatusCode::BAD_REQUEST, "Invalid grant type".into())),
     }
 }

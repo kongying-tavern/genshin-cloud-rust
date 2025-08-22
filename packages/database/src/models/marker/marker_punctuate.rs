@@ -10,27 +10,27 @@ use _utils::{
 #[sea_orm(table_name = "marker_punctuate", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: i64,
+    pub version: u64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: i64,
+    pub id: u64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<i64>,
+    pub creator_id: Option<u64>,
     /// 更新人
-    pub updater_id: Option<i64>,
+    pub updater_id: Option<u64>,
     /// 逻辑删除
     pub del_flag: bool,
 
     /// 点位提交 ID
-    pub punctuate_id: i64,
+    pub punctuate_id: u64,
     /// 原有点位 ID
     /// 该列的数值仅当操作为修改或删除时才有意义
     #[sea_orm(indexed)]
-    pub original_marker_id: Option<i64>,
+    pub original_marker_id: Option<u64>,
     /// 点位名称
     pub marker_title: Option<String>,
     /// 点位物品列表
@@ -42,13 +42,13 @@ pub struct Model {
     /// 点位图片
     pub picture: Option<String>,
     /// 点位初始标记者
-    pub marker_creator_id: i64,
+    pub marker_creator_id: u64,
     /// 点位图片上传者
-    pub picture_creator_id: Option<i64>,
+    pub picture_creator_id: Option<u64>,
     /// 点位视频
     pub video_path: Option<String>,
     /// 点位提交者 ID
-    pub author: i64,
+    pub author: u64,
     /// 状态
     pub status: MarkerPunctuateStatus,
     /// 审核备注
@@ -56,7 +56,7 @@ pub struct Model {
     /// 操作类型
     pub method_type: MarkerPunctuateMethodType,
     /// 点位刷新时间
-    pub refresh_time: i64,
+    pub refresh_time: u64,
     /// 权限屏蔽标记
     #[sea_orm(indexed)]
     pub hidden_flag: HiddenFlag,
