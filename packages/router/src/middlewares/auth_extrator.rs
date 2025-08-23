@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 use axum::{
     extract::FromRequestParts,
@@ -15,7 +15,7 @@ use _utils::{
     models::CommonResponse,
 };
 
-pub struct ExtractAuthInfo(pub Option<AuthInfo>);
+pub struct ExtractAuthInfo(pub AuthInfo);
 
 impl<S> FromRequestParts<S> for ExtractAuthInfo
 where
@@ -37,14 +37,22 @@ where
                     .into_response()
             })?;
 
-            return Ok(Self(Some(AuthInfo {
+            return Ok(Self(AuthInfo {
                 token,
                 user_id: claims.sub,
                 created_at: claims.iat,
                 expires_at: claims.exp,
-            })));
+            }));
         }
 
-        Ok(Self(None))
+        let ret = (
+            StatusCode::UNAUTHORIZED,
+            serde_json::to_string(
+                &CommonResponse::<()>::new(Err(anyhow!("No Authorization header found")))
+                    .with_status(StatusCode::UNAUTHORIZED.as_u16()),
+            )
+            .expect("Failed to serialize error response"),
+        );
+        Err(ret.into_response())
     }
 }
