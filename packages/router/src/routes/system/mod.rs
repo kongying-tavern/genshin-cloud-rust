@@ -15,14 +15,17 @@ use axum::{
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
-        .route("/archive/last/{}", get(archive::get_last))
-        .route("/archive/history/{}", get(archive::get_history))
+        .route("/archive/last/{slot_index}", get(archive::get_last))
+        .route("/archive/history/{slot_index}", get(archive::get_history))
         .route("/archive/all_history", get(archive::get_all_history))
-        .route("/archive/{}/{}", put(archive::put))
-        .route("/archive/save/{}", post(archive::save))
-        .route("/archive/rename/{}/{}", post(archive::rename))
-        .route("/archive/restore/{}", delete(archive::restore))
-        .route("/archive/slot/{}", delete(archive::delete_slot))
+        .route("/archive/{slot_index}/{name}", put(archive::put))
+        .route("/archive/save/{slot_index}", post(archive::save))
+        .route(
+            "/archive/rename/{slot_index}/{new_name}",
+            post(archive::rename),
+        )
+        .route("/archive/restore/{slot_index}", delete(archive::restore))
+        .route("/archive/slot/{slot_index}", delete(archive::delete_slot))
         .route("/action_log/list", post(action_log::list))
         .route("/device/list", post(device::list))
         .route("/device/update", post(device::update))
@@ -30,20 +33,20 @@ pub async fn router() -> Result<Router> {
         .route("/invitation/update", post(invitation::update))
         .route("/invitation/info", post(invitation::info))
         .route("/invitation/consume", post(invitation::consume))
-        .route("/invitation/{}", delete(invitation::delete))
+        .route("/invitation/{invitation_id}", delete(invitation::delete))
         .route("/role/list", get(role::list))
         .route("/user/register", post(user::register))
         .route("/user/register/qq", post(user::register_qq))
-        .route("/user/info/{}", get(user::get_info))
+        .route("/user/info/{user_id}", get(user::get_info))
         .route("/user/update", post(user::update))
         .route("/user/update_password", post(user::update_password))
         .route(
             "/user/update_password_by_admin",
             post(user::update_password_by_admin),
         )
-        .route("/user/{}", delete(user::delete))
+        .route("/user/{work_id}", delete(user::delete))
         .route("/user/info/list", post(user::list))
-        .route("/user/kick_out/{}", delete(user::kick_out));
+        .route("/user/kick_out/{work_id}", delete(user::kick_out));
 
     Ok(ret)
 }
