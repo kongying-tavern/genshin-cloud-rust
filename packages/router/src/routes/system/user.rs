@@ -1,5 +1,4 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 use axum::{
     extract::{Json, Path},
@@ -8,119 +7,10 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::{models::wrapper::Pagination, types::AccessPolicyItemEnum};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum UserSort {
-    #[serde(rename = "createTime+")]
-    CreateTime,
-    #[serde(rename = "createTime-")]
-    CreateTimeReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "nickname+")]
-    Nickname,
-    #[serde(rename = "nickname-")]
-    NicknameReverse,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserRegisterParams {
-    /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
-    /// 头像链接
-    pub logo: String,
-    /// 备注
-    pub remark: String,
-    /// 角色列表
-    pub role_id: i64,
-    /// 用户名
-    pub username: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserRegisterQqParams {
-    /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
-    /// 头像链接
-    pub logo: String,
-    /// 备注
-    pub remark: String,
-    /// 角色列表
-    pub role_id: i64,
-    /// 用户名
-    pub username: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserUpdateParams {
-    /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
-    /// 头像链接
-    pub logo: String,
-    /// 昵称
-    pub nickname: String,
-    /// 手机号
-    pub phone: String,
-    /// QQ
-    pub qq: String,
-    /// 备注
-    pub remark: String,
-    /// 角色列表
-    pub role_id: i64,
-    /// 用户ID
-    pub user_id: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserUpdatePasswordParams {
-    /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
-    /// ID
-    pub id: i64,
-    /// 头像链接
-    pub logo: String,
-    pub old_password: String,
-    /// 备注
-    pub remark: String,
-    /// 角色列表
-    pub role_id: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserUpdatePasswordByAdminParams {
-    /// 新密码
-    pub password: String,
-    /// 用户ID
-    pub user_id: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserListParams {
-    #[serde(flatten)]
-    pub pagination: Pagination,
-    /// 昵称
-    pub nickname: String,
-    /// 角色ID
-    pub role_ids: Option<Vec<i64>>,
-    pub sort: Option<Vec<UserSort>>,
-    /// 用户名
-    pub username: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct UserKickOutParams {
-    pub work_id: String,
-}
+use _utils::models::{
+    UserListParams, UserRegisterParams, UserRegisterQQParams, UserUpdateParams,
+    UserUpdatePasswordByAdminParams, UserUpdatePasswordParams,
+};
 
 /// 注册用户
 /// POST /user/register
@@ -137,7 +27,7 @@ pub async fn register(
 #[tracing::instrument(skip_all)]
 pub async fn register_qq(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<UserRegisterQqParams>,
+    Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(())
 }
