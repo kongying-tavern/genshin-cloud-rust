@@ -9,30 +9,30 @@ use _utils::models::wrapper::Pagination;
 /// 格式：字段+ 字段-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DeviceSort {
-    #[serde(rename = "deviceId-")]
-    DeviceId,
-    #[serde(rename = "id-")]
-    Id,
-    #[serde(rename = "ipv4-")]
-    Ipv4,
-    #[serde(rename = "lastLoginTime-")]
-    LastLoginTime,
     #[serde(rename = "deviceId+")]
-    SortDeviceId,
+    DeviceId,
+    #[serde(rename = "deviceId-")]
+    DeviceIdReverse,
     #[serde(rename = "id+")]
-    SortId,
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
     #[serde(rename = "ipv4+")]
-    SortIpv4,
+    Ipv4,
+    #[serde(rename = "ipv4-")]
+    Ipv4Reverse,
     #[serde(rename = "lastLoginTime+")]
-    SortLastLoginTime,
+    LastLoginTime,
+    #[serde(rename = "lastLoginTime-")]
+    LastLoginTimeReverse,
     #[serde(rename = "status+")]
-    SortStatus,
-    #[serde(rename = "updateTime+")]
-    SortUpdateTime,
-    #[serde(rename = "status-")]
     Status,
-    #[serde(rename = "updateTime-")]
+    #[serde(rename = "status-")]
+    StatusReverse,
+    #[serde(rename = "updateTime+")]
     UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

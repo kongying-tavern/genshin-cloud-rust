@@ -16,30 +16,30 @@ pub enum Action {
 /// 操作日志排序枚举
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ActionLogSort {
-    #[serde(rename = "action-")]
-    Action,
-    #[serde(rename = "deviceId-")]
-    DeviceId,
-    #[serde(rename = "id-")]
-    Id,
-    #[serde(rename = "ipv4-")]
-    Ipv4,
-    #[serde(rename = "isError-")]
-    IsError,
     #[serde(rename = "action+")]
-    SortAction,
+    Action,
+    #[serde(rename = "action-")]
+    ActionReverse,
     #[serde(rename = "deviceId+")]
-    SortDeviceId,
+    DeviceId,
+    #[serde(rename = "deviceId-")]
+    DeviceIdReverse,
     #[serde(rename = "id+")]
-    SortId,
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
     #[serde(rename = "ipv4+")]
-    SortIpv4,
+    Ipv4,
+    #[serde(rename = "ipv4-")]
+    Ipv4Reverse,
     #[serde(rename = "isError+")]
-    SortIsError,
+    IsError,
+    #[serde(rename = "isError-")]
+    IsErrorReverse,
     #[serde(rename = "updateTime+")]
-    SortUpdateTime,
-    #[serde(rename = "updateTime-")]
     UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

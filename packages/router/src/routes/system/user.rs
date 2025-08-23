@@ -14,16 +14,16 @@ use _utils::{models::wrapper::Pagination, types::AccessPolicyItemEnum};
 pub enum UserSort {
     #[serde(rename = "createTime+")]
     CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
     #[serde(rename = "id+")]
     Id,
+    #[serde(rename = "id-")]
+    IdReverse,
     #[serde(rename = "nickname+")]
     Nickname,
-    #[serde(rename = "createTime-")]
-    SortCreateTime,
-    #[serde(rename = "id-")]
-    SortId,
     #[serde(rename = "nickname-")]
-    SortNickname,
+    NicknameReverse,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
