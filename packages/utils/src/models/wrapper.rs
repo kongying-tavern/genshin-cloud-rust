@@ -32,21 +32,24 @@ impl<T> CommonResponse<T> {
         }
     }
 
-    pub fn new_with_users(result: Result<T>, users: Vec<SysUserVO>) -> Self {
-        match result {
-            Ok(data) => Self {
-                error: false,
-                data: Some(data),
-                users,
-                ..Default::default()
-            },
-            Err(err) => Self {
-                error: true,
-                message: err.to_string(),
-                users,
-                ..Default::default()
-            },
-        }
+    pub fn with_users(mut self, users: Vec<SysUserVO>) -> Self {
+        self.users = users;
+        self
+    }
+
+    pub fn with_status(mut self, status: u16) -> Self {
+        self.error_status = status;
+        self
+    }
+
+    pub fn with_error_data(mut self, error_data: serde_json::Value) -> Self {
+        self.error_data = Some(error_data);
+        self
+    }
+
+    pub fn with_message(mut self, message: String) -> Self {
+        self.message = message;
+        self
     }
 }
 
@@ -66,7 +69,7 @@ impl<T> Default for CommonResponse<T> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Page {
+pub struct Pagination {
     pub current: u32,
     pub size: u32,
 }
