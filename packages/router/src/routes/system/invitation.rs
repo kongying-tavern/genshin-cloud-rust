@@ -27,22 +27,22 @@ pub struct InvitationListRequest {
 /// 邀请排序枚举
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum InvitationSort {
-    #[serde(rename = "createTime-")]
-    CreateTime,
-    #[serde(rename = "id-")]
-    Id,
     #[serde(rename = "createTime+")]
-    SortCreateTime,
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
     #[serde(rename = "id+")]
-    SortId,
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
     #[serde(rename = "updateTime+")]
-    SortUpdateTime,
-    #[serde(rename = "username+")]
-    SortUsername,
-    #[serde(rename = "updateTime-")]
     UpdateTime,
-    #[serde(rename = "username-")]
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+    #[serde(rename = "username+")]
     Username,
+    #[serde(rename = "username-")]
+    UsernameReverse,
 }
 
 /// 新增/更新用户邀请的请求参数
