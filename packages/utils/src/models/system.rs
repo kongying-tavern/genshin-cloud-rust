@@ -6,7 +6,7 @@ use crate::types::{AccessPolicyList, SystemUserRole};
 #[serde(rename_all = "camelCase")]
 pub struct SysUserVO {
     /// ID
-    pub id: u64,
+    pub id: i64,
     /// 用户名
     pub username: String,
     /// 昵称

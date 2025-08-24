@@ -10,18 +10,18 @@ use _utils::{
 #[sea_orm(table_name = "item", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: u64,
+    pub version: i64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: u64,
+    pub id: i64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<u64>,
+    pub creator_id: Option<i64>,
     /// 更新人
-    pub updater_id: Option<u64>,
+    pub updater_id: Option<i64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -30,11 +30,11 @@ pub struct Model {
     /// 地区 ID
     /// 须确保是末端地区
     #[sea_orm(indexed)]
-    pub area_id: u64,
+    pub area_id: i64,
     /// 默认刷新时间
     /// 单位为毫秒
     #[sea_orm(default_value = 0)]
-    pub default_refresh_time: u64,
+    pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
     pub default_content: Option<String>,

@@ -12,7 +12,7 @@ pub struct OauthLoginResponse {
     /// 令牌类型
     pub token_type: OauthTokenType,
     /// 令牌寿命
-    pub expires_in: u64,
+    pub expires_in: i64,
     /// 生效范围
     pub scope: OauthScopeType,
     /// 唯一标识
@@ -27,7 +27,7 @@ pub struct OauthAnonymousResponse {
     /// 令牌类型
     pub token_type: OauthTokenType,
     /// 令牌寿命
-    pub expires_in: u64,
+    pub expires_in: i64,
     /// 生效范围
     pub scope: OauthScopeType,
     /// 唯一标识

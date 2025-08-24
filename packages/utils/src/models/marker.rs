@@ -17,14 +17,14 @@ pub struct MarkerRequest {
     /// 点位图片
     pub picture: Option<String>,
     /// 点位初始标记者
-    pub marker_creator_id: u64,
+    pub marker_creator_id: i64,
     /// 点位图片上传者
-    pub picture_creator_id: Option<u64>,
+    pub picture_creator_id: Option<i64>,
     /// 点位视频
     pub video_path: Option<String>,
     /// 点位刷新时间
     /// 单位为毫秒
-    pub refresh_time: u64,
+    pub refresh_time: i64,
     /// 权限屏蔽标记
     pub hidden_flag: HiddenFlag,
     /// 额外特殊字段
@@ -207,9 +207,9 @@ pub struct MarkerTweakRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MarkerUpdateRequest {
     /// 点位 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础点位信息
     #[serde(flatten)]
     pub marker: MarkerRequest,
@@ -222,7 +222,7 @@ pub struct MarkerListRequest {
     /// 点位名称（模糊搜索）
     pub marker_title: Option<String>,
     /// 点位初始标记者
-    pub marker_creator_id: Option<u64>,
+    pub marker_creator_id: Option<i64>,
     /// 权限屏蔽标记
     pub hidden_flag: Option<HiddenFlag>,
 

@@ -7,18 +7,18 @@ use _utils::{impl_safe_operation, types::HiddenFlag};
 #[sea_orm(table_name = "route", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: u64,
+    pub version: i64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: u64,
+    pub id: i64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<u64>,
+    pub creator_id: Option<i64>,
     /// 更新人
-    pub updater_id: Option<u64>,
+    pub updater_id: Option<i64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -41,7 +41,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct MarkerListWrapper(Vec<u64>);
+pub struct MarkerListWrapper(Vec<i64>);
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
 pub enum Relation {

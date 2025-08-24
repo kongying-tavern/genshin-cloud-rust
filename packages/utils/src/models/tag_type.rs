@@ -22,9 +22,9 @@ pub type TagTypeAddRequest = TagTypeBaseRequest;
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeUpdateRequest {
     /// 标签类型 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础标签类型信息
     #[serde(flatten)]
     pub base: TagTypeBaseRequest,

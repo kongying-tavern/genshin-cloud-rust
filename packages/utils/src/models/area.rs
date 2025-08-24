@@ -38,9 +38,9 @@ pub type AreaAddRequest = AreaRequest;
 #[serde(rename_all = "camelCase")]
 pub struct AreaUpdateRequest {
     /// 地区 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础地区信息
     #[serde(flatten)]
     pub area: AreaRequest,

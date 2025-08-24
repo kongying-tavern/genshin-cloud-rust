@@ -5,7 +5,7 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
     where
         Self: Sized;
 
-    fn find_safety_by_id(id: u64) -> ::sea_orm::Select<Self>
+    fn find_safety_by_id(id: i64) -> ::sea_orm::Select<Self>
     where
         Self: Sized;
 
@@ -21,7 +21,7 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
     where
         Self: Sized;
 
-    fn delete_safety_by_id(id: u64) -> ::sea_orm::UpdateOne<<Self as SafeEntityTrait>::ActiveModel>
+    fn delete_safety_by_id(id: i64) -> ::sea_orm::UpdateOne<<Self as SafeEntityTrait>::ActiveModel>
     where
         Self: Sized;
 }
@@ -73,7 +73,7 @@ macro_rules! impl_safe_operation {
                 Self::find().filter($del_flag_column.eq(false))
             }
 
-            fn find_safety_by_id(id: u64) -> ::sea_orm::Select<Self> {
+            fn find_safety_by_id(id: i64) -> ::sea_orm::Select<Self> {
                 Self::find_safety().filter(Column::Id.eq(id))
             }
 
@@ -82,14 +82,14 @@ macro_rules! impl_safe_operation {
                     .version
                     .into_value()
                     .and_then(|v| match v {
-                        ::sea_orm::Value::TinyInt(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::SmallInt(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::Int(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::BigInt(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::TinyUnsigned(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::SmallUnsigned(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::Unsigned(Some(val)) => Some(val as u64),
-                        ::sea_orm::Value::BigUnsigned(Some(val)) => Some(val),
+                        ::sea_orm::Value::TinyInt(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::SmallInt(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::Int(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::BigInt(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::TinyUnsigned(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::SmallUnsigned(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::Unsigned(Some(val)) => Some(val as i64),
+                        ::sea_orm::Value::BigUnsigned(Some(val)) => Some(val as i64),
                         _ => None,
                     })
                     .unwrap_or(1);
@@ -107,7 +107,7 @@ macro_rules! impl_safe_operation {
                 })
             }
 
-            fn delete_safety_by_id(id: u64) -> ::sea_orm::UpdateOne<ActiveModel> {
+            fn delete_safety_by_id(id: i64) -> ::sea_orm::UpdateOne<ActiveModel> {
                 Self::delete_safety(ActiveModel {
                     id: ::sea_orm::ActiveValue::Set(id),
                     ..Default::default()
