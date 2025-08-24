@@ -22,6 +22,7 @@ exec cargo run
 '''
 
 [tasks.dev.env]
+PORT = "8101"
 DB_HOST = "127.0.0.1"
 DB_PORT = "5432"
 DB_USERNAME = "genshin_map"
