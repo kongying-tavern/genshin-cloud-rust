@@ -20,9 +20,9 @@ pub type IconTypeAddRequest = IconTypeBaseRequest;
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeUpdateRequest {
     /// 图标类型 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础图标类型信息
     #[serde(flatten)]
     pub base: IconTypeBaseRequest,

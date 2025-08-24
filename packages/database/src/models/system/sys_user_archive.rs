@@ -6,18 +6,18 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "sys_user_archive", schema_name = "genshin_map")]
 pub struct Model {
     /// 乐观锁
-    pub version: u64,
+    pub version: i64,
     /// ID
     #[sea_orm(primary_key)]
-    pub id: u64,
+    pub id: i64,
     /// 创建时间
     pub create_time: DateTime,
     /// 更新时间
     pub update_time: Option<DateTime>,
     /// 创建人
-    pub creator_id: Option<u64>,
+    pub creator_id: Option<i64>,
     /// 更新人
-    pub updater_id: Option<u64>,
+    pub updater_id: Option<i64>,
     /// 逻辑删除
     pub del_flag: bool,
 
@@ -27,7 +27,7 @@ pub struct Model {
     pub slot_index: i32,
     /// 用户 ID
     #[sea_orm(indexed)]
-    pub user_id: u64,
+    pub user_id: i64,
     /// 存档信息
     /// TODO: 绑定一个完整的存档数据结构
     pub data: serde_json::Value,

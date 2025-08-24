@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct MarkerItemLinkRequest {
     /// 第一个关联 ID
-    pub id1: u64,
+    pub id1: i64,
     /// 第二个关联 ID
-    pub id2: u64,
+    pub id2: i64,
     /// 数量
     pub count: i32,
 }
@@ -19,9 +19,9 @@ pub struct MarkerItemLinkRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CountedLinkRequest {
     /// 第一个关联 ID
-    pub id1: u64,
+    pub id1: i64,
     /// 第二个关联 ID
-    pub id2: u64,
+    pub id2: i64,
     /// 数量
     pub count: i32,
 }
@@ -31,9 +31,9 @@ pub struct CountedLinkRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateLinkRequest {
     /// 关联记录 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础关联信息
     #[serde(flatten)]
     pub link: CountedLinkRequest,
@@ -44,9 +44,9 @@ pub struct UpdateLinkRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteLinkRequest {
     /// 第一个关联 ID
-    pub id1: u64,
+    pub id1: i64,
     /// 第二个关联 ID
-    pub id2: u64,
+    pub id2: i64,
 }
 
 /// 点位物品关联添加请求模型

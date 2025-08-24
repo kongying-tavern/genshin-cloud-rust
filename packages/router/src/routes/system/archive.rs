@@ -16,7 +16,7 @@ use _utils::types::SystemUserRole;
 #[tracing::instrument(skip(auth))]
 pub async fn get_last(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<u64>,
+    Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
@@ -30,7 +30,7 @@ pub async fn get_last(
 #[tracing::instrument(skip(auth))]
 pub async fn get_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<u64>,
+    Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
@@ -65,7 +65,7 @@ pub struct ArchiveSaveParams {
 #[tracing::instrument(skip(auth))]
 pub async fn put(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path((slot_index, name)): Path<(u64, String)>,
+    Path((slot_index, name)): Path<(i64, String)>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
@@ -80,7 +80,7 @@ pub async fn put(
 #[tracing::instrument(skip(auth))]
 pub async fn save(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<u64>,
+    Path(slot_index): Path<i64>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
@@ -95,7 +95,7 @@ pub async fn save(
 #[tracing::instrument(skip(auth))]
 pub async fn rename(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path((slot_index, new_name)): Path<(u64, String)>,
+    Path((slot_index, new_name)): Path<(i64, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
@@ -109,7 +109,7 @@ pub async fn rename(
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<u64>,
+    Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
@@ -123,7 +123,7 @@ pub async fn restore(
 #[tracing::instrument(skip(auth))]
 pub async fn delete_slot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<u64>,
+    Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());

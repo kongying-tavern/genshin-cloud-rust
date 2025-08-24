@@ -20,9 +20,9 @@ pub type IconAddRequest = IconBaseRequest;
 #[serde(rename_all = "camelCase")]
 pub struct IconUpdateRequest {
     /// 图标 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础图标信息
     #[serde(flatten)]
     pub base: IconBaseRequest,
@@ -33,9 +33,9 @@ pub struct IconUpdateRequest {
 #[serde(rename_all = "camelCase")]
 pub struct IconListRequest {
     /// 上传者
-    pub creator: Option<u64>,
+    pub creator: Option<i64>,
     /// 图标 ID 列表
-    pub icon_list: Option<Vec<u64>>,
+    pub icon_list: Option<Vec<i64>>,
     /// 图标名
     pub name: Option<String>,
 

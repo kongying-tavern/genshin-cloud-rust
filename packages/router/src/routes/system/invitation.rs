@@ -135,7 +135,7 @@ pub async fn consume(
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(invitation_id): Path<u64>,
+    Path(invitation_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());

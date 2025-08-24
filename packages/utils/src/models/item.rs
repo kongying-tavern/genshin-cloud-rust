@@ -13,10 +13,10 @@ pub struct ItemRequest {
     pub name: String,
     /// 地区 ID
     /// 须确保是末端地区
-    pub area_id: u64,
+    pub area_id: i64,
     /// 默认刷新时间
     /// 单位为毫秒
-    pub default_refresh_time: u64,
+    pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
     pub default_content: Option<String>,
@@ -127,9 +127,9 @@ pub struct ItemFilterRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ItemUpdateRequest {
     /// 物品 ID
-    pub id: u64,
+    pub id: i64,
     /// 乐观锁版本号
-    pub version: u64,
+    pub version: i64,
     /// 基础物品信息
     #[serde(flatten)]
     pub item: ItemRequest,
@@ -142,7 +142,7 @@ pub struct ItemListRequest {
     /// 物品名称（模糊搜索）
     pub name: Option<String>,
     /// 地区 ID
-    pub area_id: Option<u64>,
+    pub area_id: Option<i64>,
     /// 权限屏蔽标记
     pub hidden_flag: Option<HiddenFlag>,
 

@@ -67,7 +67,7 @@ async fn oauth_password_login_inner(
         access_token,
         refresh_token,
         token_type: OauthTokenType::Bearer,
-        expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+        expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
         scope: OauthScopeType::All,
         jti,
     })

@@ -49,7 +49,7 @@ mod jwt_numeric_date {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: u64,
+    pub sub: i64,
     pub jti: Uuid,
     #[serde(with = "jwt_numeric_date")]
     pub iat: DateTime<Utc>,
@@ -59,7 +59,7 @@ pub struct Claims {
 
 pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
 
-pub async fn generate_token(now: DateTime<Utc>, user_id: u64, jti: Uuid) -> Result<String> {
+pub async fn generate_token(now: DateTime<Utc>, user_id: i64, jti: Uuid) -> Result<String> {
     let claims = Claims {
         sub: user_id,
         jti,
