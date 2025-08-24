@@ -5,6 +5,7 @@ use sea_orm::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
+/// 权限屏蔽标记
 pub enum HiddenFlag {
     /// 可见
     #[sea_orm(num_value = 0)]
@@ -12,7 +13,7 @@ pub enum HiddenFlag {
     /// 隐藏
     #[sea_orm(num_value = 1)]
     Hidden = 1,
-    /// 内鬼
+    /// 内鬼 / 测试服
     #[sea_orm(num_value = 2)]
     Spy = 2,
     /// 彩蛋

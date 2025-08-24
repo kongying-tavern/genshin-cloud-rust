@@ -70,6 +70,6 @@ impl<T> Default for CommonResponse<T> {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
-    pub current: u32,
-    pub size: u32,
+    pub current: Option<u32>,
+    pub size: Option<u32>,
 }
