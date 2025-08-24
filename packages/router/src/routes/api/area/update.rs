@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use _utils::models::AreaUpdateRequest;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _utils::models::AreaUpdateRequest;
 
 /// 修改地区
 /// POST /area/update

@@ -1,12 +1,25 @@
 use anyhow::Result;
-use axum::{
-    extract::Json,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use serde::{Deserialize, Serialize};
+
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::{route::RouteSearchRequest, wrapper::Pagination};
+use _utils::models::wrapper::Pagination;
+
+/// 路线筛选查询请求
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteSearchRequest {
+    /// 创建人 id，创建人 id，此字段不能与昵称模糊搜索字段共存
+    pub creator_id: Option<String>,
+    /// 创建人昵称模糊搜索字段，创建人昵称模糊搜索字段，此字段不能与创建人 id 字段共存
+    pub creator_nickname_part: Option<String>,
+    /// 路线名称模糊搜索字段
+    pub name_part: Option<String>,
+    /// 分页参数
+    #[serde(flatten)]
+    pub page: Pagination,
+}
 
 /// 分页查询所有路线信息
 /// 分页查询所有路线信息，会根据当前角色决定不同的显隐等级

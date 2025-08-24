@@ -1,9 +1,9 @@
 use anyhow::Result;
 
-use _utils::models::AreaAddRequest;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _utils::models::AreaAddRequest;
 
 /// 新增地区
 /// PUT /area/add

@@ -1,9 +1,6 @@
 use anyhow::Result;
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::IntoResponse,
-};
+
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 

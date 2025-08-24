@@ -1,10 +1,8 @@
 mod doc;
 
 use anyhow::Result;
-use axum::{
-    routing::get,
-    Router,
-};
+
+use axum::{routing::get, Router};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

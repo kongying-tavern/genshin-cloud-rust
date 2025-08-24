@@ -1,4 +1,5 @@
 use anyhow::Result;
+
 use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;

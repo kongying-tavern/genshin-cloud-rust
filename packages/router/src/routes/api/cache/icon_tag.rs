@@ -1,6 +1,8 @@
-use crate::middlewares::ExtractAuthInfo;
 use anyhow::Result;
+
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+
+use crate::middlewares::ExtractAuthInfo;
 
 /// 删除标签缓存
 #[tracing::instrument(skip_all)]
