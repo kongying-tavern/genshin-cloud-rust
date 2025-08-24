@@ -43,7 +43,7 @@ pub struct Model {
     /// 头像链接
     pub logo: Option<String>,
 
-    /// 角色 ID
+    /// 角色
     pub role_id: SystemUserRole,
     /// 权限策略
     #[sea_orm(column_type = "Json")]
@@ -84,6 +84,7 @@ impl Into<SysUserVO> for Model {
             qq: self.qq,
             phone: self.phone,
             logo: self.logo,
+            role_id: self.role_id,
             access_policy: self.access_policy,
             remark: self.remark,
         }

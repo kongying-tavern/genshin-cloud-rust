@@ -8,7 +8,10 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::{models::wrapper::Pagination, types::AccessPolicyItemEnum};
+use _utils::{
+    models::wrapper::Pagination,
+    types::{AccessPolicyItemEnum, SystemUserRole},
+};
 
 /// 获取用户邀请列表的请求参数
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,7 +89,11 @@ pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    }
+
+    Ok(Json(()).into_response())
 }
 
 /// 新增/更新用户邀请
@@ -96,7 +103,11 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    }
+
+    Ok(Json(()).into_response())
 }
 
 /// 检查用户邀请数据
@@ -116,7 +127,7 @@ pub async fn consume(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    Ok(Json(()).into_response())
 }
 
 /// 删除用户邀请
@@ -126,5 +137,9 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(invitation_id): Path<u64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    }
+
+    Ok(Json(()).into_response())
 }

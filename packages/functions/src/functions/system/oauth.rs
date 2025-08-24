@@ -7,7 +7,8 @@ use sea_orm::{prelude::*, ActiveValue::Set};
 use _database::{models, DB_CONN};
 use _utils::{
     bcrypt::verify_hash,
-    jwt::{generate_token, EXPIRED_APPEND_DURATION},
+    jwt::{generate_token, verify_token, Claims, EXPIRED_APPEND_DURATION},
+    models::SysUserVO,
     types::{
         auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
         SystemActionLogAction,
@@ -32,6 +33,8 @@ async fn oauth_password_login_inner(
     let access_token = generate_token(now, item.id, jti).await?;
     let refresh_token = generate_token(now, item.id, jti).await?;
 
+    let id = item.id;
+    let vo: SysUserVO = item.into();
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
@@ -39,8 +42,8 @@ async fn oauth_password_login_inner(
         .await?;
     redis_conn
         .set_options(
-            format!("jwt:access:{}:{}", item.id, jti),
-            &access_token,
+            format!("jwt:access:{}:{}", id, jti),
+            serde_json::to_string(&vo)?,
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -50,8 +53,8 @@ async fn oauth_password_login_inner(
         .await?;
     redis_conn
         .set_options(
-            format!("jwt:refresh:{}:{}", item.id, jti),
-            &refresh_token,
+            format!("jwt:refresh:{}:{}", id, jti),
+            &"",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -68,6 +71,21 @@ async fn oauth_password_login_inner(
         scope: OauthScopeType::All,
         jti,
     })
+}
+
+pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
+    let claims = verify_token(&token).await?;
+
+    let mut redis_conn = DB_CONN
+        .wait()
+        .redis_conn
+        .get_multiplexed_async_connection()
+        .await?;
+    let item = redis_conn
+        .get(format!("jwt:access:{}:{}", claims.sub, claims.jti))
+        .await?
+        .ok_or(anyhow!("Token not found in Redis"))?;
+    Ok((serde_json::from_str(&item)?, claims))
 }
 
 pub async fn oauth_password_login(

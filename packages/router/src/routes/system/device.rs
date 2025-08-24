@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::wrapper::Pagination;
+use _utils::{models::wrapper::Pagination, types::SystemUserRole};
 
 /// 格式：字段+ 字段-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,7 +59,11 @@ pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<DeviceListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    }
+
+    Ok(Json(()).into_response())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,5 +81,9 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<DeviceUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    }
+
+    Ok(Json(()).into_response())
 }
