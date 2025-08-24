@@ -6,6 +6,8 @@ use uuid::Uuid;
 
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 
+use crate::models::{self, SysUserVO};
+
 pub const JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     let key = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into());
@@ -18,8 +20,7 @@ pub const JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthInfo {
-    pub token: String,
-    pub user_id: u64,
+    pub info: SysUserVO,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
 }
