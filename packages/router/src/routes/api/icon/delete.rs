@@ -10,7 +10,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除图标
 /// DELETE /icon/delete/{iconId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(icon_id): Path<i64>,

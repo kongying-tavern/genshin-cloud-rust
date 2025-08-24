@@ -18,7 +18,7 @@ use _utils::models::marker::MarkerTweakRequest;
 /// 2. 【视频地址】无需进行接入，此功能仅为特殊用途开启的方案。
 ///
 /// POST /marker/tweak
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn tweak(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerTweakRequest>,

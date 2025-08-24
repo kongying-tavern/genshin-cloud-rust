@@ -7,7 +7,7 @@ use _utils::types::SystemUserRole;
 
 /// 返回可用角色列表
 /// GET /role/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

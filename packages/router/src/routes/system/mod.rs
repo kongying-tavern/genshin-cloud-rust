@@ -9,6 +9,7 @@ mod user;
 use anyhow::Result;
 
 use axum::{
+    middleware::from_extractor,
     routing::{delete, get, post, put},
     Router,
 };
@@ -46,7 +47,8 @@ pub async fn router() -> Result<Router> {
         )
         .route("/user/{work_id}", delete(user::delete))
         .route("/user/info/list", post(user::list))
-        .route("/user/kick_out/{work_id}", delete(user::kick_out));
+        .route("/user/kick_out/{work_id}", delete(user::kick_out))
+        .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>());
 
     Ok(ret)
 }

@@ -130,7 +130,7 @@ pub struct UserKickOutParams {
 
 /// 注册用户
 /// POST /user/register
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn register(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterParams>,
@@ -154,7 +154,7 @@ pub async fn register(
 
 /// 用QQ注册用户
 /// POST /user/register/qq
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn register_qq(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterQQParams>,
@@ -178,7 +178,7 @@ pub async fn register_qq(
 
 /// 获取用户信息
 /// GET /user/info/{userId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(user_id): Path<i64>,
@@ -195,7 +195,7 @@ pub async fn get_info(
 
 /// 更新用户信息
 /// POST /user/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdateParams>,
@@ -222,7 +222,7 @@ pub async fn update(
 
 /// 更新用户密码
 /// POST /user/update_password
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update_password(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordParams>,
@@ -247,7 +247,7 @@ pub async fn update_password(
 
 /// 更新用户密码（管理员）
 /// POST /user/update_password_by_admin
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update_password_by_admin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
@@ -266,7 +266,7 @@ pub async fn update_password_by_admin(
 
 /// 删除用户
 /// DELETE /user/{workId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(work_id): Path<i64>,
@@ -283,7 +283,7 @@ pub async fn delete(
 
 /// 用户信息(批量查询)
 /// POST /user/info/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserListParams>,
@@ -309,7 +309,7 @@ pub async fn list(
 
 /// 踢出用户
 /// DELETE /user/kick_out/{workId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn kick_out(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(work_id): Path<String>,

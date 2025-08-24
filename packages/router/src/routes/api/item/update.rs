@@ -12,7 +12,7 @@ use _utils::models::item::ItemUpdateData;
 /// 修改物品
 /// 提供修改同名物品功能，默认关闭
 /// POST /item/update/{editSame}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(edit_same): Path<bool>,

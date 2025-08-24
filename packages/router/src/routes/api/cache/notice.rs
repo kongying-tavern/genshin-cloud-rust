@@ -5,7 +5,7 @@ use axum::{http::StatusCode, response::IntoResponse};
 use crate::middlewares::ExtractAuthInfo;
 
 /// 删除公告缓存
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete_notice_cache(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

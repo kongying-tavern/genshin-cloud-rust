@@ -11,7 +11,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 将物品加入某一类型
 /// 根据物品ID列表批量加入
 /// POST /item/join/{typeId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn join_type(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(type_id): Path<i64>,

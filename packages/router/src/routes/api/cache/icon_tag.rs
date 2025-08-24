@@ -5,7 +5,7 @@ use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::ExtractAuthInfo;
 
 /// 删除标签缓存
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete_icon_tag_cache(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<Vec<String>>,

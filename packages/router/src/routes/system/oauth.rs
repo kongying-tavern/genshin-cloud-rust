@@ -13,7 +13,7 @@ use _functions::functions::system::oauth::{
     oauth_client_credentials, oauth_password_login, oauth_refresh,
 };
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct LoginQuery {
     grant_type: Option<LoginQueryType>,
     // ClientCredentials
@@ -22,7 +22,7 @@ pub struct LoginQuery {
     refresh_token: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case", untagged)]
 pub enum LoginQueryType {
     // 这里留着只是用于标记，Password 这个项是故意忽略的，因为这个类型只能手动解析
@@ -31,7 +31,7 @@ pub enum LoginQueryType {
     RefreshToken,
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(form))]
 pub async fn oauth(
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(ip): ExtractIP,

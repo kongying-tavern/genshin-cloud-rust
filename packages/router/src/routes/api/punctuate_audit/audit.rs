@@ -10,7 +10,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 通过点位审核
 /// POST /punctuate_audit/pass/{punctuateId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn pass(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(punctuate_id): Path<i64>,
@@ -21,7 +21,7 @@ pub async fn pass(
 
 /// 驳回点位审核
 /// POST /punctuate_audit/reject/{punctuateId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn reject(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(punctuate_id): Path<i64>,

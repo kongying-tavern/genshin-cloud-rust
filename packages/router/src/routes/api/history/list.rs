@@ -7,7 +7,7 @@ use _utils::models::history::HistoryListRequest;
 
 /// 历史记录分页查询
 /// POST /history/get/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<HistoryListRequest>,

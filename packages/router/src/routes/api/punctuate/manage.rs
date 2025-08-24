@@ -7,7 +7,7 @@ use _utils::models::punctuate::PunctuateData;
 
 /// 修改自身未提交的暂存点位
 /// POST /punctuate/
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,
@@ -18,7 +18,7 @@ pub async fn update(
 
 /// 提交暂存点位
 /// PUT /punctuate/
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn submit(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,

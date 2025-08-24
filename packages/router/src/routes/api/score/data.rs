@@ -20,7 +20,7 @@ pub struct ScoreDataRequest {
 }
 
 /// 获取评分数据
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_score_data(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<ScoreDataRequest>,

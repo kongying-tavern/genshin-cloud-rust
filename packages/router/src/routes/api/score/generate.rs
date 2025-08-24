@@ -20,7 +20,7 @@ pub struct ScoreGenerateRequest {
 }
 
 /// 生成评分数据
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn generate_score(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<ScoreGenerateRequest>,

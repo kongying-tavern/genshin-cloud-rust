@@ -9,7 +9,7 @@ use _utils::models::icon::IconAddRequest;
 /// 无需指定icon的id，id由系统自动生成并在响应中返回
 /// 一组name和creator需要唯一（允许单一重复）
 /// PUT /icon/add
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<IconAddRequest>,

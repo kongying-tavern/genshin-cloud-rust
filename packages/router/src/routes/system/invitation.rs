@@ -84,7 +84,7 @@ pub struct InvitationInfoRequest {
 
 /// 获取用户邀请列表
 /// POST /invitation/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationListRequest>,
@@ -98,7 +98,7 @@ pub async fn list(
 
 /// 新增/更新用户邀请
 /// POST /invitation/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationUpdateRequest>,
@@ -112,7 +112,7 @@ pub async fn update(
 
 /// 检查用户邀请数据
 /// POST /invitation/info
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationInfoRequest>,
@@ -122,7 +122,7 @@ pub async fn info(
 
 /// 使用用户邀请
 /// POST /invitation/consume
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn consume(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
@@ -132,7 +132,7 @@ pub async fn consume(
 
 /// 删除用户邀请
 /// DELETE /invitation/{invitation_id}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(invitation_id): Path<u64>,

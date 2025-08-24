@@ -7,7 +7,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 删除物品
 /// 根据物品ID删除物品
 /// DELETE /item/delete/{itemId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(item_id): Path<i64>,

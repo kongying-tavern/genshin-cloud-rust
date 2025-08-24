@@ -8,7 +8,7 @@ use _utils::models::item::ItemAddRequest;
 /// 新增物品
 /// 新建成功后会返回新物品ID
 /// PUT /item/add
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemAddRequest>,

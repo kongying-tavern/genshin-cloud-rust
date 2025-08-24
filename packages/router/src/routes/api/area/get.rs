@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 获取单个地区信息
 /// POST /area/get/{areaId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(area_id): Path<i64>,

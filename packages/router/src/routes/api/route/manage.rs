@@ -51,7 +51,7 @@ pub struct RouteUpdateRequest {
 
 /// 新增路线
 /// PUT /route/add
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteAddRequest>,
@@ -62,7 +62,7 @@ pub async fn add(
 
 /// 修改路线
 /// POST /route
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteUpdateRequest>,

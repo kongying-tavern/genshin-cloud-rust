@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除提交点位
 /// DELETE /punctuate_audit/delete/{punctuateId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(punctuate_id): Path<i64>,
