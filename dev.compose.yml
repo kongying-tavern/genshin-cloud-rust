@@ -40,17 +40,7 @@ services:
       - minio-data:/data
     restart: unless-stopped
 
-  # alist:
-  #   image: xhofe/alist:latest
-  #   container_name: test-alist
-  #   ports:
-  #     - "5244:5244"
-  #   volumes:
-  #     - alist-data:/data
-  #   restart: unless-stopped
-
 volumes:
   postgres-data:
   redis-data:
   minio-data:
-  # alist-data:
