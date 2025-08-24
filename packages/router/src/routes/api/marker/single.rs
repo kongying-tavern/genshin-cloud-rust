@@ -7,7 +7,7 @@ use _utils::models::marker::{MarkerAddRequest, MarkerUpdateData};
 
 /// 新增点位
 /// PUT /marker/single
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add_single(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerAddRequest>,
@@ -18,7 +18,7 @@ pub async fn add_single(
 
 /// 修改点位
 /// POST /marker/single
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update_single(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerUpdateData>,

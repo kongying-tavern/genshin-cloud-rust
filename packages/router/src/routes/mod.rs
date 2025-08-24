@@ -14,7 +14,6 @@ pub async fn router() -> Result<Router> {
         .merge(system::router().await?)
         .merge(api::router().await?)
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
-        .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
         .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB

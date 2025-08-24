@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除路线
 /// DELETE /route/{routeId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(route_id): Path<i64>,

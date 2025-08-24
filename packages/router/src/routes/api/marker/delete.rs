@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除点位
 /// DELETE /marker/{markerId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(marker_id): Path<i64>,

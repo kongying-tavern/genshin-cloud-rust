@@ -29,7 +29,7 @@ pub struct NoticeListRequest {
 }
 
 /// 获取公告列表
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_notice_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<NoticeListRequest>,

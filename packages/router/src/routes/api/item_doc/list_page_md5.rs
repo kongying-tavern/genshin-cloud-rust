@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 物品分页的md5数组
 /// GET /item_doc/list_page_bin_md5
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list_page_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

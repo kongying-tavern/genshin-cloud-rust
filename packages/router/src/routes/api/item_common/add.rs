@@ -7,7 +7,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 新增地区公用物品
 /// 通过ID列表批量添加地区公用物品
 /// PUT /item_common/add
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,

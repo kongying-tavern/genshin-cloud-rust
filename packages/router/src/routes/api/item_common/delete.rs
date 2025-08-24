@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 删除地区公用物品
 /// DELETE /item_common/delete/{itemId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(item_id): Path<i64>,

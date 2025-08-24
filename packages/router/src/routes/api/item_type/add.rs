@@ -8,7 +8,7 @@ use _utils::models::item_type::ItemTypeAddRequest;
 /// 添加物品类型
 /// 成功后返回新的类型ID
 /// PUT /item_type/add
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemTypeAddRequest>,

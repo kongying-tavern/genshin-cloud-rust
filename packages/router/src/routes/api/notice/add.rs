@@ -25,7 +25,7 @@ pub struct NoticeAddRequest {
 }
 
 /// 新增公告
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn add_notice(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<NoticeAddRequest>,

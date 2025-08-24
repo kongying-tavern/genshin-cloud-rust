@@ -7,7 +7,7 @@ use _utils::models::marker_link::MarkerLinkage;
 
 /// 关联点位
 /// POST /marker_link/link
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn link(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<MarkerLinkage>>,

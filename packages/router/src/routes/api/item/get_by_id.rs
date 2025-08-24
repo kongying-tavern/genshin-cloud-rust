@@ -7,7 +7,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 根据物品ID查询物品
 /// 输入ID列表查询，单个查询也用此API
 /// POST /item/get/list_by_id
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,

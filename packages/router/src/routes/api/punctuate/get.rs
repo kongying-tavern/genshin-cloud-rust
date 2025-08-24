@@ -11,7 +11,7 @@ use _utils::models::{punctuate::PunctuateData, wrapper::Pagination};
 
 /// 分页查询所有打点信息
 /// POST /punctuate/get/page
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
@@ -22,7 +22,7 @@ pub async fn get_page(
 
 /// 分页查询自己提交的未通过的打点信息
 /// POST /punctuate/get/page/{authorId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_page_by_author(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(author_id): Path<i64>,

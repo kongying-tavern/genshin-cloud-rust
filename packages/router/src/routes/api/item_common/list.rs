@@ -8,7 +8,7 @@ use _utils::models::Pagination;
 /// 列出地区公用物品
 /// 列出公共物品，但需要注意处理所属地区已被删除的公共物品
 /// POST /item_common/get/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,

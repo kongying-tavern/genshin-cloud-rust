@@ -7,7 +7,7 @@ use _utils::models::AreaUpdateRequest;
 
 /// 修改地区
 /// POST /area/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaUpdateRequest>,

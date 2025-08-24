@@ -8,7 +8,7 @@ use _utils::models::item::ItemFilterRequest;
 /// 根据筛选条件列出物品信息
 /// 传入的物品类型ID和地区ID列表，必须为末端的类型或地区
 /// POST /item/get/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemFilterRequest>,

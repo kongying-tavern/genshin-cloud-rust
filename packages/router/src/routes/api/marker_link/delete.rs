@@ -7,7 +7,7 @@ use _utils::models::marker_link::MarkerLinkDeleteRequest;
 
 /// 删除点位关联
 /// DELETE /marker_link/delete
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkDeleteRequest>,

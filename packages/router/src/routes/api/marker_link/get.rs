@@ -7,7 +7,7 @@ use _utils::models::marker_link::{MarkerLinkGraphRequest, MarkerLinkListRequest}
 
 /// 点位关联列表
 /// POST /marker_link/get/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkListRequest>,
@@ -18,7 +18,7 @@ pub async fn get_list(
 
 /// 点位关联图数据
 /// POST /marker_link/get/graph
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_graph(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkGraphRequest>,

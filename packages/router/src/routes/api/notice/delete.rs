@@ -5,7 +5,7 @@ use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::ExtractAuthInfo;
 
 /// 删除公告
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete_notice(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(notice_id): Path<i64>,

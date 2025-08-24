@@ -8,7 +8,7 @@ use _utils::models::AreaListRequest;
 /// 列出地区
 /// POST /area/get/list
 /// 可根据父级地区id列出子地区列表
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaListRequest>,

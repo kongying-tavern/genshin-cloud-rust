@@ -8,7 +8,7 @@ use _utils::models::icon_type::IconTypeUpdateRequest;
 /// 修改分类
 /// 由类型ID来定位修改一个分类
 /// POST /icon_type/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<IconTypeUpdateRequest>,

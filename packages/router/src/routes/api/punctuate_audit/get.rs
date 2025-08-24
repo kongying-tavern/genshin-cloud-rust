@@ -22,7 +22,7 @@ pub struct PunctuateAuditFilterRequest {
 
 /// 根据各种条件筛选打点ID
 /// POST /punctuate_audit/get/id
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateAuditFilterRequest>,
@@ -33,7 +33,7 @@ pub async fn get_id(
 
 /// 根据各种条件筛选打点信息
 /// POST /punctuate_audit/get/list_byinfo
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list_by_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateAuditFilterRequest>,
@@ -44,7 +44,7 @@ pub async fn get_list_by_info(
 
 /// 通过打点ID列表查询打点信息
 /// POST /punctuate_audit/get/list_byid
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
@@ -55,7 +55,7 @@ pub async fn get_list_by_id(
 
 /// 分页查询所有打点信息（包括暂存）
 /// POST /punctuate_audit/get/page/all
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_page_all(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,

@@ -6,7 +6,7 @@ use crate::middlewares::ExtractAuthInfo;
 
 /// 点位关联列表数据md5
 /// GET /marker_link_doc/all_list_bin_md5
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn all_list_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -16,7 +16,7 @@ pub async fn all_list_bin_md5(
 
 /// 点位关联列表数据
 /// GET /marker_link_doc/all_list_bin
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn all_list_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -26,7 +26,7 @@ pub async fn all_list_bin(
 
 /// 点位关联有向图数据md5
 /// GET /marker_link_doc/all_graph_bin_md5
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn all_graph_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -36,7 +36,7 @@ pub async fn all_graph_bin_md5(
 
 /// 点位关联有向图数据
 /// GET /marker_link_doc/all_graph_bin
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn all_graph_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

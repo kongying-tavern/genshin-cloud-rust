@@ -7,7 +7,7 @@ use _utils::models::item_type::ItemTypeUpdateData;
 
 /// 修改物品类型
 /// POST /item_type/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemTypeUpdateData>,

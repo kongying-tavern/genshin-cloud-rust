@@ -63,7 +63,7 @@ pub struct ActionLogParams {
 
 /// 获取操作日志
 /// POST /action_log/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Query(query): Query<ActionLogParams>,

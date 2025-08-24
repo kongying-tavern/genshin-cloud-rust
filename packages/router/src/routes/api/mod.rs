@@ -23,7 +23,7 @@ pub mod tag_type;
 
 use anyhow::Result;
 
-use axum::Router;
+use axum::{middleware::from_extractor, Router};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
@@ -48,7 +48,8 @@ pub async fn router() -> Result<Router> {
         .nest("/score", score::router().await?)
         .nest("/tag", tag::router().await?)
         .nest("/tag_type", tag_type::router().await?)
-        .nest("/tag_doc", tag_doc::router().await?);
+        .nest("/tag_doc", tag_doc::router().await?)
+        .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>());
 
     Ok(ret)
 }

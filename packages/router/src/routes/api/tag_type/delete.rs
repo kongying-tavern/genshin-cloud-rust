@@ -11,7 +11,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 删除分类
 /// 这个操作会递归删除，请在前端做二次确认
 /// DELETE /tag_type/delete/{typeId}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(type_id): Path<i64>,

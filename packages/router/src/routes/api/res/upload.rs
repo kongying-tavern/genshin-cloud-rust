@@ -5,7 +5,7 @@ use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 use crate::middlewares::ExtractAuthInfo;
 
 /// 上传图片
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn upload_image(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     mut multipart: Multipart,

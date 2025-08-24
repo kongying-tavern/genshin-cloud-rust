@@ -12,7 +12,7 @@ use _utils::models::item_type::ItemTypeListRequest;
 /// 列出某一层级的物品类型
 /// 不递归遍历，只遍历子级
 /// POST /item_type/get/list/{self}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(self_flag): Path<bool>,
@@ -25,7 +25,7 @@ pub async fn get_list(
 /// 列出所有物品类型
 /// 不递归遍历，只遍历子级
 /// POST /item_type/get/list_all
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn get_list_all(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

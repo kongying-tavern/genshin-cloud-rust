@@ -11,7 +11,7 @@ use crate::middlewares::ExtractAuthInfo;
 /// 创建标签
 /// 只创建一个空标签
 /// PUT /tag/{tagName}
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn create(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(tag_name): Path<String>,

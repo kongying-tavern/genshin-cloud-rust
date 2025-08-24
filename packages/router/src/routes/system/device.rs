@@ -54,7 +54,7 @@ pub struct DeviceListParams {
 
 /// 获取用户设备
 /// POST /device/list
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<DeviceListParams>,
@@ -76,7 +76,7 @@ pub struct DeviceUpdateParams {
 
 /// 更新用户设备信息
 /// POST /device/update
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<DeviceUpdateParams>,
