@@ -1,9 +1,6 @@
 use anyhow::Result;
-use axum::{
-    extract::Json,
-    http::StatusCode,
-    response::IntoResponse,
-};
+
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 use _utils::models::item_type::ItemTypeUpdateData;
