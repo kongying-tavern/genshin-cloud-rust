@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::Pagination;
+
 /// 标签类型基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,7 +21,7 @@ pub type TagTypeAddRequest = TagTypeBaseRequest;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeUpdateRequest {
-    /// 标签类型ID
+    /// 标签类型 ID
     pub id: u64,
     /// 乐观锁版本号
     pub version: u64,
@@ -38,8 +40,7 @@ pub struct TagTypeListRequest {
     pub parent_id: Option<i64>,
     /// 是否遍历子类型
     pub is_traverse: Option<bool>,
-    /// 分页页码
-    pub page: Option<u32>,
-    /// 分页大小
-    pub page_size: Option<u32>,
+
+    #[serde(flatten)]
+    pub page: Pagination,
 }

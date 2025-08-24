@@ -5,10 +5,14 @@ pub mod icon;
 pub mod icon_type;
 pub mod item;
 pub mod item_common;
+pub mod item_doc;
 pub mod item_type;
 pub mod marker;
+pub mod marker_doc;
 pub mod marker_link;
+pub mod marker_link_doc;
 pub mod notice;
+pub mod punctuate;
 pub mod punctuate_audit;
 pub mod res;
 pub mod route;
@@ -29,10 +33,14 @@ pub async fn router() -> Result<Router> {
         .nest("/icon_type", icon_type::router().await?)
         .nest("/item", item::router().await?)
         .nest("/item_common", item_common::router().await?)
+        .nest("/item_doc", item_doc::router().await?)
         .nest("/item_type", item_type::router().await?)
         .nest("/marker", marker::router().await?)
+        .nest("/marker_doc", marker_doc::router().await?)
         .nest("/marker_link", marker_link::router().await?)
+        .nest("/marker_link_doc", marker_link_doc::router().await?)
         .nest("/notice", notice::router().await?)
+        .nest("/punctuate", punctuate::router().await?)
         .nest("/punctuate_audit", punctuate_audit::router().await?)
         .nest("/res", res::router().await?)
         .nest("/route", route::router().await?)

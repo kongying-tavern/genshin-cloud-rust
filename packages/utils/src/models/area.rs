@@ -20,7 +20,6 @@ pub struct AreaRequest {
     /// 是否为末端地区
     pub is_final: bool,
     /// 权限屏蔽标记
-    /// hiddenFlag 显隐方式，0显示 1隐藏 2测试服 3彩蛋
     pub hidden_flag: HiddenFlag,
     /// 排序
     pub sort_index: i32,
@@ -38,7 +37,7 @@ pub type AreaAddRequest = AreaRequest;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaUpdateRequest {
-    /// 地区ID
+    /// 地区 ID
     pub id: u64,
     /// 乐观锁版本号
     pub version: u64,
@@ -53,6 +52,6 @@ pub struct AreaUpdateRequest {
 pub struct AreaListRequest {
     /// 是否遍历子地区
     pub is_traverse: Option<bool>,
-    /// 父级ID
+    /// 父级 ID
     pub parent_id: Option<i64>,
 }

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     models::Pagination,
-    types::{AccessPolicyItemEnum, AccessPolicyList},
+    types::{AccessPolicyItemEnum, AccessPolicyList, SystemUserRole},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -54,7 +54,7 @@ pub struct UserRegisterParams {
     /// 备注
     pub remark: String,
     /// 角色列表
-    pub role_id: i64,
+    pub role_id: SystemUserRole,
     /// 用户名
     pub username: String,
 }
@@ -69,7 +69,7 @@ pub struct UserRegisterQQParams {
     /// 备注
     pub remark: String,
     /// 角色列表
-    pub role_id: i64,
+    pub role_id: SystemUserRole,
     /// 用户名
     pub username: String,
 }
@@ -77,7 +77,7 @@ pub struct UserRegisterQQParams {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdateParams {
-    /// 用户ID
+    /// 用户 ID
     pub id: i64,
     /// 权限策略
     pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
@@ -92,7 +92,7 @@ pub struct UserUpdateParams {
     /// 备注
     pub remark: Option<String>,
     /// 角色列表
-    pub role_id: i64,
+    pub role_id: SystemUserRole,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ pub struct UserUpdatePasswordParams {
     /// 备注
     pub remark: String,
     /// 角色列表
-    pub role_id: i64,
+    pub role_id: SystemUserRole,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -117,7 +117,7 @@ pub struct UserUpdatePasswordParams {
 pub struct UserUpdatePasswordByAdminParams {
     /// 新密码
     pub password: String,
-    /// 用户ID
+    /// 用户 ID
     pub user_id: i64,
 }
 
@@ -128,8 +128,9 @@ pub struct UserListParams {
     pub pagination: Pagination,
     /// 昵称
     pub nickname: String,
-    /// 角色ID
-    pub role_ids: Option<Vec<i64>>,
+    /// 角色 ID
+    pub role_ids: Option<Vec<SystemUserRole>>,
+    /// 排序优先级
     pub sort: Option<Vec<UserSort>>,
     /// 用户名
     pub username: String,
