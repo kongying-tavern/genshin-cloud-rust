@@ -12,6 +12,13 @@ pub async fn link(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<MarkerLinkage>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现关联点位的逻辑
-    Ok(())
+    match _functions::functions::api::marker_link::do_link(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

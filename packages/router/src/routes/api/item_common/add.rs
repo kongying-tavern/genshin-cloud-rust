@@ -12,6 +12,9 @@ pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现批量新增地区公用物品的逻辑
-    Ok(())
+    match _functions::functions::api::item_common::do_add(auth, payload).await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

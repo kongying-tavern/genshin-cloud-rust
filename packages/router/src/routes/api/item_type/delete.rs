@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 
@@ -12,6 +12,8 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(item_type_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现删除物品类型的逻辑
-    Ok(())
+    match _functions::functions::api::item_type::do_delete(auth, item_type_id).await {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

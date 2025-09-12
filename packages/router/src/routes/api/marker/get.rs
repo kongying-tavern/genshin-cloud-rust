@@ -13,9 +13,15 @@ pub async fn get_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据条件筛选查询点位ID的逻辑
-    // 需要验证三种查询条件不能同时生效
-    Ok(())
+    match _functions::functions::api::marker::do_get_id(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 根据各种条件筛选查询点位信息
@@ -26,9 +32,15 @@ pub async fn get_list_by_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据条件筛选查询点位信息的逻辑
-    // 需要验证三种查询条件不能同时生效
-    Ok(())
+    match _functions::functions::api::marker::do_get_list_by_info(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 通过ID列表查询点位信息
@@ -39,8 +51,15 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现通过ID列表查询点位信息的逻辑
-    Ok(())
+    match _functions::functions::api::marker::do_get_list_by_id(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 分页查询所有点位信息
@@ -50,6 +69,14 @@ pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现分页查询所有点位信息的逻辑
-    Ok(())
+    // use axum::Json as AxumJson; (removed duplicate alias)
+    match _functions::functions::api::marker::do_get_page(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

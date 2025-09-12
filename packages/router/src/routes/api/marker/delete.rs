@@ -1,6 +1,10 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, Path},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAuthInfo;
 
@@ -11,6 +15,8 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(marker_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现删除点位的逻辑
-    Ok(())
+    match _functions::functions::api::marker::do_delete(auth, marker_id).await {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

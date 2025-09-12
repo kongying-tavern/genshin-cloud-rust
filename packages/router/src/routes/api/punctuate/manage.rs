@@ -12,8 +12,15 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现修改自身未提交的暂存点位的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate::do_update(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 提交暂存点位
@@ -23,6 +30,13 @@ pub async fn submit(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现提交暂存点位的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate::do_submit(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

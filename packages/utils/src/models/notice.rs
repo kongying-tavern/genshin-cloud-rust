@@ -54,3 +54,43 @@ pub enum NoticeSort {
 pub enum NoticeTransformer {
     Unity,
 }
+
+use crate::models::wrapper::Pagination;
+
+/// 公告添加请求
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeAddRequest {
+    pub channel: Vec<NoticeChannel>,
+    pub content: String,
+    pub sort_index: i64,
+    pub title: String,
+    pub valid_time_end: Option<f64>,
+    pub valid_time_start: Option<f64>,
+}
+
+/// 公告列表查询请求
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeListRequest {
+    pub channels: Option<Vec<NoticeChannel>>,
+    pub get_valid: Option<bool>,
+    pub sort: Option<Vec<NoticeSort>>,
+    pub title: Option<String>,
+    pub transformer: Option<NoticeTransformer>,
+    #[serde(flatten)]
+    pub page: Pagination,
+}
+
+/// 公告更新请求
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeUpdateRequest {
+    pub channel: Vec<NoticeChannel>,
+    pub content: String,
+    pub id: i64,
+    pub sort_index: i64,
+    pub title: String,
+    pub valid_time_end: Option<f64>,
+    pub valid_time_start: Option<f64>,
+}

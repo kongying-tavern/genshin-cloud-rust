@@ -12,6 +12,9 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据ID列表查询物品的逻辑
-    Ok(())
+    match _functions::functions::api::item::do_get_list_by_id(auth, payload).await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

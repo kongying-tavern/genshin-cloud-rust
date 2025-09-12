@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+// duplicate import removed
 
 use crate::middlewares::ExtractAuthInfo;
 use _utils::models::{punctuate::PunctuateData, wrapper::Pagination};
@@ -16,8 +17,15 @@ pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现分页查询所有打点信息的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate::do_get_page(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 分页查询自己提交的未通过的打点信息
@@ -28,6 +36,14 @@ pub async fn get_page_by_author(
     Path(author_id): Path<i64>,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现分页查询自己提交的未通过的打点信息的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate::do_get_page_by_author(
+        auth,
+        author_id,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

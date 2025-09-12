@@ -12,8 +12,16 @@ pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现获取点位关联列表的逻辑
-    Ok(())
+    // removed local alias
+    match _functions::functions::api::marker_link::do_get_list(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 点位关联图数据
@@ -23,6 +31,13 @@ pub async fn get_graph(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkGraphRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现获取点位关联图数据的逻辑
-    Ok(())
+    match _functions::functions::api::marker_link::do_get_graph(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

@@ -15,7 +15,10 @@ pub async fn router() -> Result<Router> {
         .route("/", post(manage::update))
         .route("/", put(manage::submit))
         .route("/push/{author_id}", put(actions::push))
-        .route("/delete/{author_id}/{punctuate_id}", delete(actions::delete));
+        .route(
+            "/delete/{author_id}/{punctuate_id}",
+            delete(actions::delete),
+        );
 
     Ok(ret)
 }

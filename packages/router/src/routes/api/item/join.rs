@@ -17,6 +17,8 @@ pub async fn join_type(
     Path(type_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现将物品加入类型的逻辑
-    Ok(())
+    match _functions::functions::api::item::do_join_type(auth, type_id, payload).await {
+        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

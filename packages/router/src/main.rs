@@ -1,3 +1,4 @@
+pub mod functions;
 mod middlewares;
 mod routes;
 

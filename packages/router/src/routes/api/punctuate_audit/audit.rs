@@ -15,8 +15,15 @@ pub async fn pass(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(punctuate_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现通过点位审核的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate_audit::do_pass(
+        auth,
+        serde_json::json!({"punctuate_id": punctuate_id}),
+    )
+    .await
+    {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 驳回点位审核
@@ -27,6 +34,13 @@ pub async fn reject(
     Path(punctuate_id): Path<i64>,
     Json(audit_remark): Json<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现驳回点位审核的逻辑
-    Ok(())
+    match _functions::functions::api::punctuate_audit::do_reject(
+        auth,
+        serde_json::json!({"punctuate_id": punctuate_id, "remark": audit_remark}),
+    )
+    .await
+    {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

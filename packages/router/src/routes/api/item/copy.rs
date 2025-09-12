@@ -18,6 +18,8 @@ pub async fn copy_to_area(
     Path(area_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现复制物品到地区的逻辑
-    Ok(())
+    match crate::functions::api::item::do_copy_to_area(auth, area_id, payload).await {
+        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

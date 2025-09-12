@@ -13,7 +13,9 @@ pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现地区公用物品列表查询逻辑
-    // 需要注意处理所属地区已被删除的公共物品
-    Ok(())
+    match crate::functions::api::item_common::do_get_list(auth, payload).await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

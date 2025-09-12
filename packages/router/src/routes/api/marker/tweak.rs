@@ -23,6 +23,13 @@ pub async fn tweak(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerTweakRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现点位调整的逻辑
-    Ok(())
+    match crate::functions::api::marker::do_tweak(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

@@ -1,25 +1,11 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
-
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::wrapper::Pagination;
+use _utils::models::{wrapper::Pagination, RouteSearchRequest};
 
-/// 路线筛选查询请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RouteSearchRequest {
-    /// 创建人 id，创建人 id，此字段不能与昵称模糊搜索字段共存
-    pub creator_id: Option<String>,
-    /// 创建人昵称模糊搜索字段，创建人昵称模糊搜索字段，此字段不能与创建人 id 字段共存
-    pub creator_nickname_part: Option<String>,
-    /// 路线名称模糊搜索字段
-    pub name_part: Option<String>,
-    /// 分页参数
-    #[serde(flatten)]
-    pub page: Pagination,
-}
+// RouteSearchRequest is defined in `_utils::models::route` and re-exported as
+// `_utils::models::RouteSearchRequest`.
 
 /// 分页查询所有路线信息
 /// 分页查询所有路线信息，会根据当前角色决定不同的显隐等级
@@ -29,8 +15,15 @@ pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现分页查询所有路线信息的逻辑
-    Ok(())
+    match _functions::functions::api::route::do_get_page(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 根据条件筛选分页查询路线信息
@@ -41,8 +34,15 @@ pub async fn get_search(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteSearchRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据条件筛选分页查询路线信息的逻辑
-    Ok(())
+    match _functions::functions::api::route::do_get_search(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
 
 /// 根据id列表查询路线信息
@@ -53,6 +53,13 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<f64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据id列表查询路线信息的逻辑
-    Ok(())
+    match _functions::functions::api::route::do_get_list_by_id(
+        auth,
+        payload,
+    )
+    .await
+    {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

@@ -4,20 +4,7 @@ use serde::{Deserialize, Serialize};
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-
-/// 评分数据获取请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScoreDataRequest {
-    /// 结束时间戳
-    pub end_time: f64,
-    /// 打点模块，可选值：punctuate - 打点
-    pub scope: String,
-    /// 统计颗粒度，可选值：day - 按天
-    pub span: String,
-    /// 开始时间戳
-    pub start_time: f64,
-}
+use _utils::models::score::ScoreDataRequest;
 
 /// 获取评分数据
 #[tracing::instrument(skip(auth))]
@@ -25,6 +12,8 @@ pub async fn get_score_data(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<ScoreDataRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现评分数据获取逻辑
-    Ok(())
+    match _functions::functions::api::score::do_get_score_data(auth, request).await {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

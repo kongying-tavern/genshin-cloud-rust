@@ -93,6 +93,7 @@ dependencies = [
  "futures",
  "jsonwebtoken",
  "log",
+ "md5",
  "once_cell",
  "oneshot",
  "percent-encoding",

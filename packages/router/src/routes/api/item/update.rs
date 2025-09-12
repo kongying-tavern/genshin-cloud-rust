@@ -18,6 +18,8 @@ pub async fn update(
     Path(edit_same): Path<bool>,
     Json(payload): Json<Vec<ItemUpdateData>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现修改物品的逻辑
-    Ok(())
+    match _functions::functions::api::item::do_update(auth, edit_same, payload).await {
+        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

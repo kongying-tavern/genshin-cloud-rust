@@ -1,0 +1,31 @@
+use anyhow::Result;
+
+use _utils::jwt::AuthInfo;
+
+pub async fn do_delete_notice_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_marker_link_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_marker_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_item_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_icon_tag_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_common_item_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}
+
+pub async fn do_delete_area_cache(_auth: AuthInfo) -> Result<()> {
+    Ok(())
+}

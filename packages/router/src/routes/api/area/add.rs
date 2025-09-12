@@ -13,5 +13,8 @@ pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::area::do_add(auth, payload).await {
+        Ok(id) => Ok((StatusCode::OK, Json(serde_json::json!({"id": id})))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }
