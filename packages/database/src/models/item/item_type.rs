@@ -22,8 +22,8 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 图标标签
-    pub icon_tag: String,
+    /// 图标 ID
+    pub icon_id: i64,
     /// 类型名
     pub name: String,
     /// 类型补充说明
@@ -59,6 +59,12 @@ pub enum Relation {
 
     #[sea_orm(belongs_to = "Entity", from = "Column::ParentId", to = "Column::Id")]
     ParentId,
+    #[sea_orm(
+        belongs_to = "super::super::icon::icon::Entity",
+        from = "Column::IconId",
+        to = "super::super::icon::icon::Column::Id"
+    )]
+    IconId,
 }
 
 pub struct ParentReferencingLink;

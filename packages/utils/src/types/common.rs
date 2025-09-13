@@ -56,9 +56,6 @@ pub enum HistoryOperationType {
     /// 点位
     #[sea_orm(num_value = 4)]
     Position = 4,
-    /// 标签
-    #[sea_orm(num_value = 5)]
-    Tag = 5,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]

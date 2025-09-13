@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use strum::EnumIter;
 
-use sea_orm::prelude::*;
+use sea_orm::{prelude::*, FromJsonQueryResult};
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, EnumIter, DeriveActiveEnum,
@@ -22,4 +23,9 @@ pub enum IconStyleType {
     /// 类神瞳无对勾
     #[sea_orm(num_value = 3)]
     Oculus = 3,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, FromJsonQueryResult)]
+pub struct IconURLVariants {
+    pub url_variants: HashMap<String, String>,
 }

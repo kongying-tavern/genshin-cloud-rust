@@ -17,9 +17,6 @@ pub mod punctuate_audit;
 pub mod res;
 pub mod route;
 pub mod score;
-pub mod tag;
-pub mod tag_doc;
-pub mod tag_type;
 
 use anyhow::Result;
 
@@ -46,9 +43,6 @@ pub async fn router() -> Result<Router> {
         .nest("/res", res::router().await?)
         .nest("/route", route::router().await?)
         .nest("/score", score::router().await?)
-        .nest("/tag", tag::router().await?)
-        .nest("/tag_type", tag_type::router().await?)
-        .nest("/tag_doc", tag_doc::router().await?)
         .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>());
 
     Ok(ret)
