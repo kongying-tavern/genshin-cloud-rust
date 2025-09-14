@@ -11,12 +11,7 @@ pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::route::do_add(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::route::do_add(auth, payload).await {
         Ok(id) => Ok((StatusCode::OK, Json(serde_json::json!({"id": id})))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -29,12 +24,7 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match crate::functions::api::route::do_update(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match crate::functions::api::route::do_update(auth, payload).await {
         Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

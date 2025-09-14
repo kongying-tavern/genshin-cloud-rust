@@ -42,3 +42,33 @@ pub struct IconListRequest {
     #[serde(flatten)]
     pub page: Pagination,
 }
+
+/// 图标返回值（用于 API 响应）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconVO {
+    pub id: i64,
+    pub url: String,
+    pub tag: String,
+    pub description: String,
+    pub url_variants: crate::types::IconURLVariants,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconListResponse {
+    pub total: i64,
+    pub items: Vec<IconVO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconSingleResponse {
+    pub item: IconVO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconAddResponse {
+    pub id: i64,
+}

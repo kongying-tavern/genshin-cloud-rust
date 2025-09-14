@@ -12,8 +12,7 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::item::do_get_list_by_id(auth, payload).await
-    {
+    match _functions::functions::api::item::do_get_list_by_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

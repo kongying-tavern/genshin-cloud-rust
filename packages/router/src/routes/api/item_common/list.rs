@@ -13,8 +13,7 @@ pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match crate::functions::api::item_common::do_get_list(auth, payload).await
-    {
+    match crate::functions::api::item_common::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

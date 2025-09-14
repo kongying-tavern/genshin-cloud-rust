@@ -15,12 +15,7 @@ pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::route::do_get_page(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::route::do_get_page(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -34,12 +29,7 @@ pub async fn get_search(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<RouteSearchRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::route::do_get_search(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::route::do_get_search(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -53,12 +43,7 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<f64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::route::do_get_list_by_id(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::route::do_get_list_by_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

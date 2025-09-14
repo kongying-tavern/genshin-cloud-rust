@@ -17,7 +17,9 @@ pub async fn move_to_target(
     Path(target_type_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::item_type::do_move_to_target(auth, target_type_id, payload).await {
+    match _functions::functions::api::item_type::do_move_to_target(auth, target_type_id, payload)
+        .await
+    {
         Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

@@ -27,3 +27,27 @@ pub struct IconTypeUpdateRequest {
     #[serde(flatten)]
     pub base: IconTypeBaseRequest,
 }
+
+/// 图标类型 VO（返回给前端的结构）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconTypeVO {
+    pub version: i64,
+    pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
+    pub del_flag: bool,
+
+    pub name: String,
+    pub parent_id: i64,
+    pub is_final: bool,
+}
+
+/// 图标类型列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconTypeListResponse {
+    pub items: Vec<IconTypeVO>,
+}

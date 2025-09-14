@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum::EnumIter;
 
-use sea_orm::{prelude::*, FromJsonQueryResult};
+use sea_orm::prelude::*;
+use sea_orm::FromJsonQueryResult;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, EnumIter, DeriveActiveEnum,
@@ -25,7 +26,14 @@ pub enum IconStyleType {
     Oculus = 3,
 }
 
+// SeaORM requires JSON column types to implement certain traits like
+// `FromJsonQueryResult` / `TryGetableFromJson` / `ValueType`. A plain
+// `HashMap<String, String>` does not implement those. Wrap it in a
+// newtype and derive `FromJsonQueryResult` so it can be used directly in
+// entity models as `#[sea_orm(column_type = "Json")]`.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct IconURLVariants {
-    pub url_variants: HashMap<String, String>,
-}
+pub struct IconURLVariantsWrapper(pub HashMap<String, String>);
+
+// Keep a compatibility alias used by other codepaths in the repo. Prefer
+// `IconURLVariantsWrapper` for DB models that require SeaORM traits.
+pub type IconURLVariants = IconURLVariantsWrapper;

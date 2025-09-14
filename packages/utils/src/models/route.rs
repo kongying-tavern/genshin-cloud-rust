@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use crate::models::wrapper::Pagination;
 use crate::types::HiddenFlag;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// 路线添加请求
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,3 +58,7 @@ pub struct RouteSearchRequest {
     #[serde(flatten)]
     pub page: Pagination,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteEmptyResponse {}

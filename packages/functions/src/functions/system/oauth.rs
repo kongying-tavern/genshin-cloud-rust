@@ -6,7 +6,7 @@ use sea_orm::{prelude::*, ActiveValue::Set};
 
 use _database::{models, DB_CONN};
 use _utils::{
-    bcrypt::verify_hash,
+    bcrypt::verify_password,
     jwt::{generate_token, verify_token, Claims, EXPIRED_APPEND_DURATION},
     models::SysUserVO,
     types::{
@@ -19,12 +19,7 @@ async fn oauth_password_login_inner(
     item: models::system::sys_user::Model,
     password_raw: String,
 ) -> Result<OauthLoginResponse> {
-    if !verify_hash(
-        password_raw,
-        item.password
-            .strip_prefix("{bcrypt}")
-            .ok_or(anyhow!("Failed to strip bcrypt prefix"))?,
-    )? {
+    if !verify_password(password_raw, item.password.clone())? {
         return Err(anyhow!("Invalid password"));
     }
 
@@ -120,11 +115,116 @@ pub async fn oauth_password_login(
     ret
 }
 
-pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
-    // Handle client credentials grant type
-    todo!()
+pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousResponse> {
+    // 使用系统匿名用户 id = 0 表示客户端凭据/匿名访问
+    let id: i64 = 0;
+
+    let jti = Uuid::now_v7();
+    let now = chrono::Utc::now();
+    let access_token = generate_token(now, id, jti).await?;
+    let _refresh_token = generate_token(now, id, jti).await?;
+
+    let mut redis_conn = DB_CONN
+        .wait()
+        .redis_conn
+        .get_multiplexed_async_connection()
+        .await?;
+
+    // 对于匿名/客户端凭据，存储一个空的 payload 或简单标记
+    let payload = serde_json::to_string(&serde_json::json!({"anon": true}))?;
+
+    redis_conn
+        .set_options(
+            format!("jwt:access:{}:{}", id, jti),
+            payload,
+            SetOptions::default()
+                .conditional_set(redis::ExistenceCheck::NX)
+                .with_expiration(redis::SetExpiry::EX(
+                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                )),
+        )
+        .await?;
+    redis_conn
+        .set_options(
+            format!("jwt:refresh:{}:{}", id, jti),
+            &"",
+            SetOptions::default()
+                .conditional_set(redis::ExistenceCheck::NX)
+                .with_expiration(redis::SetExpiry::EX(
+                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                )),
+        )
+        .await?;
+
+    Ok(OauthAnonymousResponse {
+        access_token,
+        token_type: OauthTokenType::Bearer,
+        expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
+        scope: OauthScopeType::All, // TODO: map scope string to enum if needed
+        jti,
+    })
 }
 
 pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
-    todo!()
+    // 验证传入的 refresh token 并获取 claims
+    let claims = verify_token(&refresh_token).await?;
+
+    let mut redis_conn = DB_CONN
+        .wait()
+        .redis_conn
+        .get_multiplexed_async_connection()
+        .await?;
+
+    // 确认 refresh token 在 Redis 中存在
+    let refresh_key = format!("jwt:refresh:{}:{}", claims.sub, claims.jti);
+    let exists: Option<String> = redis_conn.get(&refresh_key).await?;
+    if exists.is_none() {
+        return Err(anyhow!("Refresh token not found"));
+    }
+
+    // 生成新的 jti 和 token
+    let new_jti = Uuid::now_v7();
+    let now = chrono::Utc::now();
+    let _new_access = generate_token(now, claims.sub, new_jti).await?;
+    let _new_refresh = generate_token(now, claims.sub, new_jti).await?;
+
+    // 保持原来的访问负载（如果有），尝试读取旧的 access payload
+    let old_access_key = format!("jwt:access:{}:{}", claims.sub, claims.jti);
+    let access_payload: Option<String> = redis_conn.get(&old_access_key).await?;
+
+    // 写入新的 access/refresh 条目
+    let access_key = format!("jwt:access:{}:{}", claims.sub, new_jti);
+    let refresh_key_new = format!("jwt:refresh:{}:{}", claims.sub, new_jti);
+
+    let payload_to_store = access_payload.unwrap_or_else(|| serde_json::json!({}).to_string());
+
+    redis_conn
+        .set_options(
+            &access_key,
+            payload_to_store,
+            SetOptions::default()
+                .conditional_set(redis::ExistenceCheck::NX)
+                .with_expiration(redis::SetExpiry::EX(
+                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                )),
+        )
+        .await?;
+
+    redis_conn
+        .set_options(
+            &refresh_key_new,
+            &"",
+            SetOptions::default()
+                .conditional_set(redis::ExistenceCheck::NX)
+                .with_expiration(redis::SetExpiry::EX(
+                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                )),
+        )
+        .await?;
+
+    // 删除旧的 access/refresh 键
+    let _deleted_old_access: usize = redis_conn.del(old_access_key).await?;
+    let _deleted_old_refresh: usize = redis_conn.del(refresh_key).await?;
+
+    Ok(())
 }

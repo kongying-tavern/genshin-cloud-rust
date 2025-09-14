@@ -12,8 +12,7 @@ pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<HistoryListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::history::do_get_list(auth, payload).await
-    {
+    match _functions::functions::api::history::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

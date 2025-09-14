@@ -149,3 +149,45 @@ pub struct ItemListRequest {
     #[serde(flatten)]
     pub page: Pagination,
 }
+
+/// 物品返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemVO {
+    pub id: i64,
+    pub name: String,
+    pub area_id: i64,
+    pub default_refresh_time: i64,
+    pub default_content: Option<String>,
+    pub default_count: i32,
+    pub icon_id: i64,
+    pub icon_style_type: crate::types::IconStyleType,
+    pub hidden_flag: crate::types::HiddenFlag,
+    pub sort_index: i32,
+    pub special_flag: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemListResponse {
+    pub total: i64,
+    pub items: Vec<ItemVO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemSingleResponse {
+    pub item: ItemVO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAddResponse {
+    pub id: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyCountResponse {
+    pub count: i64,
+}

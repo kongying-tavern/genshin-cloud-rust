@@ -96,3 +96,30 @@ pub struct MarkerLinkDeleteRequest {
     /// 关联 ID
     pub ids: Option<Vec<i64>>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkVO {
+    pub id: i64,
+    pub from_id: i64,
+    pub to_id: i64,
+    pub link_action: Option<crate::types::MarkerLinkageLinkAction>,
+    pub path: Option<Vec<Option<MarkerLinkagePathEdge>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkListResponse(pub Vec<MarkerLinkVO>);
+
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkGraphResponse(pub HashMap<String, Vec<MarkerLinkVO>>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkUpsertResult {
+    pub id: i64,
+    pub status: String,
+}

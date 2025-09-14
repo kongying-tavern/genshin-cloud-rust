@@ -2,6 +2,30 @@ use serde::{Deserialize, Serialize};
 
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
 
+/// 物品类型对外 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemTypeVO {
+    pub id: i64,
+    pub name: String,
+    pub icon_id: i64,
+    pub content: Option<String>,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub hidden_flag: HiddenFlag,
+    pub sort_index: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemTypeListResponse {
+    pub total: i64,
+    pub items: Vec<ItemTypeVO>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ItemTypeAllResponse(pub Vec<ItemTypeVO>);
+
 /// 物品类型基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

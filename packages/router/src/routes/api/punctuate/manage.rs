@@ -12,12 +12,7 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::punctuate::do_update(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::punctuate::do_update(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -30,12 +25,7 @@ pub async fn submit(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<PunctuateData>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::punctuate::do_submit(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::punctuate::do_submit(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

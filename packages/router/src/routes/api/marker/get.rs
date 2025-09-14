@@ -13,12 +13,7 @@ pub async fn get_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::marker::do_get_id(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::marker::do_get_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -32,12 +27,7 @@ pub async fn get_list_by_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::marker::do_get_list_by_info(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::marker::do_get_list_by_info(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -51,12 +41,7 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::marker::do_get_list_by_id(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::marker::do_get_list_by_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
@@ -70,12 +55,7 @@ pub async fn get_page(
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // use axum::Json as AxumJson; (removed duplicate alias)
-    match _functions::functions::api::marker::do_get_page(
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::marker::do_get_page(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

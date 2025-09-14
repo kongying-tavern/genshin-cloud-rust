@@ -6,5 +6,3 @@ pub enum ActionLogAction {
     #[serde(rename = "LOGIN")]
     Login,
 }
-
-// ActionLogSort 和 ActionLogParams 已移动到对应的路由文件中

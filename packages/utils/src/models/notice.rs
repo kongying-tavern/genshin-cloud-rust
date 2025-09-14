@@ -94,3 +94,28 @@ pub struct NoticeUpdateRequest {
     pub valid_time_end: Option<f64>,
     pub valid_time_start: Option<f64>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeVO {
+    pub id: i64,
+    pub title: String,
+    pub content: Option<String>,
+    pub channels: Vec<NoticeChannel>,
+    pub sort_index: i64,
+    pub valid_time_start: Option<f64>,
+    pub valid_time_end: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeListResponse {
+    pub total: i64,
+    pub items: Vec<NoticeVO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoticeAddResponse {
+    pub id: i64,
+}

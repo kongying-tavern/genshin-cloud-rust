@@ -55,3 +55,35 @@ pub struct AreaListRequest {
     /// 父级 ID
     pub parent_id: Option<i64>,
 }
+
+/// 地区返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaVO {
+    pub id: i64,
+    pub name: String,
+    pub code: Option<String>,
+    pub content: Option<String>,
+    pub icon_id: i64,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub hidden_flag: crate::types::HiddenFlag,
+    pub sort_index: i32,
+    pub special_flag: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaListResponse(pub Vec<AreaVO>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaSingleResponse {
+    pub item: AreaVO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaAddResponse {
+    pub id: i64,
+}

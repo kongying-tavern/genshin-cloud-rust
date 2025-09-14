@@ -2,6 +2,74 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
+use serde_json::Value;
+
+/// 点位对外返回 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerVO {
+    pub version: i64,
+    pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
+    pub del_flag: bool,
+
+    #[deprecated = "仅用于兼容旧数据，现已不再使用"]
+    pub marker_stamp: Option<String>,
+    pub marker_title: Option<String>,
+    pub position: String,
+    pub content: String,
+    pub picture: Option<String>,
+    pub marker_creator_id: i64,
+    pub picture_creator_id: Option<i64>,
+    pub video_path: Option<String>,
+    pub refresh_time: i64,
+    pub hidden_flag: HiddenFlag,
+    /// 直接保留原始 extra JSON
+    pub extra: Option<Value>,
+}
+
+/// 空响应（会序列化为 {}）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerEmptyResponse {}
+
+/// 添加返回 ID
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerAddResponse {
+    pub id: i64,
+}
+
+/// ID 列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerIdListResponse {
+    pub ids: Vec<i64>,
+}
+
+/// 列表响应（带总数）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerListResponse {
+    pub total: usize,
+    pub items: Vec<MarkerVO>,
+}
+
+/// 仅 items 响应（不含 total）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerItemsResponse {
+    pub items: Vec<MarkerVO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerSingleResponse {
+    pub marker: MarkerVO,
+}
 
 /// 点位基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
