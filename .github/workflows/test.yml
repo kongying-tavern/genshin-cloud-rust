@@ -1,0 +1,95 @@
+name: Test
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Setup sccache
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          SCCACHE_VERSION: v0.15.0
+        run: |
+          curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar xz
+          sudo mv "sccache-${SCCACHE_VERSION}/sccache" /usr/local/bin/
+          sccache --version
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run unit tests
+        run: cargo test --workspace --lib --no-fail-fast
+
+      - name: Run integration tests
+        run: cargo test --workspace --tests --no-fail-fast
+
+  commit-msg:
+    name: Commit Message Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install celestia-devtools
+        run: pip install "git+https://github.com/celestia-island/celestia-devtools.git"
+
+      - name: Lint commit messages
+        run: |
+          # Lint all commits in the push/PR range against the gitmoji convention.
+          git log --format='%s' origin/${{ github.base_ref || github.event.repository.default_branch }}..HEAD 2>/dev/null | \
+            celestia-devtools commit-msg-lint check --stdin-subjects || \
+          git log --format='%s' -n ${{ github.event.push.commits[0].size || 1 }} HEAD | \
+            celestia-devtools commit-msg-lint check --stdin-subjects
+
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trufflehog Secrets Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          extra_args: --only-verified --fail
