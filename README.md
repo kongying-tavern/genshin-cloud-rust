@@ -1,0 +1,111 @@
+<!-- markdownlint-disable MD033 MD041 MD036 -->
+<h1 align="center">空荧酒馆·原神地图 Rust 后端</h1>
+<h2 align="center">Genshin Map Cloud — Rust Backend</h2>
+
+<p align="center"><strong>原神地图后端服务的 Rust 重写，与 Java 侧 (<code>java-genshin-map-cloud</code>) 功能对齐</strong></p>
+
+<div align="center">
+
+[![Rust](https://github.com/kongying-tavern/genshin-cloud-rust/workflows/Rust/badge.svg)](https://github.com/kongying-tavern/genshin-cloud-rust/actions/workflows/rust.yml)
+[![Test](https://github.com/kongying-tavern/genshin-cloud-rust/workflows/Test/badge.svg)](https://github.com/kongying-tavern/genshin-cloud-rust/actions/workflows/test.yml)
+[![GitHub](https://img.shields.io/badge/github-kongying--tavern%2Fgenshin--cloud--rust-blue.svg)](https://github.com/kongying-tavern/genshin-cloud-rust)
+
+</div>
+
+<div align="center">
+
+**简体中文** · [English](./docs/en/guides/README.md)
+
+</div>
+
+---
+
+## 简介 / Overview
+
+本项目是「空荧酒馆·原神地图」后端的 Rust 实现，目标是与 Java 侧参考实现
+([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
+的功能保持同步，并在性能、部署体验与类型安全上有所改进。
+
+This project is the Rust rewrite of the "空荧酒馆 Genshin Map" backend. The goal
+is feature parity with the Java reference implementation
+([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
+while improving performance, deployment ergonomics, and type safety.
+
+## 技术栈 / Tech Stack
+
+| 层 / Layer | 技术 / Technology |
+|---|---|
+| Web 框架 / Framework | `axum` |
+| ORM | `sea-orm` (PostgreSQL via `sqlx`) |
+| 缓存 / Cache | `redis` |
+| 对象存储 / Object storage | `minio` |
+| 鉴权 / Auth | `jsonwebtoken` + `bcrypt` |
+| 运行时 / Runtime | `tokio` |
+| 日志 / Tracing | `tracing` + `tracing-subscriber` |
+
+## 快速开始 / Quick Start
+
+在部署之前，请在项目根目录创建一个 `.env` 文件，存放数据库连接信息，示例：
+
+Before deploying, create a `.env` file in the project root with the database
+configuration, for example:
+
+```env
+DB_PASSWORD=<password>
+```
+
+正式开始前，请确保已安装 [`just`](https://github.com/casey/just)、`cargo` 与
+`docker`；如果需要本地调试，还需要 `docker-compose`。
+
+Before starting, make sure [`just`](https://github.com/casey/just), `cargo`,
+and `docker` are installed. Local debugging additionally requires
+`docker-compose`.
+
+```bash
+just init          # 初始化开发环境 / initialize the dev environment
+just hooks         # 安装 commit-msg 钩子 / install the commit-msg hook
+just build         # 构建（release） / build (release)
+just dev           # 实时调试 / real-time debug
+```
+
+> 历史命令 `cargo make build` / `cargo make dev` 仍然可用（依赖
+> `Makefile.toml`），但推荐使用 `just`。
+
+## 工作区结构 / Workspace Layout
+
+```
+packages/
+  utils/      # 通用工具、数据结构 / shared utilities & data structures
+  database/   # 数据库实体与连接 / DB entities & connection
+  functions/  # 业务逻辑层 / business logic
+  router/     # axum 路由与中间件 / axum routes & middlewares
+```
+
+## 文档 / Documentation
+
+完整架构、设计决策与指南位于 `docs/` 目录（多语言）：
+
+Full architecture, design decisions, and guides live under `docs/`
+(multilingual):
+
+- **[简体中文文档](./docs/zhs/README.md)** — 架构、构建、API 参考、Java 同步路线图
+- **[English docs](./docs/en/README.md)** — architecture, building, API
+  reference, Java-sync roadmap
+
+## 提交规范 / Commit Convention
+
+本项目遵循 celestia-island 组织的 [gitmoji 提交规范](https://gitmoji.dev)。
+所有提交信息（subject line）必须为**英文**，以 gitmoji 开头、首字母大写、
+以句号结尾。钩子会在 `git commit` 时强制校验。
+
+This project follows the celestia-island org
+[gitmoji convention](https://gitmoji.dev). All commit subjects must be in
+**English**, starting with a gitmoji, capitalized, and ending with a period.
+The commit-msg hook enforces this on every `git commit`.
+
+详见 / See: [提交规范](./docs/zhs/guides/commit-message-convention.md) /
+[Commit Convention](./docs/en/guides/commit-message-convention.md)
+
+## 许可证 / License
+
+本项目为空荧酒馆（kongying-tavern）所有。详见仓库历史与上游 Java 项目。
