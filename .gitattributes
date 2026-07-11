@@ -1,0 +1,21 @@
+# Normalize line endings to LF in the repo; let Git convert on checkout per-OS.
+* text=auto eol=lf
+
+# Binary files — never diff/merge as text
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary
+
+# Generated lock files — merge-friendly
+Cargo.lock -diff
