@@ -1,5 +1,7 @@
 # 空荧酒馆·原神地图 Rust 后端 / Genshin Map Cloud Rust Backend
 
+[![Rust](https://github.com/kongying-tavern/genshin-cloud-rust/workflows/Rust/badge.svg)](https://github.com/kongying-tavern/genshin-cloud-rust/actions/workflows/rust.yml)
+
 ## 如何构建 / How to build
 
 为了确保环境的一致性，本项目采用 Docker Compose 进行自动化部署。请确保机器上已安装 Docker 和 Cargo。
