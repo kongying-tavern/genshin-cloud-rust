@@ -1,8 +1,8 @@
 use anyhow::Result;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter};
+use sea_orm::{ActiveValue::Set, QueryFilter, prelude::*};
 
-use _database::{models::marker::marker_linkage as linkage_model, DB_CONN};
+use _database::{DB_CONN, models::marker::marker_linkage as linkage_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -35,8 +35,8 @@ pub async fn do_link(
                 if let Some(action) = p.link_action {
                     am.link_action = Set(action);
                 }
-                am.path = Set(p.path.map(|v| serde_json::to_value(v).ok()).flatten());
-                linkage_model::Entity::update_safety(am)
+                am.path = Set(p.path.and_then(|v| serde_json::to_value(v).ok()));
+                linkage_model::Entity::update_safety(am)?
                     .exec(&DB_CONN.wait().pg_conn)
                     .await?;
                 ret.push(MarkerLinkUpsertResult {
@@ -156,7 +156,7 @@ pub async fn do_delete(
             if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
                 let mut am: linkage_model::ActiveModel = item.into();
                 am.del_flag = Set(true);
-                linkage_model::Entity::delete_safety(am).exec(db).await?;
+                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
         return Ok(CommonResponse::new(Ok(())));
@@ -171,7 +171,7 @@ pub async fn do_delete(
             for it in items {
                 let mut am: linkage_model::ActiveModel = it.into();
                 am.del_flag = Set(true);
-                linkage_model::Entity::delete_safety(am).exec(db).await?;
+                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
     }

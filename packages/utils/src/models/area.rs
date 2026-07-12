@@ -54,6 +54,8 @@ pub struct AreaListRequest {
     pub is_traverse: Option<bool>,
     /// 父级 ID
     pub parent_id: Option<i64>,
+    /// 数据级过滤（与 marker 域一致，normal vs insider）
+    pub hidden_flag: Option<crate::types::HiddenFlag>,
 }
 
 /// 地区返回值 VO

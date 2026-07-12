@@ -1,5 +1,5 @@
 use _utils::impl_safe_operation;
-use sea_orm::{entity::prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]

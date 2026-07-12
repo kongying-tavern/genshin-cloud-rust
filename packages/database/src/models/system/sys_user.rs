@@ -75,18 +75,18 @@ impl_safe_operation! {
     del_flag_column: Column::DelFlag
 }
 
-impl Into<SysUserVO> for Model {
-    fn into(self) -> SysUserVO {
+impl From<Model> for SysUserVO {
+    fn from(val: Model) -> Self {
         SysUserVO {
-            id: self.id,
-            username: self.username,
-            nickname: self.nickname,
-            qq: self.qq,
-            phone: self.phone,
-            logo: self.logo,
-            role_id: self.role_id,
-            access_policy: self.access_policy,
-            remark: self.remark,
+            id: val.id,
+            username: val.username,
+            nickname: val.nickname,
+            qq: val.qq,
+            phone: val.phone,
+            logo: val.logo,
+            role_id: val.role_id,
+            access_policy: val.access_policy,
+            remark: val.remark,
         }
     }
 }

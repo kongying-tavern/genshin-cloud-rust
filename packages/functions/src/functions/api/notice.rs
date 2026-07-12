@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QuerySelect};
+use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
 
-use _database::{models::common::notice as notice_model, DB_CONN};
+use _database::{DB_CONN, models::common::notice as notice_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -32,7 +32,7 @@ pub async fn do_update_notice(
     am.title = Set(payload.title);
     am.content = Set(Some(payload.content));
 
-    notice_model::Entity::update_safety(am).exec(db).await?;
+    notice_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -70,7 +70,7 @@ pub async fn do_get_notice_list(
                         "DASHBOARD" => channels.push(NoticeChannel::Dashboard),
                         "TIANLI" => channels.push(NoticeChannel::Tianli),
                         "WEB" => channels.push(NoticeChannel::Web),
-                        _ => {}
+                        _ => {},
                     }
                 }
             }
@@ -82,8 +82,12 @@ pub async fn do_get_notice_list(
             content: it.content,
             channels,
             sort_index: it.sort_index as i64,
-            valid_time_start: it.valid_time_start.map(|dt| dt.and_utc().timestamp_millis() as f64),
-            valid_time_end: it.valid_time_end.map(|dt| dt.and_utc().timestamp_millis() as f64),
+            valid_time_start: it
+                .valid_time_start
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            valid_time_end: it
+                .valid_time_end
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
         });
     }
     let payload = NoticeListResponse {
@@ -99,7 +103,7 @@ pub async fn do_delete_notice(_auth: AuthInfo, id: i64) -> Result<CommonResponse
     let n = n.ok_or(anyhow!("Notice not found"))?;
     let mut am: notice_model::ActiveModel = n.into();
     am.del_flag = Set(true);
-    notice_model::Entity::delete_safety(am).exec(db).await?;
+    notice_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }
 

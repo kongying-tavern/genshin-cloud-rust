@@ -63,7 +63,30 @@ pub async fn list(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    let size = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.size)
+        .unwrap_or(10) as u64;
+    let current = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.current)
+        .unwrap_or(1);
+
+    match _functions::functions::system::device::do_list(
+        auth,
+        None,
+        payload.device_id,
+        payload.status.map(|s| s as i32),
+        size,
+        current as u64,
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -85,5 +108,11 @@ pub async fn update(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    let status = payload
+        .status
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
+    match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }

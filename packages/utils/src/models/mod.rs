@@ -1,11 +1,11 @@
 pub mod area;
+pub mod common;
 pub mod history;
 pub mod icon;
 pub mod icon_type;
 pub mod item;
 pub mod item_type;
 pub mod marker;
-pub mod common;
 pub mod marker_item_link;
 pub mod marker_link;
 pub mod notice;

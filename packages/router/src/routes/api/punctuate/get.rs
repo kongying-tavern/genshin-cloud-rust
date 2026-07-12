@@ -8,7 +8,7 @@ use axum::{
 // duplicate import removed
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::{punctuate::PunctuateData, wrapper::Pagination};
+use _utils::models::wrapper::Pagination;
 
 /// 分页查询所有打点信息
 /// POST /punctuate/get/page

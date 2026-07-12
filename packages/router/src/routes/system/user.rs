@@ -124,6 +124,7 @@ pub struct UserListParams {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // request body type for the kick-out endpoint (not yet wired)
 pub struct UserKickOutParams {
     pub work_id: String,
 }
@@ -187,10 +188,12 @@ pub async fn get_info(
         return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(do_get_info(auth, user_id)
-        .await
-        .map_err(|err| (StatusCode::NOT_FOUND, err.to_string()))?
-        .into_response())
+    Ok(Json(
+        do_get_info(auth, user_id)
+            .await
+            .map_err(|err| (StatusCode::NOT_FOUND, err.to_string()))?,
+    )
+    .into_response())
 }
 
 /// 更新用户信息
@@ -292,18 +295,20 @@ pub async fn list(
         return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(do_list(
-        auth,
-        payload.pagination,
-        payload.nickname,
-        payload.role_ids,
-        payload
-            .sort
-            .map(|sorts| sorts.into_iter().map(|s| format!("{:?}", s)).collect()),
-        payload.username,
+    Ok(Json(
+        do_list(
+            auth,
+            payload.pagination,
+            payload.nickname,
+            payload.role_ids,
+            payload
+                .sort
+                .map(|sorts| sorts.into_iter().map(|s| format!("{:?}", s)).collect()),
+            payload.username,
+        )
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 

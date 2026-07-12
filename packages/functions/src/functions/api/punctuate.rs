@@ -1,222 +1,217 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
-use _database::{models::marker::marker as marker_model, DB_CONN};
+use _database::{DB_CONN, models::marker::marker_punctuate as mp_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
+        common::EmptyResponse,
         punctuate::PunctuateData,
-        marker::{MarkerAddResponse, MarkerEmptyResponse, MarkerVO, MarkerListResponse},
         wrapper::{CommonResponse, Pagination},
     },
+    types::MarkerPunctuateStatus,
 };
 
-/// 使用 marker 表作为打点后台实现
-pub async fn do_update(_auth: AuthInfo, payload: PunctuateData) -> Result<CommonResponse<MarkerEmptyResponse>> {
-    // 如果 payload 中带有原有点位 id，则视为更新对应 marker 的额外字段与状态
-    if let Some(original_id) = payload.original_marker_id {
-        let id = original_id as i64;
-        let db = &DB_CONN.wait().pg_conn;
-        if let Some(model) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
-            // 更新 extra、content、position、picture、video_path 等可变字段
-            let mut am: marker_model::ActiveModel = model.into();
-            am.content = Set(payload.content.unwrap_or_default());
-            am.position = Set(payload.position);
-            am.picture = Set(payload.picture);
-            am.video_path = Set(payload.video_path);
-            if let Some(extra) = payload.extra {
-                let json = serde_json::to_value(extra)?;
-                am.extra = Set(Some(json));
-            }
+/// 暂存 / 提交打点
+///
+/// - `status == Pending`：暂存（STAGE），用户可在后续提交审核
+/// - `status == Reviewing`：提交审核（COMMIT），从 Pending 或 Rejected 晋升
+///
+/// 对应 Java `PunctuateService.stage` / `PunctuateService.commit`。
+pub async fn do_submit(
+    _auth: AuthInfo,
+    payload: PunctuateData,
+) -> Result<CommonResponse<EmptyResponse>> {
+    let db = &DB_CONN.wait().pg_conn;
+    let now = Utc::now().naive_utc();
 
-            marker_model::Entity::update_safety(am).exec(db).await?;
-        }
+    match payload.status {
+        MarkerPunctuateStatus::Pending => {
+            // STAGE: 新建或覆盖暂存（按 punctuate_id + STAGE|REJECTED 查找并替换）
+            let existing = mp_model::Entity::find_safety()
+                .filter(mp_model::Column::PunctuateId.eq(payload.punctuate_id as i64))
+                .filter(mp_model::Column::Status.is_in([
+                    MarkerPunctuateStatus::Pending,
+                    MarkerPunctuateStatus::Rejected,
+                ]))
+                .one(db)
+                .await?;
+
+            if let Some(m) = existing {
+                // 更新已有的暂存记录
+                let mut am: mp_model::ActiveModel = m.into();
+                apply_punctuate_fields(&mut am, &payload);
+                mp_model::Entity::update_safety(am)?.exec(db).await?;
+            } else {
+                // 新建暂存记录
+                let am = new_punctuate_active_model(&payload, now);
+                mp_model::Entity::insert(am).exec(db).await?;
+            }
+        },
+        MarkerPunctuateStatus::Reviewing => {
+            // COMMIT: 将 STAGE 或 REJECTED 的记录状态改为 Reviewing
+            let m = mp_model::Entity::find_safety()
+                .filter(mp_model::Column::PunctuateId.eq(payload.punctuate_id as i64))
+                .filter(mp_model::Column::Status.is_in([
+                    MarkerPunctuateStatus::Pending,
+                    MarkerPunctuateStatus::Rejected,
+                ]))
+                .one(db)
+                .await?
+                .ok_or_else(|| anyhow!("无待提交的打点信息"))?;
+
+            let mut am: mp_model::ActiveModel = m.into();
+            am.status = Set(MarkerPunctuateStatus::Reviewing);
+            apply_punctuate_fields(&mut am, &payload);
+            mp_model::Entity::update_safety(am)?.exec(db).await?;
+        },
+        MarkerPunctuateStatus::Rejected => {
+            return Err(anyhow!("不能直接将状态设为不通过；需通过审核驳回流程"));
+        },
     }
 
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+    Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-pub async fn do_submit(_auth: AuthInfo, payload: PunctuateData) -> Result<CommonResponse<MarkerAddResponse>> {
-    let now = Utc::now().naive_utc();
-    let active = marker_model::ActiveModel {
-        version: Set(0),
-        id: Set(0),
-        create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(Some(payload.author)),
-        updater_id: Set(None),
-        del_flag: Set(false),
-
-        marker_stamp: Set(None),
-        marker_title: Set(Some(payload.marker_title)),
-        position: Set(payload.position),
-        content: Set(payload.content.unwrap_or_default()),
-        picture: Set(payload.picture),
-        marker_creator_id: Set(payload.marker_creator_id),
-        picture_creator_id: Set(payload.picture_creator_id),
-        video_path: Set(payload.video_path),
-        refresh_time: Set(payload.refresh_time.unwrap_or(0)),
-        hidden_flag: Set(payload.hidden_flag),
-        extra: Set(payload
-            .extra
-            .map(|m| serde_json::to_value(m).unwrap_or(serde_json::json!({})))),
-        ..Default::default()
-    };
-
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(MarkerAddResponse { id: res.id })))
-}
-
-pub async fn do_get_page(_auth: AuthInfo, payload: Pagination) -> Result<CommonResponse<MarkerListResponse>> {
+/// 更新打点内容（仅 Pending/Rejected 状态可改）
+pub async fn do_update(
+    _auth: AuthInfo,
+    payload: PunctuateData,
+) -> Result<CommonResponse<EmptyResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
+    let m = mp_model::Entity::find_safety()
+        .filter(mp_model::Column::PunctuateId.eq(payload.punctuate_id as i64))
+        .filter(mp_model::Column::Status.is_in([
+            MarkerPunctuateStatus::Pending,
+            MarkerPunctuateStatus::Rejected,
+        ]))
+        .one(db)
+        .await?
+        .ok_or_else(|| anyhow!("打点信息不存在或已提交，无法修改"))?;
+
+    let mut am: mp_model::ActiveModel = m.into();
+    apply_punctuate_fields(&mut am, &payload);
+    mp_model::Entity::update_safety(am)?.exec(db).await?;
+    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+}
+
+/// 分页查询所有打点信息
+pub async fn do_get_page(
+    _auth: AuthInfo,
+    payload: Pagination,
+) -> Result<CommonResponse<serde_json::Value>> {
+    let db = &DB_CONN.wait().pg_conn;
     let size = payload.size.unwrap_or(10) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
-    let query = marker_model::Entity::find_safety();
+    let query = mp_model::Entity::find_safety();
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
-    let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(MarkerVO {
-            version: it.version,
-            id: it.id,
-            create_time: it.create_time.and_utc().timestamp_millis() as f64,
-            update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
-            creator_id: it.creator_id,
-            updater_id: it.updater_id,
-            del_flag: it.del_flag,
-            marker_stamp: it.marker_stamp,
-            marker_title: it.marker_title,
-            position: it.position,
-            content: it.content,
-            picture: it.picture,
-            marker_creator_id: it.marker_creator_id,
-            picture_creator_id: it.picture_creator_id,
-            video_path: it.video_path,
-            refresh_time: it.refresh_time,
-            hidden_flag: it.hidden_flag,
-            extra: it.extra,
-        });
-    }
-    Ok(CommonResponse::new(Ok(MarkerListResponse { total: total as usize, items: arr })))
+    Ok(CommonResponse::new(Ok(serde_json::json!({
+        "total": total,
+        "list": items,
+    }))))
 }
 
+/// 按提交者分页查询打点信息
 pub async fn do_get_page_by_author(
     _auth: AuthInfo,
     author_id: i64,
     payload: Pagination,
-) -> Result<CommonResponse<MarkerListResponse>> {
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
-
     let size = payload.size.unwrap_or(10) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
-    let query =
-        marker_model::Entity::find_safety().filter(marker_model::Column::CreatorId.eq(author_id));
+    let query = mp_model::Entity::find_safety().filter(mp_model::Column::Author.eq(author_id));
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
-    let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(MarkerVO {
-            version: it.version,
-            id: it.id,
-            create_time: it.create_time.and_utc().timestamp_millis() as f64,
-            update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
-            creator_id: it.creator_id,
-            updater_id: it.updater_id,
-            del_flag: it.del_flag,
-            marker_stamp: it.marker_stamp,
-            marker_title: it.marker_title,
-            position: it.position,
-            content: it.content,
-            picture: it.picture,
-            marker_creator_id: it.marker_creator_id,
-            picture_creator_id: it.picture_creator_id,
-            video_path: it.video_path,
-            refresh_time: it.refresh_time,
-            hidden_flag: it.hidden_flag,
-            extra: it.extra,
-        });
-    }
-    Ok(CommonResponse::new(Ok(MarkerListResponse { total: total as usize, items: arr })))
+    Ok(CommonResponse::new(Ok(serde_json::json!({
+        "total": total,
+        "list": items,
+    }))))
 }
 
-pub async fn do_push(_auth: AuthInfo, payload: serde_json::Value) -> Result<CommonResponse<MarkerEmptyResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    // 如果 payload 包含明确的 marker id，则更新其 extra（向后兼容）
-    if let Some(id) = payload.get("id").and_then(|v| v.as_i64()) {
-        if let Some(model) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
-            let mut am: marker_model::ActiveModel = model.into();
-            if let Some(extra) = payload.get("extra") {
-                am.extra = Set(Some(extra.clone()));
-            }
-            marker_model::Entity::update_safety(am).exec(db).await?;
-            return Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})));
-        }
-    }
-
-    // 否则如果 payload 包含 author_id（router 使用该字段），则视为提交待审：
-    // 查找该作者创建的 markers，并将 submit 审计条目追加到 extra.audit
-    if let Some(author_id) = payload.get("author_id").and_then(|v| v.as_i64()) {
-        let markers = marker_model::Entity::find_safety()
-            .filter(marker_model::Column::MarkerCreatorId.eq(author_id))
-            .all(db)
-            .await?;
-
-        for m in markers.into_iter() {
-            let mut am: marker_model::ActiveModel = m.clone().into();
-
-            let mut extra = m.extra.clone().unwrap_or(serde_json::json!({}));
-            let mut audits = extra.get("audit").cloned().unwrap_or(serde_json::json!([]));
-            let entry = serde_json::json!({
-                "action": "submit",
-                "by": author_id,
-                "time": Utc::now().to_rfc3339()
-            });
-            if audits.is_array() {
-                // 避免添加重复的连续 submit 条目
-                let arr = audits.as_array_mut().unwrap();
-                let need_push = match arr.last() {
-                    Some(last) => last.get("action").and_then(|v| v.as_str()) != Some("submit"),
-                    None => true,
-                };
-                if need_push {
-                    arr.push(entry);
-                }
-            } else {
-                audits = serde_json::json!([entry]);
-            }
-            extra["audit"] = audits;
-            am.extra = Set(Some(extra));
-
-            marker_model::Entity::update_safety(am).exec(db).await?;
-        }
-    }
-
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
-}
-
+/// 删除打点记录（软删除）
 pub async fn do_delete(
     _auth: AuthInfo,
-    payload: serde_json::Value,
-) -> Result<CommonResponse<MarkerEmptyResponse>> {
+    punctuate_id: i64,
+) -> Result<CommonResponse<EmptyResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    // 支持按 id 删除 {"id": i64}
-    if let Some(id) = payload.get("id").and_then(|v| v.as_i64()) {
-        marker_model::Entity::delete_safety_by_id(id)
-            .exec(db)
-            .await?;
-    }
+    let m = mp_model::Entity::find_safety()
+        .filter(mp_model::Column::PunctuateId.eq(punctuate_id))
+        .one(db)
+        .await?
+        .ok_or_else(|| anyhow!("打点信息不存在"))?;
 
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+    mp_model::Entity::delete_safety(m.into())?.exec(db).await?;
+    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/// 将 PunctuateData 的字段写入 ActiveModel（不改 status / id / version）。
+fn apply_punctuate_fields(am: &mut mp_model::ActiveModel, p: &PunctuateData) {
+    am.marker_title = Set(Some(p.marker_title.clone()));
+    am.content = Set(p.content.clone().unwrap_or_default());
+    am.position = Set(p.position.clone());
+    am.picture = Set(p.picture.clone());
+    am.video_path = Set(p.video_path.clone());
+    am.method_type = Set(p.method_type);
+    am.hidden_flag = Set(p.hidden_flag);
+    am.original_marker_id = Set(p.original_marker_id.map(|f| f as i64));
+    am.refresh_time = Set(p.refresh_time.unwrap_or(0));
+    am.item_list =
+        Set(serde_json::to_value(&p.item_list).unwrap_or(serde_json::Value::Array(Vec::new())));
+    am.extra = Set(p
+        .extra
+        .as_ref()
+        .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null)));
+}
+
+/// 构造一条新的 marker_punctuate ActiveModel（状态 = payload.status）。
+fn new_punctuate_active_model(
+    p: &PunctuateData,
+    now: chrono::NaiveDateTime,
+) -> mp_model::ActiveModel {
+    mp_model::ActiveModel {
+        version: Set(0),
+        id: Set(0),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(Some(p.author)),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        punctuate_id: Set(p.punctuate_id as i64),
+        original_marker_id: Set(p.original_marker_id.map(|f| f as i64)),
+        marker_title: Set(Some(p.marker_title.clone())),
+        item_list: Set(
+            serde_json::to_value(&p.item_list).unwrap_or(serde_json::Value::Array(Vec::new()))
+        ),
+        position: Set(p.position.clone()),
+        content: Set(p.content.clone().unwrap_or_default()),
+        picture: Set(p.picture.clone()),
+        marker_creator_id: Set(p.marker_creator_id),
+        picture_creator_id: Set(p.picture_creator_id),
+        video_path: Set(p.video_path.clone()),
+        author: Set(p.author),
+        status: Set(p.status),
+        audit_remark: Set(None),
+        method_type: Set(p.method_type),
+        refresh_time: Set(p.refresh_time.unwrap_or(0)),
+        hidden_flag: Set(p.hidden_flag),
+        extra: Set(p
+            .extra
+            .as_ref()
+            .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null))),
+    }
 }

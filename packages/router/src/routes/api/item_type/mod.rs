@@ -7,8 +7,8 @@ mod update;
 use anyhow::Result;
 
 use axum::{
-    routing::{delete, post, put},
     Router,
+    routing::{delete, post, put},
 };
 
 pub async fn router() -> Result<Router> {

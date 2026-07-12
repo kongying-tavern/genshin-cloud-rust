@@ -1,0 +1,7 @@
+[site]
+title = "空荧酒馆·原神地图 Rust 后端"
+description = "Genshin Map Cloud — Rust backend, feature-synced with the Java reference implementation"
+
+[languages]
+default = "en"
+order = ["en", "zhs", "zht", "ja", "ko", "fr", "es", "ru", "ar", "de", "pt"]

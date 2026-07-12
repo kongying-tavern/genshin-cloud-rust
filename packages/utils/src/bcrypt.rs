@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use bcrypt::{hash, verify as do_verify, DEFAULT_COST};
+use bcrypt::{DEFAULT_COST, hash, verify as do_verify};
 
 const BCRYPT_PREFIX: &str = "{bcrypt}";
 

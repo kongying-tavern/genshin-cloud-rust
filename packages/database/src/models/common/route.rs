@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 use _utils::{impl_safe_operation, types::HiddenFlag};
@@ -41,7 +41,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct MarkerListWrapper(Vec<i64>);
+pub struct MarkerListWrapper(pub Vec<i64>);
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
 pub enum Relation {

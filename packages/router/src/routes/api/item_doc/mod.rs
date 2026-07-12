@@ -3,7 +3,7 @@ mod list_page_md5;
 
 use anyhow::Result;
 
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

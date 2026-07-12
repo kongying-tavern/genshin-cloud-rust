@@ -1,4 +1,5 @@
 pub mod area;
+pub mod binary_doc;
 pub mod cache;
 pub mod history;
 pub mod icon;
@@ -17,3 +18,5 @@ pub mod punctuate_audit;
 pub mod res;
 pub mod route;
 pub mod score;
+pub mod tag;
+pub mod tag_type;

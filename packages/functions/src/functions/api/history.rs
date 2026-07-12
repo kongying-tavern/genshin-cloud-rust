@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use chrono::{TimeZone, Utc};
 
-use sea_orm::{prelude::*, QueryOrder, QuerySelect};
+use sea_orm::{QueryOrder, QuerySelect, prelude::*};
 
-use _database::models::common::history as history_model;
 use _database::DB_CONN;
+use _database::models::common::history as history_model;
 use _utils::db_operations::SafeEntityTrait;
 use _utils::{
     jwt::AuthInfo,
@@ -58,10 +58,10 @@ pub async fn do_get_list(
         query = query.filter(history_model::Column::EditType.eq(edit_type));
     }
 
-    if let Some(ids) = payload.id {
-        if !ids.is_empty() {
-            query = query.filter(history_model::Column::TId.is_in(ids));
-        }
+    if let Some(ids) = payload.id
+        && !ids.is_empty()
+    {
+        query = query.filter(history_model::Column::TId.is_in(ids));
     }
 
     // 排序
@@ -70,10 +70,10 @@ pub async fn do_get_list(
             match s {
                 _utils::models::history::HistorySort::UpdateTimeAsc => {
                     query = query.order_by_asc(history_model::Column::UpdateTime)
-                }
+                },
                 _utils::models::history::HistorySort::UpdateTimeDesc => {
                     query = query.order_by_desc(history_model::Column::UpdateTime)
-                }
+                },
             }
         }
     } else {
@@ -85,11 +85,11 @@ pub async fn do_get_list(
 
     // 分页
     let mut select = query;
-    if let Some(current) = payload.page.current {
-        if let Some(size) = payload.page.size {
-            let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
-            select = select.limit(size as u64).offset(offset as u64);
-        }
+    if let Some(current) = payload.page.current
+        && let Some(size) = payload.page.size
+    {
+        let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
+        select = select.limit(size as u64).offset(offset);
     }
 
     let items = select.all(&DB_CONN.wait().pg_conn).await?;

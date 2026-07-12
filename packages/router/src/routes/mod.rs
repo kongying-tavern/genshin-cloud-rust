@@ -4,8 +4,8 @@ mod system;
 use anyhow::Result;
 
 use axum::{
-    extract::DefaultBodyLimit, http::StatusCode, middleware::from_extractor,
-    response::IntoResponse, routing::post, Router,
+    Router, extract::DefaultBodyLimit, http::StatusCode, middleware::from_extractor,
+    response::IntoResponse, routing::post,
 };
 
 pub async fn router() -> Result<Router> {

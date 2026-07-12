@@ -4,8 +4,8 @@ mod get;
 
 use anyhow::Result;
 use axum::{
-    routing::{delete, post},
     Router,
+    routing::{delete, post},
 };
 
 pub async fn router() -> Result<Router> {

@@ -1,18 +1,18 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QuerySelect};
+use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
 
-use _database::models::icon::icon as icon_model;
 use _database::DB_CONN;
+use _database::models::icon::icon as icon_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
+        IconAddRequest, IconListRequest, IconUpdateRequest,
         icon::{IconAddResponse, IconListResponse, IconSingleResponse, IconVO},
         wrapper::CommonResponse,
-        IconAddRequest, IconListRequest, IconUpdateRequest,
     },
 };
 
@@ -52,10 +52,10 @@ pub async fn do_list(
     if let Some(creator) = payload.creator {
         query = query.filter(icon_model::Column::CreatorId.eq(creator));
     }
-    if let Some(ids) = payload.icon_list {
-        if !ids.is_empty() {
-            query = query.filter(icon_model::Column::Id.is_in(ids));
-        }
+    if let Some(ids) = payload.icon_list
+        && !ids.is_empty()
+    {
+        query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
         query = query.filter(icon_model::Column::Tag.contains(name));
@@ -64,11 +64,11 @@ pub async fn do_list(
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
 
     let mut select = query;
-    if let Some(current) = payload.page.current {
-        if let Some(size) = payload.page.size {
-            let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
-            select = select.limit(size as u64).offset(offset as u64);
-        }
+    if let Some(current) = payload.page.current
+        && let Some(size) = payload.page.size
+    {
+        let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
+        select = select.limit(size as u64).offset(offset);
     }
 
     let items = select.all(&DB_CONN.wait().pg_conn).await?;
@@ -115,7 +115,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     let item = item.ok_or(anyhow!("Icon not found"))?;
     let mut am: icon_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    icon_model::Entity::delete_safety(am)
+    icon_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))
@@ -130,7 +130,7 @@ pub async fn do_update(_auth: AuthInfo, payload: IconUpdateRequest) -> Result<Co
     let mut am: icon_model::ActiveModel = item.into();
     am.tag = Set(payload.base.name);
     am.url = Set(payload.base.url);
-    icon_model::Entity::update_safety(am)
+    icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))
