@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 // serde_json not needed after concrete response conversion
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, ExprTrait, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
-    models::item::item as item_model, models::item::item_type_link as link_model, DB_CONN,
+    DB_CONN, models::item::item as item_model, models::item::item_type_link as link_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -44,7 +44,7 @@ pub async fn do_update(
         }
         am.special_flag = Set(Some(p.special_flag as i32));
 
-        item_model::Entity::update_safety(am)
+        item_model::Entity::update_safety(am)?
             .exec(&DB_CONN.wait().pg_conn)
             .await?;
     }
@@ -64,6 +64,17 @@ pub async fn do_get_list(
     }
     if let Some(name) = payload.name {
         query = query.filter(item_model::Column::Name.like(format!("%{}%", name)));
+    }
+    if let Some(sf) = payload.special_flag {
+        // Java parity: special_flag is a bit-mask. param == 0 means "no special
+        // flag set" (filter special_flag = 0); param > 0 means "has any of these
+        // bits" (filter (special_flag & param) != 0).
+        let sf = sf as i32;
+        if sf == 0 {
+            query = query.filter(item_model::Column::SpecialFlag.eq(0));
+        } else {
+            query = query.filter(Expr::col(item_model::Column::SpecialFlag).bit_and(sf).ne(0));
+        }
     }
     if let Some(type_list) = payload.type_id_list {
         // 与 link 表联表以按类型进行筛选
@@ -121,7 +132,7 @@ pub async fn do_join_type(
         if let Some(link) = ex {
             let mut lam: link_model::ActiveModel = link.into();
             lam.type_id = Set(type_id);
-            link_model::Entity::update_safety(lam)
+            link_model::Entity::update_safety(lam)?
                 .exec(&DB_CONN.wait().pg_conn)
                 .await?;
         } else {
@@ -183,7 +194,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     let item = item.ok_or(anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    item_model::Entity::delete_safety(am)
+    item_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))

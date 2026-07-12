@@ -1,6 +1,6 @@
 [package]
 authors = ["langyo <langyo.china@gmail.com>"]
-edition = "2021"
+edition = "2024"
 publish = false
 name = "_functions"
 version = "0.1.0"
@@ -34,6 +34,8 @@ yuuka = { workspace = true }
 image = { workspace = true }
 sqids = { workspace = true }
 bzip2 = { workspace = true }
+flate2 = { workspace = true }
+md5 = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }

@@ -1,6 +1,6 @@
 [package]
 authors = ["langyo <langyo.china@gmail.com>"]
-edition = "2021"
+edition = "2024"
 name = "_utils"
 publish = false
 version = "0.1.0"

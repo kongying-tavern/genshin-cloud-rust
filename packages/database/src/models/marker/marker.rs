@@ -23,8 +23,7 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 点位签戳
-    /// 用于兼容旧点位 ID
-    #[deprecated = "仅用于兼容旧数据，现已不再使用"]
+    /// 用于兼容旧点位 ID（仅兼容历史数据，新数据不再写入；业务层仍需读取旧记录）
     pub marker_stamp: Option<String>,
     /// 点位名称
     pub marker_title: Option<String>,

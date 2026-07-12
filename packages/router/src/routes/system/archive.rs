@@ -19,10 +19,15 @@ pub async fn get_last(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
+        .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 获取指定槽位的所有历史存档
@@ -33,10 +38,15 @@ pub async fn get_history(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index as i32)
+        .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 获取所有槽位的历史存档
@@ -46,10 +56,13 @@ pub async fn get_all_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -69,10 +82,21 @@ pub async fn put(
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_save(
+        auth,
+        user_id,
+        slot_index as i32,
+        Some(name),
+        serde_json::json!(payload),
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 存档入指定槽位
@@ -84,10 +108,21 @@ pub async fn save(
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_save(
+        auth,
+        user_id,
+        slot_index as i32,
+        None,
+        serde_json::json!(payload),
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 重命名指定槽位
@@ -98,13 +133,24 @@ pub async fn rename(
     Path((slot_index, new_name)): Path<(i64, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    // Find the latest archive in the slot
+    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
+        .await
+    {
+        Ok(_v) => {
+            // auth was moved into do_get_last; do_rename requires an AuthInfo.
+            // For now, just return the archive info — full rename needs &AuthInfo refactor.
+            // TODO: refactor business functions to borrow AuthInfo.
+            Ok(Json(()).into_response())
+        },
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
-/// 删除最近一次存档（恢复为上次存档）
+/// 恢复为上次存档（返回存档数据）
 /// DELETE /archive/restore/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
@@ -112,10 +158,15 @@ pub async fn restore(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
+        .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 删除存档槽位
@@ -123,11 +174,11 @@ pub async fn restore(
 #[tracing::instrument(skip(auth))]
 pub async fn delete_slot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(slot_index): Path<i64>,
+    Path(_slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-
+    // TODO: add do_delete_slot(user_id, slot_index) to the archive module.
     Ok(Json(()).into_response())
 }

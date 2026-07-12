@@ -2,7 +2,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::{wrapper::Pagination, RouteSearchRequest};
+use _utils::models::{RouteSearchRequest, wrapper::Pagination};
 
 // RouteSearchRequest is defined in `_utils::models::route` and re-exported as
 // `_utils::models::RouteSearchRequest`.

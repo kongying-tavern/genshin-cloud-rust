@@ -1,15 +1,15 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
-use sea_orm::{prelude::*, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::*};
 
-use _database::{models::area::area as area_model, DB_CONN};
+use _database::{DB_CONN, models::area::area as area_model};
 use _utils::models::common::EmptyResponse;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        wrapper::CommonResponse, AreaAddRequest, AreaAddResponse, AreaListRequest,
-        AreaListResponse, AreaSingleResponse, AreaUpdateRequest, AreaVO,
+        AreaAddRequest, AreaAddResponse, AreaListRequest, AreaListResponse, AreaSingleResponse,
+        AreaUpdateRequest, AreaVO, wrapper::CommonResponse,
     },
 };
 
@@ -67,7 +67,7 @@ pub async fn do_update(
     am.sort_index = Set(payload.area.sort_index);
     am.special_flag = Set(payload.area.special_flag);
 
-    area_model::Entity::update_safety(am)
+    area_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -81,6 +81,11 @@ pub async fn do_list(
     let mut query = area_model::Entity::find_safety();
     if let Some(parent) = payload.parent_id {
         query = query.filter(area_model::Column::ParentId.eq(parent));
+    }
+    if let Some(hidden_flag) = payload.hidden_flag {
+        // 数据级过滤：与 marker 域的 hiddenFlagList 过滤保持一致，
+        // 让客户端按 normal / insider 数据级请求地区列表。
+        query = query.filter(area_model::Column::HiddenFlag.eq(hidden_flag));
     }
 
     let items = query.all(&DB_CONN.wait().pg_conn).await?;
@@ -132,7 +137,7 @@ pub async fn do_delete(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<E
     let item = item.ok_or(anyhow!("Area not found"))?;
     let mut am: area_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    area_model::Entity::delete_safety(am)
+    area_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))

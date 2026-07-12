@@ -1,17 +1,17 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::{prelude::*, ActiveValue::Set};
+use sea_orm::{ActiveValue::Set, prelude::*};
 
-use _database::{models, DB_CONN};
+use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
-    jwt::{generate_token, verify_token, Claims, EXPIRED_APPEND_DURATION},
+    jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
-        auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
         SystemActionLogAction,
+        auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
     },
 };
 
@@ -33,6 +33,8 @@ async fn oauth_password_login_inner(
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
     redis_conn
@@ -49,7 +51,7 @@ async fn oauth_password_login_inner(
     redis_conn
         .set_options(
             format!("jwt:refresh:{}:{}", id, jti),
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -74,6 +76,8 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
     let item = redis_conn
@@ -127,6 +131,8 @@ pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousRe
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
 
@@ -147,7 +153,7 @@ pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousRe
     redis_conn
         .set_options(
             format!("jwt:refresh:{}:{}", id, jti),
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
@@ -172,6 +178,8 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Redis not available"))?
         .get_multiplexed_async_connection()
         .await?;
 
@@ -213,7 +221,7 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     redis_conn
         .set_options(
             &refresh_key_new,
-            &"",
+            "",
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(

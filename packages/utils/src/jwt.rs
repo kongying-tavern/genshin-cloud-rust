@@ -4,11 +4,11 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
 use crate::models::SysUserVO;
 
-pub const JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
+pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     let key = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into());
     (
@@ -67,7 +67,7 @@ pub async fn generate_token(now: DateTime<Utc>, user_id: i64, jti: Uuid) -> Resu
         exp: now + EXPIRED_APPEND_DURATION,
     };
 
-    Ok(encode(&Header::default(), &claims, &JWT_SECRET.0).context("Failed to encode token")?)
+    encode(&Header::default(), &claims, &JWT_SECRET.0).context("Failed to encode token")
 }
 
 pub async fn verify_token(token: &str) -> Result<Claims> {

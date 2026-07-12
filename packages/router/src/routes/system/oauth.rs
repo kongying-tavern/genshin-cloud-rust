@@ -102,7 +102,7 @@ pub async fn oauth(
                     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
             )
             .into_response());
-        }
+        },
         LoginQueryType::RefreshToken => {
             let refresh_token = query.refresh_token.ok_or_else(|| {
                 (
@@ -114,6 +114,6 @@ pub async fn oauth(
                 .await
                 .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
             return Ok(StatusCode::NO_CONTENT.into_response());
-        }
+        },
     }
 }

@@ -9,9 +9,9 @@ mod user;
 use anyhow::Result;
 
 use axum::{
+    Router,
     middleware::from_extractor,
     routing::{delete, get, post, put},
-    Router,
 };
 
 pub async fn router() -> Result<Router> {

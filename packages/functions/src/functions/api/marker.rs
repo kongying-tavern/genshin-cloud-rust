@@ -1,12 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QuerySelect};
+use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
 
 use std::collections::HashSet;
 
 use _database::{
-    models::marker::marker as marker_model, models::marker::marker_item_link as mil_model, DB_CONN,
+    DB_CONN, models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -28,8 +28,10 @@ fn model_to_vo(it: marker_model::Model) -> MarkerVO {
     MarkerVO {
         version: it.version,
         id: it.id,
-    create_time: it.create_time.and_utc().timestamp_millis() as f64,
-    update_time: it.update_time.map(|dt| dt.and_utc().timestamp_millis() as f64),
+        create_time: it.create_time.and_utc().timestamp_millis() as f64,
+        update_time: it
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
         creator_id: it.creator_id,
         updater_id: it.updater_id,
         del_flag: it.del_flag,
@@ -69,72 +71,69 @@ pub async fn do_tweak(
                 _utils::models::marker::MarkerTweakConfigPropEnum::Content => {
                     if let Some(v) = &tweak.meta.replace {
                         am.content = Set(v.clone());
-                    } else if let Some(_val) = &tweak.meta.value {
+                    } else if let Some(_utils::models::marker::TweakValue::String(s)) =
+                        &tweak.meta.value
+                    {
                         // 简化处理：若值为 String -> 替换
-                        if let _utils::models::marker::TweakValue::String(s) = _val {
-                            am.content = Set(s.clone());
-                        }
+                        am.content = Set(s.clone());
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Title => {
                     if let Some(v) = &tweak.meta.replace {
                         am.marker_title = Set(Some(v.clone()));
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Position => {
                     if let Some(v) = &tweak.meta.replace {
                         am.position = Set(v.clone());
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::VideoPath => {
                     if let Some(v) = &tweak.meta.replace {
                         am.video_path = Set(Some(v.clone()));
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::RefreshTime => {
-                    if let Some(_v) = &tweak.meta.value {
-                        if let _utils::models::marker::TweakValue::Integer(i) = _v {
-                            am.refresh_time = Set(*i);
-                        }
+                    if let Some(_v) = &tweak.meta.value
+                        && let _utils::models::marker::TweakValue::Integer(i) = _v
+                    {
+                        am.refresh_time = Set(*i);
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::Extra => {
                     if let Some(map) = &tweak.meta.map {
                         // 用序列化后的 map 完整替换 extra
                         am.extra = Set(Some(serde_json::to_value(map)?));
-                    } else if let Some(_val) = &tweak.meta.value {
+                    } else if let Some(_utils::models::marker::TweakValue::AnythingMap(m)) =
+                        &tweak.meta.value
+                    {
                         // 尝试设置任意 JSON 值
-                        match _val {
-                            _utils::models::marker::TweakValue::AnythingMap(m) => {
-                                am.extra = Set(Some(serde_json::to_value(m)?));
-                            }
-                            _ => {}
-                        }
+                        am.extra = Set(Some(serde_json::to_value(m)?));
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::HiddenFlag => {
-                    if let Some(_val) = &tweak.meta.value {
-                        if let _utils::models::marker::TweakValue::Integer(i) = _val {
-                            // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                            let hf = match *i as i32 {
-                                0 => _utils::types::HiddenFlag::Visible,
-                                1 => _utils::types::HiddenFlag::Hidden,
-                                2 => _utils::types::HiddenFlag::Spy,
-                                3 => _utils::types::HiddenFlag::Suprise,
-                                _ => _utils::types::HiddenFlag::Visible,
-                            };
-                            am.hidden_flag = Set(hf);
-                        }
+                    if let Some(_val) = &tweak.meta.value
+                        && let _utils::models::marker::TweakValue::Integer(i) = _val
+                    {
+                        // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
+                        let hf = match *i as i32 {
+                            0 => _utils::types::HiddenFlag::Visible,
+                            1 => _utils::types::HiddenFlag::Hidden,
+                            2 => _utils::types::HiddenFlag::Spy,
+                            3 => _utils::types::HiddenFlag::Suprise,
+                            _ => _utils::types::HiddenFlag::Visible,
+                        };
+                        am.hidden_flag = Set(hf);
                     }
-                }
+                },
                 _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
                     // 逻辑复杂：此处跳过。Item 列表调整应由专门的 API 处理。
-                }
+                },
             }
         }
 
         // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
-        marker_model::Entity::update_safety(am).exec(db).await?;
+        marker_model::Entity::update_safety(am)?.exec(db).await?;
     }
 
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
@@ -204,7 +203,7 @@ pub async fn do_update_single(
         am.video_path = Set(Some(video_path));
     }
 
-    marker_model::Entity::update_safety(am).exec(db).await?;
+    marker_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
@@ -336,6 +335,6 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Marker
     let m = m.ok_or(anyhow!("Marker not found"))?;
     let mut am: marker_model::ActiveModel = m.into();
     am.del_flag = Set(true);
-    marker_model::Entity::delete_safety(am).exec(db).await?;
+    marker_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }

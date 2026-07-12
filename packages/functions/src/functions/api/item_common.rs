@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QuerySelect};
+use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
 
 use _utils::{
     jwt::AuthInfo,
@@ -16,7 +16,7 @@ use _utils::{
 
 use _utils::db_operations::SafeEntityTrait;
 
-use _database::{models::item::item as item_model, DB_CONN};
+use _database::{DB_CONN, models::item::item as item_model};
 
 pub async fn do_get_list(
     _auth: AuthInfo,
@@ -95,8 +95,8 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
         del_flag: Set(false),
 
         name: Set("新物品".to_string()),
-        area_id: Set(payload.get(0).cloned().unwrap_or(0)),
-        default_refresh_time: Set(payload.get(2).cloned().unwrap_or(0) as i64),
+        area_id: Set(payload.first().cloned().unwrap_or(0)),
+        default_refresh_time: Set(payload.get(2).cloned().unwrap_or(0)),
         default_content: Set(None),
         default_count: Set(payload.get(1).cloned().unwrap_or(1) as i32),
         icon_id: Set(0),
@@ -104,7 +104,6 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
         hidden_flag: Set(HiddenFlag::Visible),
         sort_index: Set(0),
         special_flag: Set(None),
-        ..Default::default()
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
@@ -129,7 +128,7 @@ pub async fn do_update(
         am.default_content = Set(Some(default_content.to_string()));
     }
 
-    item_model::Entity::update_safety(am)
+    item_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -142,7 +141,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
     let item = item.ok_or(anyhow::anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    item_model::Entity::delete_safety(am)
+    item_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))

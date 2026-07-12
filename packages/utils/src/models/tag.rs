@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::models::Pagination;
+use crate::{models::Pagination, types::HiddenFlag};
 
 /// 标签基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,4 +49,30 @@ pub struct TagListRequest {
 
     #[serde(flatten)]
     pub page: Pagination,
+}
+
+/// 标签返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagVO {
+    pub id: i64,
+    pub tag: String,
+    pub icon_id: i64,
+    pub hidden_flag: HiddenFlag,
+    pub sort_index: i32,
+}
+
+/// 标签列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagListResponse {
+    pub total: i64,
+    pub list: Vec<TagVO>,
+}
+
+/// 标签新增响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagAddResponse {
+    pub id: i64,
 }

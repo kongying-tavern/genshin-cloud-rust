@@ -44,3 +44,29 @@ pub struct TagTypeListRequest {
     #[serde(flatten)]
     pub page: Pagination,
 }
+
+/// 标签类型返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagTypeVO {
+    pub id: i64,
+    pub name: String,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub sort_index: i32,
+}
+
+/// 标签类型列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagTypeListResponse {
+    pub total: i64,
+    pub list: Vec<TagTypeVO>,
+}
+
+/// 标签类型新增响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagTypeAddResponse {
+    pub id: i64,
+}

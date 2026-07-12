@@ -93,7 +93,29 @@ pub async fn list(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    let size = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.size)
+        .unwrap_or(10) as u64;
+    let current = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.current)
+        .unwrap_or(1);
+
+    match _functions::functions::system::invitation::do_list(
+        auth,
+        payload.code,
+        payload.username,
+        size,
+        current as u64,
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 新增/更新用户邀请
@@ -107,7 +129,17 @@ pub async fn update(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    match _functions::functions::system::invitation::do_update(
+        auth,
+        payload.code,
+        Some(payload.role_id),
+        Some(payload.remark),
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 检查用户邀请数据
@@ -117,7 +149,10 @@ pub async fn info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationInfoRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::system::invitation::do_info(auth, payload.code).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 使用用户邀请
@@ -127,7 +162,10 @@ pub async fn consume(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(Json(()).into_response())
+    match _functions::functions::system::invitation::do_consume(auth, payload.code).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
 
 /// 删除用户邀请
@@ -141,5 +179,8 @@ pub async fn delete(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    match _functions::functions::system::invitation::do_delete(auth, invitation_id).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }

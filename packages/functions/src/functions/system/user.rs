@@ -1,14 +1,14 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
-use _database::models::system::sys_user as sys_user_model;
 use _database::DB_CONN;
+use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::Pagination,
+    models::{Pagination, SysUserVO},
     types::{AccessPolicyItemEnum, SystemUserRole},
 };
 
@@ -64,17 +64,16 @@ pub async fn do_register_qq(
     do_register(_auth, access_policy, logo, remark, role_id, username).await
 }
 
-pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<()> {
+pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
-    // 返回简要用户信息（转换为 VO 在上层路由一般完成），这里只返回 Ok(()) 作为占位
-    let _vo: _utils::models::SysUserVO = m.into();
-    Ok(())
+    Ok(m.into())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_update(
     _auth: AuthInfo,
     id: i64,
@@ -122,7 +121,7 @@ pub async fn do_update(
     }
     am.role_id = Set(role_id);
 
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
@@ -144,7 +143,7 @@ pub async fn do_update_password(
 
     // 简化：把 old_password 视为新密码并进行哈希后存储
     am.password = Set(_utils::bcrypt::generate_storage_password(old_password)?);
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
@@ -160,13 +159,13 @@ pub async fn do_update_password_by_admin(
     let m = m.ok_or(anyhow!("User not found"))?;
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
-    sys_user_model::Entity::update_safety(am).exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
 
 pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
     // 管理员删除用户：使用软删除 by id
-    sys_user_model::Entity::delete_safety_by_id(work_id)
+    sys_user_model::Entity::delete_safety_by_id(work_id)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(())
@@ -179,8 +178,8 @@ pub async fn do_list(
     role_ids: Option<Vec<SystemUserRole>>,
     sort: Option<Vec<String>>, // 简化为 String
     username: String,
-) -> Result<()> {
-    let _ = (&pagination, &nickname, &role_ids, &sort, &username);
+) -> Result<serde_json::Value> {
+    let _ = &sort; // sort not yet applied (Java uses a Sort enum; placeholder)
     let db = &DB_CONN.wait().pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
@@ -201,8 +200,8 @@ pub async fn do_list(
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
-    let _ = serde_json::json!({"total": total, "items": items});
-    Ok(())
+    let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
+    Ok(serde_json::json!({"total": total, "items": vos}))
 }
 
 pub async fn do_kick_out(_auth: AuthInfo, _work_id: String) -> Result<()> {

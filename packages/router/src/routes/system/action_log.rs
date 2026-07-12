@@ -72,5 +72,23 @@ pub async fn list(
         return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
 
-    Ok(Json(()).into_response())
+    let size = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10) as u64;
+    let current = query
+        .pagination
+        .as_ref()
+        .and_then(|p| p.current)
+        .unwrap_or(1);
+
+    match _functions::functions::system::action_log::do_list(
+        auth,
+        query.user_id,
+        query.action.map(|a| a as i64),
+        size,
+        current as u64,
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }

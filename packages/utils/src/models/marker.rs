@@ -16,7 +16,7 @@ pub struct MarkerVO {
     pub updater_id: Option<i64>,
     pub del_flag: bool,
 
-    #[deprecated = "仅用于兼容旧数据，现已不再使用"]
+    /// 仅兼容历史数据，业务层仍需读取旧记录
     pub marker_stamp: Option<String>,
     pub marker_title: Option<String>,
     pub position: String,

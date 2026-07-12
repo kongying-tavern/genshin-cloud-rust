@@ -1,0 +1,38 @@
+[package]
+name = "genshin-cloud-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+# Workspace crates under test
+_utils = { path = "../../packages/utils" }
+_database = { path = "../../packages/database" }
+
+# sea-orm traits (EntityName, Iterable) for compile-time entity assertions
+sea-orm = { workspace = true }
+
+# Test runtime
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "^0.4"
+
+[[test]]
+name = "utils_smoke"
+path = "tests/utils_smoke.rs"
+
+[[test]]
+name = "area_domain"
+path = "tests/area/area_domain_test.rs"
+
+[[test]]
+name = "marker_domain"
+path = "tests/marker/marker_domain_test.rs"
+
+[[test]]
+name = "schema"
+path = "tests/schema_test.rs"

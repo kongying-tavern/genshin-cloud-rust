@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
-use sea_orm::{prelude::*, ActiveValue::Set, QueryFilter, QuerySelect};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
-    models::item::item_type as item_type_model, models::item::item_type_link as link_model, DB_CONN,
+    DB_CONN, models::item::item_type as item_type_model, models::item::item_type_link as link_model,
 };
 use _utils::models::common::EmptyResponse;
 use _utils::{
@@ -44,7 +44,7 @@ pub async fn do_update(
         am.sort_index = Set(si as i32);
     }
 
-    item_type_model::Entity::update_safety(am)
+    item_type_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -66,7 +66,7 @@ pub async fn do_move_to_target(
         for link in links {
             let mut lam: link_model::ActiveModel = link.into();
             lam.type_id = Set(target_type_id);
-            link_model::Entity::update_safety(lam)
+            link_model::Entity::update_safety(lam)?
                 .exec(&DB_CONN.wait().pg_conn)
                 .await?;
         }
@@ -143,7 +143,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
     let item = item.ok_or(anyhow!("ItemType not found"))?;
     let mut am: item_type_model::ActiveModel = item.into();
     am.del_flag = Set(true);
-    item_type_model::Entity::delete_safety(am)
+    item_type_model::Entity::delete_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))

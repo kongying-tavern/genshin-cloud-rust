@@ -1,5 +1,5 @@
 [workspace]
-members = ["packages/*"]
+members = ["packages/*", "tests/rust"]
 
 default-members = ["packages/router"]
 resolver = "2"
@@ -28,15 +28,16 @@ bytes = "^1"
 chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
 percent-encoding = "^2"
 
-flume = "^0.11"
+flume = "^0.12"
 futures = "^0.3"
-oneshot = "^0.1"
+oneshot = "^0.2"
 tokio = { version = "^1", features = ["full"] }
 
 serde = { version = "^1", features = ["derive"] }
 serde_json = "^1"
-# FIXME: 等待上游 sea-orm 正式发布 2.0 版本后，strum 可同步更新至 0.27
-strum = { version = "^0.26", features = ["derive"] }
+# sea-orm 2.0-rc is now the baseline; strum is bumped to 0.28 to match.
+# Drop the -rc suffix once sea-orm 2.0 goes stable.
+strum = { version = "^0.28", features = ["derive"] }
 uuid = { version = "^1", features = [
   'v4',
   "v7",
@@ -48,12 +49,14 @@ yuuka = "^0.6"
 
 image = { version = "^0.25", features = ["gif", "jpeg", "png", "webp"] }
 sqids = "^0.4"
+# flate2 for the BinaryMD5 gzip-compressed archive export (Java uses GZIP, not bzip2).
+flate2 = "^1"
 bzip2 = "^0.6"
 
-bcrypt = "^0.17"
-jsonwebtoken = "^9"
+bcrypt = "^0.19"
+jsonwebtoken = "^10"
 
-md5 = "^0.7"
+md5 = "^0.8"
 
 env_logger = "^0.11"
 log = "^0.4"
@@ -68,35 +71,57 @@ axum = { version = "^0.8", features = [
   "multipart",
   "ws",
 ] }
-axum-extra = { version = "^0.10", features = [
+axum-extra = { version = "^0.12", features = [
   "typed-header",
   "query",
   "multipart",
   "cookie",
 ] }
-reqwest = { version = "^0.12", features = [
+# reqwest: deliberately avoid the default `rustls`/`default-tls` features,
+# which would pull `__rustls-aws-lc-rs` and force the aws-lc-rs crypto provider
+# (and its native aws-lc-sys C build) onto the whole graph via feature
+# unification. `rustls-no-provider` gives us the rustls transport without
+# committing to a provider; the ring provider is activated by the explicit
+# `rustls` workspace dep below, which uses `default-features = false`.
+reqwest = { version = "^0.13", default-features = false, features = [
   "charset",
   "http2",
-  "rustls-tls",
+  "rustls-no-provider",
+  "rustls-native-certs",
   "cookies",
   "gzip",
   "brotli",
   "json",
   "multipart",
 ] }
-tower-http = { version = "^0.6", features = ["fs", "trace"] }
+# rustls: pinned ring-only. default-features = false drops aws-lc-rs from the
+# default feature set; we re-enable only what we need (std, tls12, logging).
+# This is the single source of truth for the rustls crypto provider across
+# the whole workspace (reqwest + sqlx/sea-orm both ride on this via
+# unification).
+rustls = { version = "^0.23", default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+  "logging",
+] }
+tower-http = { version = "^0.7", features = ["fs", "trace"] }
 
-sea-orm = { version = "^1", features = [
+# sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
+# have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"
+# once 2.0 stable ships.
+sea-orm = { version = "^2.0.0-rc", features = [
   "debug-print",
   "json-array",
   "sqlx-postgres",
   "runtime-tokio-rustls",
 ] }
-redis = { version = "^0.32", features = [
+# redis 1.x graduated to stable (the 0.x line is the legacy async API).
+redis = { version = "^1", features = [
   "tokio-comp",
   "ahash",
   "uuid",
   "json",
   "aio",
 ] }
-minio = "^0.3"
+minio = "^0.4"

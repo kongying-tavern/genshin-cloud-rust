@@ -8,7 +8,7 @@ mod notice;
 
 use anyhow::Result;
 
-use axum::{routing::delete, Router};
+use axum::{Router, routing::delete};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

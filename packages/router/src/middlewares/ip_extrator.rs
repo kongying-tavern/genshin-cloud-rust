@@ -6,7 +6,7 @@ use std::{
 
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 
@@ -40,7 +40,7 @@ where
                 })?;
 
                 Ok(Self(Some(SocketAddr::new(ip, 0))))
-            }
+            },
             None => Ok(Self(None)),
         }
     }

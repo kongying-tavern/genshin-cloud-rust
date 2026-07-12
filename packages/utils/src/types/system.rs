@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString};
 
-use sea_orm::{prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, prelude::*};
 
 use super::HiddenFlag;
 
@@ -89,6 +89,9 @@ pub enum SystemUserRole {
 }
 
 impl SystemUserRole {
+    /// Check whether this role may access content tagged with `flag`.
+    /// Kept for the role-gated query layer (RBAC); not yet wired into every route.
+    #[allow(dead_code)]
     fn is_available(self, flag: HiddenFlag) -> bool {
         if matches!(flag, HiddenFlag::Visible | HiddenFlag::Suprise) {
             return true;
@@ -97,10 +100,10 @@ impl SystemUserRole {
         match self {
             SystemUserRole::Admin | SystemUserRole::MapNeigui => {
                 matches!(flag, HiddenFlag::Hidden | HiddenFlag::Spy)
-            }
+            },
             SystemUserRole::MapManager | SystemUserRole::MapPunctuate => {
                 matches!(flag, HiddenFlag::Hidden)
-            }
+            },
             SystemUserRole::MapUser | SystemUserRole::Visitor => false,
         }
     }
