@@ -12,17 +12,26 @@
 //! test one domain. Future domain tests can reuse `recreate_tables_fklless`.
 
 use sea_orm::{
-    ActiveValue::NotSet, ConnectionTrait, EntityTrait, Schema, sea_query::TableCreateStatement,
+    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
+    Schema, sea_query::TableCreateStatement,
 };
 
 use _database::DB_CONN;
-use _database::models::{area::area as area_model, item::item as item_model};
-use _functions::functions::api::{area as area_fns, item_doc};
+use _database::models::{
+    area::area as area_model, item::item as item_model, marker::marker as marker_model,
+    marker::marker_item_link as mil_model,
+};
+use _functions::functions::api::{area as area_fns, item_doc, marker as marker_fns};
 use _utils::{
+    db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
         SysUserVO,
         area::{AreaAddRequest, AreaListRequest},
+        marker::{
+            MarkerTweakConfig, MarkerTweakConfigPropEnum, MarkerTweakConfigTypeEnum,
+            MarkerTweakRequest, TweakMeta,
+        },
     },
     types::{AccessPolicyList, HiddenFlag, IconStyleType, SystemUserRole},
 };
@@ -80,6 +89,13 @@ async fn recreate_tables_fklless(
     Ok(())
 }
 
+async fn link_count(db: &sea_orm::DatabaseConnection, marker_id: i64) -> anyhow::Result<u64> {
+    Ok(mil_model::Entity::find_safety()
+        .filter(mil_model::Column::MarkerId.eq(marker_id))
+        .count(db)
+        .await?)
+}
+
 fn stub_auth() -> AuthInfo {
     let now = chrono::Utc::now();
     AuthInfo {
@@ -109,10 +125,12 @@ async fn area_and_item_doc_business_assertions() {
     let ddls = [
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
+        ddl_without_foreign_keys(marker_model::Entity),
+        ddl_without_foreign_keys(mil_model::Entity),
     ];
-    recreate_tables_fklless(db, &["area", "item"], &ddls)
+    recreate_tables_fklless(db, &["area", "item", "marker", "marker_item_link"], &ddls)
         .await
-        .expect("recreate area + item tables");
+        .expect("recreate area + item + marker tables");
 
     // ── Seed one area + two items (different hidden_flag → 2 MD5 groups) ─────
     use sea_orm::ActiveValue::Set;
@@ -227,7 +245,7 @@ async fn area_and_item_doc_business_assertions() {
     // ── Assertion 3: item_doc do_list_page_bin_md5 returns one MD5 per
     //    hidden_flag group (2 items, 2 distinct flags → 2 entries), each a
     //    32-char hex MD5. ────────────────────────────────────────────────────
-    let md5_resp = item_doc::do_list_page_bin_md5(auth, serde_json::Value::Null)
+    let md5_resp = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc do_list_page_bin_md5")
         .data
@@ -250,4 +268,148 @@ async fn area_and_item_doc_business_assertions() {
             vo.md5
         );
     }
+
+    // ── Assertion 4: marker ItemList tweak maintains marker_item_link ────────
+    // Seed one marker, then exercise Append / InsertIfAbsent / Replace /
+    // RemoveLeft against its item links.
+    let marker_am = marker_model::ActiveModel {
+        id: NotSet,
+        version: Set(0),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        marker_stamp: Set(None),
+        marker_title: Set(Some("Test Marker".into())),
+        position: Set("1.0,2.0".into()),
+        content: Set(String::new()),
+        picture: Set(None),
+        marker_creator_id: Set(1),
+        picture_creator_id: Set(None),
+        video_path: Set(None),
+        refresh_time: Set(0),
+        hidden_flag: Set(HiddenFlag::Visible),
+        extra: Set(None),
+    };
+    let marker_id = marker_model::Entity::insert(marker_am)
+        .exec(db)
+        .await
+        .expect("seed marker")
+        .last_insert_id;
+
+    // Append item 1001 + 1002
+    marker_fns::do_tweak(
+        auth.clone(),
+        MarkerTweakRequest {
+            marker_ids: vec![marker_id],
+            tweaks: vec![MarkerTweakConfig {
+                meta: TweakMeta {
+                    item_list: Some(vec![
+                        Some(serde_json::json!(1001)),
+                        Some(serde_json::json!(1002)),
+                    ]),
+                    map: None,
+                    replace: None,
+                    test: None,
+                    value: None,
+                },
+                prop: MarkerTweakConfigPropEnum::ItemList,
+                marker_tweak_config_type: MarkerTweakConfigTypeEnum::Append,
+            }],
+        },
+    )
+    .await
+    .expect("append item links")
+    .data
+    .expect("tweak ok");
+    assert_eq!(
+        link_count(db, marker_id).await.expect("count"),
+        2,
+        "append creates two links"
+    );
+
+    // InsertIfAbsent with an existing id must not duplicate
+    marker_fns::do_tweak(
+        auth.clone(),
+        MarkerTweakRequest {
+            marker_ids: vec![marker_id],
+            tweaks: vec![MarkerTweakConfig {
+                meta: TweakMeta {
+                    item_list: Some(vec![Some(serde_json::json!(1001))]),
+                    map: None,
+                    replace: None,
+                    test: None,
+                    value: None,
+                },
+                prop: MarkerTweakConfigPropEnum::ItemList,
+                marker_tweak_config_type: MarkerTweakConfigTypeEnum::InsertIfAbsent,
+            }],
+        },
+    )
+    .await
+    .expect("insert-if-absent tweak")
+    .data
+    .expect("tweak ok");
+    assert_eq!(
+        link_count(db, marker_id).await.expect("count"),
+        2,
+        "InsertIfAbsent must not duplicate an existing link"
+    );
+
+    // Replace with a single item 1003
+    marker_fns::do_tweak(
+        auth.clone(),
+        MarkerTweakRequest {
+            marker_ids: vec![marker_id],
+            tweaks: vec![MarkerTweakConfig {
+                meta: TweakMeta {
+                    item_list: Some(vec![Some(serde_json::json!(1003))]),
+                    map: None,
+                    replace: None,
+                    test: None,
+                    value: None,
+                },
+                prop: MarkerTweakConfigPropEnum::ItemList,
+                marker_tweak_config_type: MarkerTweakConfigTypeEnum::Replace,
+            }],
+        },
+    )
+    .await
+    .expect("replace tweak")
+    .data
+    .expect("tweak ok");
+    assert_eq!(
+        link_count(db, marker_id).await.expect("count"),
+        1,
+        "replace collapses to a single link"
+    );
+
+    // RemoveLeft removes 1003
+    marker_fns::do_tweak(
+        auth,
+        MarkerTweakRequest {
+            marker_ids: vec![marker_id],
+            tweaks: vec![MarkerTweakConfig {
+                meta: TweakMeta {
+                    item_list: Some(vec![Some(serde_json::json!(1003))]),
+                    map: None,
+                    replace: None,
+                    test: None,
+                    value: None,
+                },
+                prop: MarkerTweakConfigPropEnum::ItemList,
+                marker_tweak_config_type: MarkerTweakConfigTypeEnum::RemoveLeft,
+            }],
+        },
+    )
+    .await
+    .expect("remove tweak")
+    .data
+    .expect("tweak ok");
+    assert_eq!(
+        link_count(db, marker_id).await.expect("count"),
+        0,
+        "RemoveLeft removes the link"
+    );
 }

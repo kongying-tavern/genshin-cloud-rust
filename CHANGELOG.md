@@ -86,6 +86,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   user's Redis sessions (degrades to no-op without Redis). The
   `user_db` test now asserts all of the above plus `do_delete`.
 
+- Implement the marker `ItemList` tweak (PLAN.md F9): the
+  `do_tweak` handler previously skipped the `itemList` prop entirely.
+  It now maintains the `marker_item_link` table for
+  Append / InsertIfAbsent / InsertOrUpdate / Merge / Update (upsert
+  with count), Replace (rebuild), and RemoveLeft / RemoveRight
+  (remove listed links). `api_db` test covers the full cycle against
+  live Postgres.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages

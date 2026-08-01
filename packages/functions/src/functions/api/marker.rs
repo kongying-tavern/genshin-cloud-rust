@@ -127,7 +127,7 @@ pub async fn do_tweak(
                     }
                 },
                 _utils::models::marker::MarkerTweakConfigPropEnum::ItemList => {
-                    // 逻辑复杂：此处跳过。Item 列表调整应由专门的 API 处理。
+                    tweak_item_list(db, *marker_id, tweak).await?;
                 },
             }
         }
@@ -137,6 +137,135 @@ pub async fn do_tweak(
     }
 
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+}
+
+/// 解析 tweak 的 item_list 元数据为 (item_id, count) 列表。
+/// 支持裸数字 id 或 `{"id": n, "count": c}` 对象。
+fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)> {
+    let mut ret = Vec::new();
+    for v in item_list.iter().flatten() {
+        match v {
+            serde_json::Value::Number(n) => {
+                if let Some(id) = n.as_i64() {
+                    ret.push((id, 1));
+                }
+            },
+            serde_json::Value::Object(obj) => {
+                if let Some(id) = obj.get("id").and_then(|x| x.as_i64()) {
+                    let count = obj.get("count").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
+                    ret.push((id, count));
+                }
+            },
+            _ => {},
+        }
+    }
+    ret
+}
+
+/// 批量调整某 marker 的 item 关联（marker_item_link 表）。
+/// 支持的调整类型：Append / InsertIfAbsent / InsertOrUpdate / Merge / Update
+/// （追加或更新 count）、Replace（整表替换）、RemoveLeft / RemoveRight
+/// （移除列出的关联）。
+async fn tweak_item_list(
+    db: &sea_orm::DatabaseConnection,
+    marker_id: i64,
+    tweak: &_utils::models::marker::MarkerTweakConfig,
+) -> Result<()> {
+    use _utils::models::marker::{MarkerTweakConfigTypeEnum, TweakMeta};
+
+    let TweakMeta {
+        item_list: Some(item_list),
+        ..
+    } = &tweak.meta
+    else {
+        return Ok(());
+    };
+    let entries = parse_item_entries(item_list);
+    if entries.is_empty() {
+        return Ok(());
+    }
+
+    let existing = mil_model::Entity::find_safety()
+        .filter(mil_model::Column::MarkerId.eq(marker_id))
+        .all(db)
+        .await?;
+    let mut existing_map: std::collections::HashMap<i64, mil_model::Model> =
+        existing.into_iter().map(|l| (l.item_id, l)).collect();
+
+    match tweak.marker_tweak_config_type {
+        MarkerTweakConfigTypeEnum::Replace => {
+            // 软删现有全部关联，然后插入新列表
+            for (_item_id, link) in existing_map.drain() {
+                mil_model::Entity::delete_safety(link.into())?
+                    .exec(db)
+                    .await?;
+            }
+            for (item_id, count) in entries {
+                insert_item_link(db, marker_id, item_id, count).await?;
+            }
+        },
+        MarkerTweakConfigTypeEnum::RemoveLeft | MarkerTweakConfigTypeEnum::RemoveRight => {
+            for (item_id, _count) in entries {
+                if let Some(link) = existing_map.remove(&item_id) {
+                    mil_model::Entity::delete_safety(link.into())?
+                        .exec(db)
+                        .await?;
+                }
+            }
+        },
+        // Append / Prepend / InsertIfAbsent / InsertOrUpdate / Merge / Update：
+        // 追加或更新 count；InsertIfAbsent 对已存在条目跳过。
+        // 其余类型（Trim*/ReplaceRegex 等）对 item 列表无意义，忽略。
+        MarkerTweakConfigTypeEnum::Append
+        | MarkerTweakConfigTypeEnum::Prepend
+        | MarkerTweakConfigTypeEnum::InsertIfAbsent
+        | MarkerTweakConfigTypeEnum::InsertOrUpdate
+        | MarkerTweakConfigTypeEnum::Merge
+        | MarkerTweakConfigTypeEnum::Update => {
+            for (item_id, count) in entries {
+                if let Some(link) = existing_map.get(&item_id) {
+                    // 已存在：仅 InsertIfAbsent 跳过；其余更新 count
+                    if matches!(
+                        tweak.marker_tweak_config_type,
+                        MarkerTweakConfigTypeEnum::InsertIfAbsent
+                    ) {
+                        continue;
+                    }
+                    let mut am: mil_model::ActiveModel = link.clone().into();
+                    am.count = Set(count);
+                    mil_model::Entity::update_safety(am)?.exec(db).await?;
+                } else {
+                    insert_item_link(db, marker_id, item_id, count).await?;
+                }
+            }
+        },
+        _ => {},
+    }
+    Ok(())
+}
+
+async fn insert_item_link(
+    db: &sea_orm::DatabaseConnection,
+    marker_id: i64,
+    item_id: i64,
+    count: i32,
+) -> Result<()> {
+    let now = Utc::now().naive_utc();
+    let am = mil_model::ActiveModel {
+        version: Set(0),
+        // id 为 IDENTITY 列：NotSet 走自增，避免多条插入共用 id=0 撞主键
+        id: sea_orm::ActiveValue::NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        item_id: Set(item_id),
+        marker_id: Set(marker_id),
+        count: Set(count),
+    };
+    mil_model::Entity::insert(am).exec(db).await?;
+    Ok(())
 }
 
 pub async fn do_add_single(
