@@ -166,6 +166,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   explicitly. The stale "follow-up" items (sea-orm 2.x / minio 0.4
   migrations, which were completed long ago) are removed.
 
+- Make the CDN proxy configurable (PLAN.md M5/I4): the `/cdn` upstream
+  was hard-coded to `v3.yuanshen.site` and the dadian config was a
+  fake empty blob. New `CDN_UPSTREAM` env var overrides the upstream
+  (self-hosted CDN / internal mirror); `CDN_DADIAN_CONFIG` points at a
+  pre-generated bz2 config served for `/cdn/dadian-preview.json.bz2`
+  (falling back to the empty dev config when unset). Both are
+  documented in `.env.example`.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
