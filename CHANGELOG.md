@@ -36,6 +36,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (M1 infra & test harness, M2 tech-debt cleanup, M3 authZ/OAuth,
   M4 caching, M5 docs & release).
 
+- Rewrite the Dockerfile as a working multi-stage build: the previous
+  image could not build (duplicate `cargo new _utils`, missing
+  `COPY --from`, `ENTRYPOINT ["./a"]` pointing at a non-existent
+  binary) and shipped unrelated `wasm32`/`cargo-make` leftovers. The
+  new image builds `_router` with LTO in a `rust:1` builder (BuildKit
+  cache mounts) and runs it on `debian:bookworm-slim` with
+  `ca-certificates` + `tini`. A `Docker` CI workflow validates the
+  build on every PR, and `.dockerignore` keeps the context lean.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
