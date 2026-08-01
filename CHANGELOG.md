@@ -94,6 +94,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (remove listed links). `api_db` test covers the full cycle against
   live Postgres.
 
+- Enforce roles and atomicity in the punctuate audit (PLAN.md F6):
+  `do_pass` / `do_reject` / `do_delete` now require the Admin or
+  MapManager role (other roles get an explicit error). `do_pass`
+  executes the "write marker + delete punctuate" steps in a single
+  database transaction, so a failure rolls back both. `api_db` test
+  asserts the role gate, reject with remark, and the atomic pass
+  promotion against live Postgres.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
