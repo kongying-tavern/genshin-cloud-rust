@@ -102,6 +102,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   asserts the role gate, reject with remark, and the atomic pass
   promotion against live Postgres.
 
+- Enforce OAuth access policies and scope mapping (PLAN.md F7):
+  password login now checks the user's `access_policy` against
+  `sys_user_device` history — `ip:same_last_ip` / `dev:same_last_device`
+  reject mismatched environments, `ip:block_disallow_ip` /
+  `dev:block_disallow_device` reject entries marked disabled
+  (`status != 0`); successful logins register/refresh the device row.
+  `oauth_client_credentials` now validates the scope string (`all` /
+  empty → `All`, anything else rejected) instead of silently returning
+  `All`. `api_db` test covers the policy gates, device registration,
+  and scope mapping against live Postgres.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
