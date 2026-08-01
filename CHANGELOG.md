@@ -159,6 +159,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no-ops. `api_db` test asserts the refresh regenerates pages (fresh
   `time`).
 
+- Resync the zhs/en Java-sync roadmaps with the actual domain status
+  (PLAN.md M5/D1): both versions now carry the same Status column —
+  batches 1–3, 5, 6 done; batches 4 and 7 mostly done with the
+  remaining gaps (score field-level diff, RSA/JWKS rotation) stated
+  explicitly. The stale "follow-up" items (sea-orm 2.x / minio 0.4
+  migrations, which were completed long ago) are removed.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages

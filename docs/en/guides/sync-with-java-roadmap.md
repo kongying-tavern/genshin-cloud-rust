@@ -19,7 +19,7 @@ two domains, plus three pieces of non-trivial infrastructure:
 - **Binary archive export** (`*_doc` endpoints): large datasets are serialized,
 
 GZIP-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
-Two-tier cache on the Java side (Caffeine → port to `moka` / `quick-cache`).
+Two-tier cache on the Java side (Caffeine → ported to `moka` in-process).
 
 - **Crowd-sourced punctuate workflow**: user marker submissions → staging
 
@@ -36,31 +36,42 @@ device/IP anomaly detection on token issuance.
 ## Porting priority
 
 The order below front-loads the entities that unblock the most downstream
-work. Each step lists the key entity/feature and an estimated complexity.
+work. Each step lists the key entity/feature, an estimated complexity, and the
+current status.
 
 | # | Area | Key entity / feature | Complexity | Status |
 | --- | --- | --- | --- | --- |
-| 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `specialFlag`. Establishes the `SafeEntityTrait` pattern and the five-layer domain template every later port copies. | Medium | Done — used as the porting template |
-| 2 | **icon / item / tag families** | `Icon`, `IconType`, `IconTypeLink`, `Item`, `ItemType`, `ItemTypeLink`, plus the `Tag` / `TagType` taxonomy. Includes the `selectPageItemByCondition` `specialFlag` filter and the icon-tag merge. | Low–Medium | In progress |
-| 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. Read-heavy content that pairs naturally with the Redis cache layer. | Low–Medium | In progress |
-| 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit) and `ScoreStat` aggregation (scope/span bucketing). Two-phase state machine plus the score aggregate. | High | Planned |
-| 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing. Depends on the bcrypt hashing already in `utils`. | Medium | In progress |
-| 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`. The Rust side generates GZIP-compressed blobs on-the-fly from PostgreSQL per request (no caching yet); porting the two-tier cache layer (Redis or moka) is the work. | High | Planned |
-| 7 | **OAuth2 / JWKS** | `/oauth/token` issuance, JWKS publication, the RSA keypair + token enhancer, device/IP anomaly check, and the `qq` registration provider. Depends on `jsonwebtoken` 10 (already pinned). | High | Planned |
+| 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `specialFlag`. Establishes the `SafeEntityTrait` pattern and the five-layer domain template every later port copies. | Medium | **Done** — used as the porting template |
+| 2 | **icon / item / tag families** | `Icon`, `IconType`, `IconTypeLink`, `Item`, `ItemType`, `ItemTypeLink`, plus the `Tag` / `TagType` taxonomy. Includes the `selectPageItemByCondition` `specialFlag` filter and copy/join/move_type. | Low–Medium | **Done** (covered by the `api_db` integration tests) |
+| 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. `RouteVO` page/search/batch queries are wired. | Low–Medium | **Done** |
+| 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation. | High | **Mostly done** — the score field-level diff (`ScoreDataPunctuateVo`) is not ported yet (current aggregation is simplified) |
+| 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing, archive rename/delete_slot. | Medium | **Done** — device registration + access-policy checks are wired |
+| 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`, with an in-process moka cache (300s TTL) and refresh endpoints. | High | **Done** |
+| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Mostly done** — still HMAC (HS256) signing; the RSA keypair + JWK rotation are not implemented |
 
-## Notes
+## Current state
 
-- Steps 1–5 are CRUD-shaped ports that follow the
+- All seven batches are landed end-to-end (entity → DTO → business → route →
+  test). Business assertions live in `tests/rust/tests/api_db_test.rs`
+  (live DB, CI `integration` job): area CRUD, item_doc BinaryMD5, marker
+  tweak, punctuate audit (role gate + transactional promotion), OAuth
+  policy/device/QQ login, JWKS, cache stability and refresh.
+- The `SafeEntityTrait` + `impl_safe_operation!` macros are stable; new
+  domains reuse the template.
 
-[Domain Sync Template](./domain-sync-template.md); they are low-risk and
-can land incrementally.
+## Known gaps (remaining parity with Java)
 
-- Steps 4, 6, and 7 each carry significant business or algorithmic logic
+- Batch 4: `score::do_generate_score` is a simplified aggregation (counts
+  edits); the Java field-level diff (`ScoreDataPunctuateVo`) is not ported.
+- Batch 7: tokens are HMAC-SHA256; the Java side uses an RSA keypair with JWK
+  rotation. The JWKS endpoint currently publishes the HMAC key in `oct` form;
+  switching to RSA requires key management and rotation.
+- Database schema deviations from the real database await data validation
+  (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
+- Translation: only `docs/en` and `docs/zhs` are complete; the other 9
+  languages are skeletons.
 
-(the punctuate state machine, BinaryMD5 hashing + GZIP streaming, JWKS key
-rotation). Each should get its own design note under `docs/en/designs/`
-before implementation.
+## Follow-up
 
-- Update this table's Status column (and `CHANGELOG.md`) as each domain moves
-
-from *Planned* → *In progress* → *Done*.
+- The gaps above are tracked in the iteration backlog (`PLAN.md` at the repo
+  root) and land via the master-based PR workflow.
