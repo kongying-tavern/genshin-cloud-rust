@@ -77,7 +77,7 @@ async fn seed_user(db: &sea_orm::DatabaseConnection) -> anyhow::Result<i64> {
         updater_id: Set(None),
         del_flag: Set(false),
         username: Set("db_test_user".into()),
-        password: Set("{bcrypt}$2a$10$stub".into()),
+        password: Set(_utils::bcrypt::generate_storage_password("init_pw").unwrap()),
         nickname: Set(Some("DB Test".into())),
         qq: Set(None),
         phone: Set(None),
@@ -132,19 +132,61 @@ async fn user_db_round_trip() {
     assert_eq!(vo.username, "db_test_user");
     assert_eq!(vo.role_id, SystemUserRole::MapUser);
 
-    // ── Soft-delete via SafeEntityTrait (correct version from the fetched
-    //    model) and confirm find_safety no longer returns it. ────────────────
-    let model = sys_user::Entity::find_safety_by_id(id)
+    // ── do_update_password: wrong old password must fail ──────────────────────
+    let wrong_pw = user_fns::do_update_password(
+        stub_auth(),
+        vec![],
+        id,
+        String::new(),
+        "wrong_old_pw".into(),
+        String::new(),
+        SystemUserRole::MapUser,
+        "new_pw".into(),
+    )
+    .await;
+    assert!(
+        wrong_pw.is_err(),
+        "updating the password with a wrong old password must fail"
+    );
+
+    // ── do_update_password: correct old password succeeds and the new
+    //    password verifies ────────────────────────────────────────────────────
+    user_fns::do_update_password(
+        stub_auth(),
+        vec![],
+        id,
+        String::new(),
+        "init_pw".into(),
+        String::new(),
+        SystemUserRole::MapUser,
+        "new_pw".into(),
+    )
+    .await
+    .expect("update password with correct old password");
+
+    let updated = sys_user::Entity::find_safety_by_id(id)
         .one(db)
         .await
-        .expect("fetch model for soft-delete")
-        .expect("model exists before soft-delete");
-    let am: sys_user::ActiveModel = model.into();
-    sys_user::Entity::delete_safety(am)
-        .expect("build soft-delete")
-        .exec(db)
+        .expect("fetch updated user")
+        .expect("user still exists");
+    assert!(
+        _utils::bcrypt::verify_password("new_pw", updated.password.clone()).expect("verify"),
+        "the new password must verify after the update"
+    );
+    assert!(
+        !_utils::bcrypt::verify_password("init_pw", updated.password).expect("verify"),
+        "the old password must no longer verify"
+    );
+
+    // ── do_kick_out: no-op degradation without Redis (must not error) ────────
+    user_fns::do_kick_out(stub_auth(), id.to_string())
         .await
-        .expect("exec soft-delete");
+        .expect("kick_out degrades gracefully without Redis");
+
+    // ── do_delete (soft delete via delete_safety_by_id) ──────────────────────
+    user_fns::do_delete(stub_auth(), id)
+        .await
+        .expect("do_delete soft-deletes the user");
 
     let gone = sys_user::Entity::find_safety_by_id(id)
         .one(db)
@@ -154,11 +196,4 @@ async fn user_db_round_trip() {
         gone.is_none(),
         "soft-deleted row must be filtered out by find_safety"
     );
-
-    // NOTE: `user_fns::do_delete` (which calls `delete_safety_by_id`) is not
-    // exercised here — it uses `..Default::default()` for the ActiveModel, so
-    // the version defaults to 1 and the optimistic-lock filter (version=1)
-    // matches 0 rows when the row is at version 0. That bug is tracked as
-    // PLAN.md F8 (user-domain placeholders) and will be fixed alongside the
-    // other user-domain stubs in M2.
 }

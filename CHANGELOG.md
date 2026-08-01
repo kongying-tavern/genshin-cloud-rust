@@ -77,6 +77,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `RoutePageResponse { total, items }` / `Vec<RouteVO>` with full route
   fields (marker list, hidden flag, extra, creator info, timestamps).
 
+- Remove the user-domain placeholder implementations (PLAN.md F8):
+  `do_register` / `do_register_qq` now take an explicit initial password
+  (no more hard-coded `"default_password"`); `do_update_password`
+  verifies the old password before storing the new one; `do_list`
+  applies the whitelisted sort keys (`createTime+/-`, `id+/-`,
+  `nickname+/-`) instead of ignoring them; `do_kick_out` clears the
+  user's Redis sessions (degrades to no-op without Redis). The
+  `user_db` test now asserts all of the above plus `do_delete`.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
