@@ -43,6 +43,8 @@ pub struct UserRegisterParams {
     pub role_id: SystemUserRole,
     /// 用户名
     pub username: String,
+    /// 初始密码
+    pub password: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,6 +60,8 @@ pub struct UserRegisterQQParams {
     pub role_id: SystemUserRole,
     /// 用户名
     pub username: String,
+    /// 初始密码
+    pub password: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -92,6 +96,8 @@ pub struct UserUpdatePasswordParams {
     pub logo: String,
     /// 旧密码
     pub old_password: String,
+    /// 新密码
+    pub new_password: String,
     /// 备注
     pub remark: String,
     /// 角色列表
@@ -147,6 +153,7 @@ pub async fn register(
         payload.remark,
         payload.role_id,
         payload.username,
+        payload.password,
     )
     .await
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
@@ -171,6 +178,7 @@ pub async fn register_qq(
         payload.remark,
         payload.role_id,
         payload.username,
+        payload.password,
     )
     .await
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
@@ -242,6 +250,7 @@ pub async fn update_password(
         payload.old_password,
         payload.remark,
         payload.role_id,
+        payload.new_password,
     )
     .await
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?

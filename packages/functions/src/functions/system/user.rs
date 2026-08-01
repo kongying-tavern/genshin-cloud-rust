@@ -20,11 +20,11 @@ pub async fn do_register(
     remark: String,
     role_id: SystemUserRole,
     username: String,
+    password: String,
 ) -> Result<()> {
     let _ = (&access_policy, &logo, &remark, &role_id, &username);
     let db = &DB_CONN.wait().pg_conn;
 
-    // 简化实现：使用默认密码并创建用户记录
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
@@ -36,9 +36,7 @@ pub async fn do_register(
         del_flag: Set(false),
 
         username: Set(username),
-        password: Set(_utils::bcrypt::generate_storage_password(
-            "default_password",
-        )?),
+        password: Set(_utils::bcrypt::generate_storage_password(&password)?),
         nickname: Set(None),
         qq: Set(None),
         phone: Set(None),
@@ -59,9 +57,19 @@ pub async fn do_register_qq(
     remark: String,
     role_id: SystemUserRole,
     username: String,
+    password: String,
 ) -> Result<()> {
     // QQ 注册与普通注册逻辑一致（占位实现）
-    do_register(_auth, access_policy, logo, remark, role_id, username).await
+    do_register(
+        _auth,
+        access_policy,
+        logo,
+        remark,
+        role_id,
+        username,
+        password,
+    )
+    .await
 }
 
 pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
@@ -125,6 +133,7 @@ pub async fn do_update(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_update_password(
     _auth: AuthInfo,
     _access_policy: Vec<AccessPolicyItemEnum>,
@@ -133,16 +142,21 @@ pub async fn do_update_password(
     old_password: String,
     _remark: String,
     _role_id: SystemUserRole,
+    new_password: String,
 ) -> Result<()> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
-    let mut am: sys_user_model::ActiveModel = m.into();
 
-    // 简化：把 old_password 视为新密码并进行哈希后存储
-    am.password = Set(_utils::bcrypt::generate_storage_password(old_password)?);
+    // 校验旧密码，拒绝错误凭据
+    if !_utils::bcrypt::verify_password(old_password, m.password.clone())? {
+        return Err(anyhow!("Invalid old password"));
+    }
+
+    let mut am: sys_user_model::ActiveModel = m.into();
+    am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(())
 }
@@ -176,10 +190,9 @@ pub async fn do_list(
     pagination: Pagination,
     nickname: String,
     role_ids: Option<Vec<SystemUserRole>>,
-    sort: Option<Vec<String>>, // 简化为 String
+    sort: Option<Vec<String>>,
     username: String,
 ) -> Result<serde_json::Value> {
-    let _ = &sort; // sort not yet applied (Java uses a Sort enum; placeholder)
     let db = &DB_CONN.wait().pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
@@ -193,6 +206,28 @@ pub async fn do_list(
         query = query.filter(sys_user_model::Column::RoleId.is_in(rids));
     }
 
+    // 排序：白名单映射（"CreateTime"/"CreateTimeReverse"/"Id"/"Nickname"...），
+    // 只允许已知列名，杜绝任意 SQL 注入。
+    if let Some(sorts) = sort {
+        use sea_orm::QueryOrder;
+        for s in sorts {
+            let (column, desc) = match s.as_str() {
+                "CreateTime" => (sys_user_model::Column::CreateTime, false),
+                "CreateTimeReverse" => (sys_user_model::Column::CreateTime, true),
+                "Id" => (sys_user_model::Column::Id, false),
+                "IdReverse" => (sys_user_model::Column::Id, true),
+                "Nickname" => (sys_user_model::Column::Nickname, false),
+                "NicknameReverse" => (sys_user_model::Column::Nickname, true),
+                _ => continue, // 未知排序键忽略
+            };
+            query = if desc {
+                query.order_by(column, sea_orm::Order::Desc)
+            } else {
+                query.order_by(column, sea_orm::Order::Asc)
+            };
+        }
+    }
+
     let size = pagination.size.unwrap_or(10) as u64;
     let current = pagination.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
@@ -204,7 +239,30 @@ pub async fn do_list(
     Ok(serde_json::json!({"total": total, "items": vos}))
 }
 
-pub async fn do_kick_out(_auth: AuthInfo, _work_id: String) -> Result<()> {
-    // 踢出逻辑通常由网关/会话管理处理；此处为占位实现
+pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
+    // 踢出用户：删除该用户在 Redis 中的全部会话令牌。
+    // JWT 本身无状态，登出/踢出依赖 Redis 会话（jwt:access:{uid}:{jti}）。
+    let user_id = work_id
+        .parse::<i64>()
+        .map_err(|_| anyhow!("Invalid user id"))?;
+
+    let Some(redis_client) = &DB_CONN.wait().redis_conn else {
+        // Redis 不可用时退化为无操作（与 oauth 的降级策略一致）
+        return Ok(());
+    };
+    use redis::AsyncCommands;
+    let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await else {
+        // Redis 连接失败同样降级（与 oauth 的降级策略一致）
+        return Ok(());
+    };
+
+    let access_prefix = format!("jwt:access:{user_id}:*");
+    let refresh_prefix = format!("jwt:refresh:{user_id}:*");
+    for key in redis_conn.keys::<_, Vec<String>>(access_prefix).await? {
+        let _: usize = redis_conn.del(&key).await?;
+    }
+    for key in redis_conn.keys::<_, Vec<String>>(refresh_prefix).await? {
+        let _: usize = redis_conn.del(&key).await?;
+    }
     Ok(())
 }
