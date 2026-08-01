@@ -67,6 +67,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   renames the latest archive in the slot; the route now returns the real
   operation result.
 
+- Implement the archive `delete_slot` handler: new
+  `do_delete_slot(user_id, slot_index)` soft-deletes every archive in
+  the slot; the route previously returned a stub `{}`.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
