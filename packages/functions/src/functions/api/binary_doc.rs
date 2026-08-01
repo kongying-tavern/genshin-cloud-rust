@@ -86,3 +86,10 @@ pub async fn get_or_compute(
 pub async fn invalidate(key: &str) {
     BIN_CACHE.invalidate(key).await;
 }
+
+/// Drop every cached page. The cache-refresh endpoints call this — the keys
+/// are domain-scoped (`item:*`, `marker:*`, `link:*`) but not enumerable
+/// cheaply, so a full flush is the simple correct invalidation.
+pub fn invalidate_all() {
+    BIN_CACHE.invalidate_all();
+}
