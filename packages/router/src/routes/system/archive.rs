@@ -172,11 +172,14 @@ pub async fn restore(
 #[tracing::instrument(skip(auth))]
 pub async fn delete_slot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(_slot_index): Path<i64>,
+    Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     if auth.info.role_id != SystemUserRole::Admin {
         return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
-    // TODO: add do_delete_slot(user_id, slot_index) to the archive module.
-    Ok(Json(()).into_response())
+    let user_id = auth.info.id;
+    match _functions::functions::system::archive::do_delete_slot(user_id, slot_index as i32).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+    }
 }
