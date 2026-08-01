@@ -13,14 +13,15 @@
 
 use _database::DB_CONN;
 use _database::models::{
-    area::area as area_model, item::item as item_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
-    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
-    system::sys_user_device as device_model,
+    area::area as area_model, common::history as history_model,
+    common::score_stat as score_stat_model, item::item as item_model,
+    marker::marker as marker_model, marker::marker_item_link as mil_model,
+    marker::marker_punctuate as mp_model, system::sys_action_log as action_log_model,
+    system::sys_user as sys_user_model, system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
     area as area_fns, cache as cache_fns, item_doc, marker as marker_fns,
-    punctuate_audit as audit_fns,
+    punctuate_audit as audit_fns, score as score_fns,
 };
 use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
@@ -33,10 +34,11 @@ use _utils::{
             MarkerTweakConfig, MarkerTweakConfigPropEnum, MarkerTweakConfigTypeEnum,
             MarkerTweakRequest, TweakMeta,
         },
+        score::{ScoreDataRequest, ScoreGenerateRequest},
     },
     types::{
-        AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, IconStyleType,
-        MarkerPunctuateMethodType, MarkerPunctuateStatus, SystemUserRole,
+        AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
+        IconStyleType, MarkerPunctuateMethodType, MarkerPunctuateStatus, SystemUserRole,
     },
 };
 use sea_orm::{
@@ -204,6 +206,8 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(sys_user_model::Entity),
         ddl_without_foreign_keys(device_model::Entity),
         ddl_without_foreign_keys(action_log_model::Entity),
+        ddl_without_foreign_keys(history_model::Entity),
+        ddl_without_foreign_keys(score_stat_model::Entity),
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
@@ -216,6 +220,8 @@ async fn area_and_item_doc_business_assertions() {
             "sys_user",
             "sys_user_device",
             "sys_action_log",
+            "history",
+            "score_stat",
             "area",
             "item",
             "marker",
@@ -774,4 +780,102 @@ async fn area_and_item_doc_business_assertions() {
             .is_err(),
         "unregistered openid must fail"
     );
+
+    // ── Assertion 9: score generation weights by field count ────────────────
+    // Seed three history rows: two Position (打点) rows with 3-field and
+    // 1-field content, and one Area row that must be filtered out.
+    let now_naive = now;
+    for (i, (content, history_type, edit_type)) in [
+        (
+            r#"{"title":"a","position":"1,2","content":"c"}"#,
+            HistoryOperationType::Position,
+            HistoryEditType::Added,
+        ),
+        (
+            r#"{"title":"b"}"#,
+            HistoryOperationType::Position,
+            HistoryEditType::Modified,
+        ),
+        (
+            r#"{"name":"area-x"}"#,
+            HistoryOperationType::Area,
+            HistoryEditType::Added,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let am = history_model::ActiveModel {
+            id: NotSet,
+            version: Set(0),
+            create_time: Set(now_naive + chrono::Duration::seconds(i as i64)),
+            update_time: Set(None),
+            creator_id: Set(Some(77)),
+            updater_id: Set(None),
+            del_flag: Set(false),
+            content: Set(content.to_string()),
+            md5: Set(None),
+            t_id: Set(i as i64),
+            history_type: Set(Some(history_type)),
+            ipv4: Set(None),
+            edit_type: Set(edit_type),
+        };
+        history_model::Entity::insert(am)
+            .exec(db)
+            .await
+            .expect("seed history");
+    }
+
+    let start_ms = (now_naive - chrono::Duration::days(1))
+        .and_utc()
+        .timestamp_millis() as f64;
+    let end_ms = (now_naive + chrono::Duration::days(1))
+        .and_utc()
+        .timestamp_millis() as f64;
+
+    score_fns::do_generate_score(
+        auth.clone(),
+        ScoreGenerateRequest {
+            end_time: end_ms,
+            scope: "map".into(),
+            span: "DAY".into(),
+            start_time: start_ms,
+        },
+    )
+    .await
+    .expect("generate score")
+    .data
+    .expect("generate score ok");
+
+    // Only the Position rows count; the 3-field row weights 3, the 1-field
+    // row weights 1 → total 4 for creator 77.
+    let stats = score_stat_model::Entity::find_safety()
+        .filter(score_stat_model::Column::UserId.eq(Some(77)))
+        .all(db)
+        .await
+        .expect("fetch score stats");
+    assert_eq!(stats.len(), 1, "one score_stat row for the contributor");
+    let content = &stats[0].content;
+    assert_eq!(content["count"], 2, "two Position edits counted");
+    assert_eq!(
+        content["fieldWeight"], 4.0,
+        "field-weighted score = 3 (3 fields) + 1 (1 field)"
+    );
+
+    // do_get_score_data reads the real score (not a fixed 1.0).
+    let data = score_fns::do_get_score_data(
+        auth,
+        ScoreDataRequest {
+            end_time: end_ms,
+            scope: "map".into(),
+            span: "DAY".into(),
+            start_time: start_ms,
+        },
+    )
+    .await
+    .expect("get score data")
+    .data
+    .expect("get score data ok");
+    assert_eq!(data.samples.len(), 1, "one sample returned");
+    assert_eq!(data.samples[0].score, 4.0, "score read back from content");
 }

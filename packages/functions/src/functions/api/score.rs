@@ -11,6 +11,7 @@ use _utils::{
     jwt::AuthInfo,
     models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample},
     models::wrapper::CommonResponse,
+    types::{HistoryEditType, HistoryOperationType},
 };
 
 /// 生成评分统计数据（批处理管线）。
@@ -18,12 +19,13 @@ use _utils::{
 /// 对应 Java `ScoreGenerateService.generateScorePunctuate`：
 /// 1. 清除 score_stat 表中该 scope+span+时间范围的旧数据
 /// 2. 扫描 history 表（type=4=打点）在时间范围内的记录
-/// 3. 按 creator_id（=提交者）分桶聚合统计
+/// 3. 按 creator_id（=提交者）分桶，按「字段级改动数」加权聚合
 /// 4. 写入 score_stat 表（每个贡献者一行）
 ///
-/// 注：Java 侧还有复杂的字段级 diff 算法（ScoreDataPunctuateVo），
-/// 当前实现为简化版——统计每个贡献者在该时间范围内的打点编辑次数，
-/// 作为评分基数。完整字段 diff 待后续细化。
+/// 字段级加权（对齐 Java `ScoreDataPunctuateVo` 的语义）：每条打点记录的
+/// 权重 = 其 content JSON 的顶层字段数（Added / Modified 按字段数计，
+/// Deleted 计 1，content 无法解析时按 1 计）。相比旧的「每条计 1」，
+/// 改动字段越多的贡献得分越高。
 pub async fn do_generate_score(
     _auth: AuthInfo,
     payload: ScoreGenerateRequest,
@@ -62,19 +64,22 @@ pub async fn do_generate_score(
         }
     }
 
-    // 2. 扫描 history 表（edit_type = 打点相关 = type 4 在 Java 侧）
-    //    Rust 侧 history.edit_type 是 HistoryEditType 枚举
+    // 2. 扫描 history 表（type = 4 = 打点/点位，对齐 Java 侧）
     let histories = history_model::Entity::find_safety()
+        .filter(history_model::Column::HistoryType.eq(HistoryOperationType::Position))
         .filter(history_model::Column::CreateTime.gte(span_start))
         .filter(history_model::Column::CreateTime.lte(span_end))
         .all(db)
         .await?;
 
-    // 3. 按 creator_id 分桶聚合（统计每个贡献者的编辑次数）
-    let mut contributions: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+    // 3. 按 creator_id 分桶，按字段级权重聚合
+    let mut contributions: std::collections::HashMap<i64, (i64, f64)> =
+        std::collections::HashMap::new();
     for h in &histories {
         if let Some(creator) = h.creator_id {
-            *contributions.entry(creator).or_insert(0) += 1;
+            let entry = contributions.entry(creator).or_insert((0, 0.0));
+            entry.0 += 1;
+            entry.1 += entry_weight(h);
         }
     }
 
@@ -82,9 +87,8 @@ pub async fn do_generate_score(
     let mut samples = Vec::new();
     let mut total_score = 0.0f64;
 
-    for (&user_id, &count) in &contributions {
-        // 评分 = 编辑次数（简化版；Java 用字段级 diff + 权重计算）
-        let score = count as f64;
+    for (&user_id, &(count, field_weight)) in &contributions {
+        let score = field_weight;
 
         let am = score_stat_model::ActiveModel {
             version: Set(0),
@@ -99,7 +103,11 @@ pub async fn do_generate_score(
             span_start_time: Set(span_start),
             span_end_time: Set(span_end),
             user_id: Set(Some(user_id)),
-            content: Set(serde_json::json!({"type": "DAY", "count": count})),
+            content: Set(serde_json::json!({
+                "type": "DAY",
+                "count": count,
+                "fieldWeight": score,
+            })),
         };
         score_stat_model::Entity::insert(am).exec(db).await?;
 
@@ -119,7 +127,27 @@ pub async fn do_generate_score(
     Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
 }
 
+/// 单条打点记录的字段级权重（Java `ScoreDataPunctuateVo` 语义的近似）。
+///
+/// - Added / Modified：content JSON 的顶层字段数（改动规模越大分越高）
+/// - Deleted：固定 1（删除动作本身）
+/// - content 无法解析：按 1 计
+fn entry_weight(h: &history_model::Model) -> f64 {
+    if h.edit_type == HistoryEditType::Deleted {
+        return 1.0;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&h.content) else {
+        return 1.0;
+    };
+    match value {
+        serde_json::Value::Object(map) => map.len().max(1) as f64,
+        _ => 1.0,
+    }
+}
+
 /// 读取评分统计数据——从 score_stat 表查询真实聚合记录。
+/// score 从每行的 content JSON 中读取（`fieldWeight`，旧数据回退到 `count`），
+/// 不再固定为 1.0。
 pub async fn do_get_score_data(
     _auth: AuthInfo,
     payload: ScoreDataRequest,
@@ -140,9 +168,12 @@ pub async fn do_get_score_data(
 
     let samples: Vec<ScoreSample> = stats
         .iter()
-        .map(|s| ScoreSample {
-            time: s.span_end_time.and_utc().timestamp_millis() as f64,
-            score: s.user_id.map(|_| 1.0).unwrap_or(0.0), // 每行 = 1 次贡献（简化）
+        .map(|s| {
+            let score = score_from_content(&s.content);
+            ScoreSample {
+                time: s.span_end_time.and_utc().timestamp_millis() as f64,
+                score,
+            }
         })
         .collect();
 
@@ -153,6 +184,16 @@ pub async fn do_get_score_data(
     };
 
     Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
+}
+
+/// 从 score_stat.content JSON 提取分数：优先 `fieldWeight`（字段级加权），
+/// 旧数据回退到 `count`（编辑次数），都缺失时按 0。
+fn score_from_content(content: &serde_json::Value) -> f64 {
+    content
+        .get("fieldWeight")
+        .and_then(|v| v.as_f64())
+        .or_else(|| content.get("count").and_then(|v| v.as_f64()))
+        .unwrap_or(0.0)
 }
 
 /// 将毫秒时间戳转换为 NaiveDateTime。
