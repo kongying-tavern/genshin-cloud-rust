@@ -71,6 +71,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `do_delete_slot(user_id, slot_index)` soft-deletes every archive in
   the slot; the route previously returned a stub `{}`.
 
+- Define `RouteVO` and return real route data: `do_get_page` /
+  `do_get_search` / `do_get_list_by_id` previously mapped their (correct)
+  queries into the `RouteEmptyResponse` placeholder. They now return
+  `RoutePageResponse { total, items }` / `Vec<RouteVO>` with full route
+  fields (marker list, hidden flag, extra, creator info, timestamps).
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
