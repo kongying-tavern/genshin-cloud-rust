@@ -23,10 +23,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build multilingual docs with lagrange
+      - name: Install lagrange (prebuilt release binary)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cargo install --git https://github.com/celestia-island/lagrange --branch dev lagrange-library --locked
-          lagrange build --src docs --out _site
+          gh release download --repo celestia-island/lagrange \
+            --pattern "*x86_64-unknown-linux-gnu.tar.gz" -O lagrange.tgz
+          tar xzf lagrange.tgz
+          sudo install -m 755 lagrange /usr/local/bin/lagrange
+          lagrange --version
+
+      - name: Build multilingual docs with lagrange
+        run: lagrange build --src docs --out _site
 
       - uses: actions/upload-pages-artifact@v3
         with:
