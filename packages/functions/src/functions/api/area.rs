@@ -1,6 +1,9 @@
 use anyhow::{Result, anyhow};
 
-use sea_orm::{ActiveValue::Set, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::area::area as area_model};
 use _utils::models::common::EmptyResponse;
@@ -24,7 +27,7 @@ pub async fn do_add(
 
     let active = area_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(Some(auth.info.id)),

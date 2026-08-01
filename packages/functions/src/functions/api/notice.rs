@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QuerySelect,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::common::notice as notice_model};
 use _utils::{
@@ -114,7 +118,7 @@ pub async fn do_add_notice(
     let now = Utc::now().naive_utc();
     let active = notice_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

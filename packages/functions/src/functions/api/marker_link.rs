@@ -1,6 +1,10 @@
 use anyhow::Result;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::marker::marker_linkage as linkage_model};
 use _utils::{
@@ -51,7 +55,7 @@ pub async fn do_link(
         let now = chrono::Utc::now().naive_utc();
         let active = linkage_model::ActiveModel {
             version: Set(0),
-            id: Set(0),
+            id: NotSet,
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(None),

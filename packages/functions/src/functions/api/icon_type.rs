@@ -1,6 +1,9 @@
 use anyhow::{Result, anyhow};
 
-use sea_orm::{ActiveValue::Set, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    prelude::*,
+};
 
 use _database::DB_CONN;
 use _database::models::icon::icon_type as icon_type_model;
@@ -85,7 +88,7 @@ pub async fn do_add(_auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64>
 
     let active = icon_type_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

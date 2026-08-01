@@ -2,7 +2,11 @@ use anyhow::{Result, anyhow};
 
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QuerySelect,
+    prelude::*,
+};
 
 use _database::DB_CONN;
 use _database::models::icon::icon as icon_model;
@@ -25,7 +29,7 @@ pub async fn do_add(
 
     let active = icon_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(Some(auth.info.id)),

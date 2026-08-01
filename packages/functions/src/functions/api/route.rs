@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::common::route as route_model};
 use _utils::{
@@ -44,7 +48,7 @@ pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
 
     let am = route_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

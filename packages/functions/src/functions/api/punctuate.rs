@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::marker::marker_punctuate as mp_model};
 use _utils::{
@@ -185,7 +189,7 @@ fn new_punctuate_active_model(
 ) -> mp_model::ActiveModel {
     mp_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(Some(p.author)),

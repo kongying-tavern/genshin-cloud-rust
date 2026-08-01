@@ -335,6 +335,40 @@ async fn area_and_item_doc_business_assertions() {
     .expect("area list payload");
     assert_eq!(after.0.len(), 2, "two areas after add");
 
+    // A second business-layer insert must not collide on the identity column
+    // (regression for the id: Set(0) bug — identity columns must be NotSet).
+    area_fns::do_add(
+        auth.clone(),
+        AreaAddRequest {
+            name: "Third Area".into(),
+            code: None,
+            content: None,
+            icon_tag: "0".into(),
+            parent_id: seeded_area_id,
+            is_final: false,
+            hidden_flag: HiddenFlag::Visible,
+            sort_index: 2,
+            special_flag: 0,
+        },
+    )
+    .await
+    .expect("second do_add must not collide on the identity column")
+    .data
+    .expect("area add payload");
+    let after_third = area_fns::do_list(
+        auth.clone(),
+        AreaListRequest {
+            is_traverse: None,
+            parent_id: None,
+            hidden_flag: None,
+        },
+    )
+    .await
+    .expect("area do_list after third add")
+    .data
+    .expect("area list payload");
+    assert_eq!(after_third.0.len(), 3, "three areas after repeated adds");
+
     // ── Assertion 3: item_doc do_list_page_bin_md5 returns one MD5 per
     //    hidden_flag group (2 items, 2 distinct flags → 2 entries), each a
     //    32-char hex MD5. ────────────────────────────────────────────────────

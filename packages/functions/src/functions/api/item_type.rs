@@ -1,6 +1,10 @@
 use anyhow::{Result, anyhow};
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::{
     DB_CONN, models::item::item_type as item_type_model, models::item::item_type_link as link_model,
@@ -159,7 +163,7 @@ pub async fn do_add(_auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64>
 
     let active = item_type_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
