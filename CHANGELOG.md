@@ -39,6 +39,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (the `rsa` crate now performs signing/key export, never RSA
   decryption).
 
+### Documentation
+
+- Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
+  each language's `README.md` is now a real translated landing page (project
+  intro + full document index linking to the English content, which remains
+  the source of truth), and every `SUMMARY.md` language switcher now lists
+  all 11 languages with the current one highlighted. The previously
+  Chinese-only placeholders and truncated switchers are gone.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

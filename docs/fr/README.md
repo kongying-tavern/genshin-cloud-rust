@@ -1,19 +1,44 @@
-# 空荧酒馆·原神地图 Rust 后端 / Genshin Map Cloud — Rust Backend
+# Genshin Map Cloud — Backend Rust
 
-> **Français** 翻译正在进行中（Translation in progress）。
+> La réécriture en Rust du backend « 空荧酒馆 Genshin Map », synchronisée avec
+> l'implémentation de référence Java
+> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
 
-完整文档请暂时参阅 / For the full documentation, please refer to:
-
-- **[简体中文 / Simplified Chinese](../zhs/README.md)**
-- **[English](../en/README.md)**
-
-本项目是「空荧酒馆·原神地图」后端的 Rust 实现，与 Java 侧参考实现
-（`java-genshin-map-cloud`）功能对齐。
-
-This project is the Rust rewrite of the "空荧酒馆 Genshin Map" backend,
-feature-synced with the Java reference implementation.
+Ceci est la section documentaire en français. Le backend est un workspace Cargo
+de quatre paquets (`utils → database → functions → router`) construit sur
+`axum`, `sea-orm` (PostgreSQL), `redis`, `minio`, avec `jsonwebtoken` + `bcrypt`
+pour l'authentification. Cette section n'est pour l'instant qu'une page
+d'accueil ; la documentation complète est disponible en
+[English](../en/README.md) ou [简体中文](../zhs/README.md).
 
 ---
 
-语言切换 / Language switcher:
-[English](../en/README.md) · [简体中文](../zhs/README.md) · [繁體中文](../zht/README.md) · [日本語](../ja/README.md) · [한국어](../ko/README.md) · [Français](../fr/README.md) · [Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) · [Deutsch](../de/README.md) · [Português](../pt/README.md)
+## Index de la documentation
+
+### Guides
+
+| Guide | Contenu |
+| --- | --- |
+| [Detailed README](../en/guides/README.md) | Présentation, stack technique, démarrage rapide |
+| [Glossary](../en/guides/glossary.md) | Terminologie de domaine chinois-anglais |
+| [Architecture](../en/guides/architecture.md) | Couches des quatre paquets, flux de requête, patron `SafeEntityTrait` |
+| [Building](../en/guides/building.md) | Prérequis, commandes `just`, fichier `.env`, docker-compose local |
+| [API Reference](../en/guides/api-reference.md) | Domaines d'API exposés par le routeur (area/icon/item/marker/punctuate/score/system…) |
+| [Commit Convention](../en/guides/commit-message-convention.md) | Convention de commits gitmoji |
+| [Java Sync Roadmap](../en/guides/sync-with-java-roadmap.md) | Ordre de priorité du portage depuis l'implémentation Java |
+| [Domain Sync Template](../en/guides/domain-sync-template.md) | Gabarit en cinq couches pour porter un domaine Java en Rust |
+
+### Designs
+
+- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
+- [BinaryMD5 Archive Export](../en/designs/binarymd5-archive-export.md)
+- [Hidden and Special Flags](../en/designs/hidden-and-special-flags.md)
+
+---
+
+## Autres langues
+
+[简体中文](../zhs/README.md) · [English](../en/README.md) · [繁體中文](../zht/README.md) ·
+[日本語](../ja/README.md) · [한국어](../ko/README.md) · **Français** ·
+[Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) ·
+[Deutsch](../de/README.md) · [Português](../pt/README.md)

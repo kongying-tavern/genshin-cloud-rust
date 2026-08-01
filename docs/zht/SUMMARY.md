@@ -1,12 +1,11 @@
-# Genshin Map Cloud — Rust Backend
+# Genshin Map Cloud — Rust 後端
 
-[Overview](./README.md)
+[概述](./README.md)
 
 ---
 
-> **繁體中文** translation is in progress. The complete table of contents is
-> available in [English](../en/SUMMARY.md) and
-> [Simplified Chinese](../zhs/SUMMARY.md).
+> **繁體中文** 翻譯進行中。完整目錄請見
+> [English](../en/SUMMARY.md) 與 [简体中文](../zhs/SUMMARY.md)。
 
 # Guides
 
@@ -28,5 +27,8 @@
 
 ---
 
-语言切换 / Language switcher:
-[English](../en/SUMMARY.md) · [简体中文](../zhs/SUMMARY.md) · [繁體中文](../zht/SUMMARY.md)
+其他語言 / Language switcher:
+[简体中文](../zhs/SUMMARY.md) · [English](../en/SUMMARY.md) · **繁體中文** ·
+[日本語](../ja/SUMMARY.md) · [한국어](../ko/SUMMARY.md) · [Français](../fr/SUMMARY.md) ·
+[Español](../es/SUMMARY.md) · [Русский](../ru/SUMMARY.md) · [العربية](../ar/SUMMARY.md) ·
+[Deutsch](../de/SUMMARY.md) · [Português](../pt/SUMMARY.md)
