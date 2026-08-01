@@ -4,11 +4,18 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{
+    DecodingKey, EncodingKey, Header, Validation, crypto::rust_crypto::DEFAULT_PROVIDER, decode,
+    encode,
+};
 
 use crate::models::SysUserVO;
 
 pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
+    // jsonwebtoken v10 requires an explicit process-level CryptoProvider.
+    // Install the rust_crypto (ring-based) provider before any JWT operation.
+    let _ = DEFAULT_PROVIDER.install_default();
+
     let key = std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into());
     (

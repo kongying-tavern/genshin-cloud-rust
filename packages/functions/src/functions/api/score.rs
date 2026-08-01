@@ -11,7 +11,6 @@ use _utils::{
     jwt::AuthInfo,
     models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample},
     models::wrapper::CommonResponse,
-    types::ScopeStatType,
 };
 
 /// 生成评分统计数据（批处理管线）。
@@ -89,7 +88,7 @@ pub async fn do_generate_score(
 
         let am = score_stat_model::ActiveModel {
             version: Set(0),
-            id: Set(0),
+            id: sea_orm::ActiveValue::NotSet,
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(Some(user_id)),
@@ -100,7 +99,7 @@ pub async fn do_generate_score(
             span_start_time: Set(span_start),
             span_end_time: Set(span_end),
             user_id: Set(Some(user_id)),
-            content: Set(ScopeStatType::DAY),
+            content: Set(serde_json::json!({"type": "DAY", "count": count})),
         };
         score_stat_model::Entity::insert(am).exec(db).await?;
 

@@ -166,9 +166,9 @@ async fn build_minio_conn() -> Option<minio::s3::MinioClient> {
                 "Version": "2012-10-17",
                 "Statement": [{
                     "Effect": "Allow",
-                    "Principal": "*",
+                    "Principal": {"AWS": ["*"]},
                     "Action": ["s3:GetObject"],
-                    "Resource": format!("arn:aws:s3:::{}/*", bucket)
+                    "Resource": [format!("arn:aws:s3:::{}/*", bucket)]
                 }]
             })
             .to_string();

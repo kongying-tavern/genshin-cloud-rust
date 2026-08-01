@@ -14,10 +14,8 @@
 
 set unstable
 set lists
-# Git for Windows keeps bash.exe on PATH; cygpath is NOT on PATH, so shebang
-# recipes die without this.
-set shell := ["bash", "-c"]
-set windows-shell := ["bash.exe", "-c"]
+# Use the full path to Git Bash to avoid WSL bash hijacking.
+set windows-shell := ["C:/Program Files/Git/usr/bin/bash.exe", "-c"]
 
 # Import vendored devtools recipes (provides python_cmd, cache-guard, etc.).
 # Recipes we don't use are overridden below or simply ignored.
@@ -88,15 +86,12 @@ run *ARGS:
     cargo run --bin _router -- {{ARGS}}
 
 # Dev mode: start Rust backend + Vue3 frontend together.
-#   just dev              # start both services
+#   just dev              # start both, block in foreground (Ctrl-C to stop)
+#   just dev daemon       # start both, return immediately (use `just dev stop`)
 #   just dev mock         # start → Shirabe browser e2e tests → stop
 #   just dev stop         # stop both
 #   just dev status       # check status
 #   just dev restart      # stop + start
-#
-# Vue frontend path resolution (in scripts/e2e/config.py):
-#   1. E2E_VUE_FRONTEND env var (absolute path)
-#   2. Sibling dir auto-discovery (../vue_map_register_v3)
-#   3. Git clone from E2E_VUE_GIT (default: kongying-tavern/vue_map_register_v3)
 dev *ARGS='':
     {{ python_cmd }} scripts/e2e/dev.py {{ARGS}}
+

@@ -54,7 +54,9 @@ flate2 = "^1"
 bzip2 = "^0.6"
 
 bcrypt = "^0.19"
-jsonwebtoken = "^10"
+# jsonwebtoken 10 requires an explicit crypto provider. Use rust_crypto (ring)
+# to stay consistent with the workspace's aws-lc-free rustls+ring policy.
+jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto"] }
 
 md5 = "^0.8"
 

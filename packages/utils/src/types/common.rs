@@ -39,6 +39,9 @@ pub enum HistoryEditType {
     /// 删除
     #[sea_orm(num_value = 3)]
     Deleted = 3,
+    /// 初始化（历史数据导入）
+    #[sea_orm(num_value = 10)]
+    Initialized = 10,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
