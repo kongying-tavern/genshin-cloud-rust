@@ -151,6 +151,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `api_db` test asserts the md5 + time are stable across repeated
   calls.
 
+- Wire the cache-refresh endpoints (PLAN.md M4/F10): `DELETE
+  /cache/item`, `/cache/marker`, and `/cache/marker_link` now flush
+  the in-process BinaryMD5 cache (`binary_doc::invalidate_all`)
+  instead of being no-ops. The remaining domains (area / common_item /
+  icon_tag / notice) have no in-process cache yet and stay honest
+  no-ops. `api_db` test asserts the refresh regenerates pages (fresh
+  `time`).
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages

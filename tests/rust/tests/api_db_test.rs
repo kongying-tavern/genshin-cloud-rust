@@ -19,7 +19,8 @@ use _database::models::{
     system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
-    area as area_fns, item_doc, marker as marker_fns, punctuate_audit as audit_fns,
+    area as area_fns, cache as cache_fns, item_doc, marker as marker_fns,
+    punctuate_audit as audit_fns,
 };
 use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
@@ -413,6 +414,31 @@ async fn area_and_item_doc_business_assertions() {
         assert_eq!(
             first.time, second.time,
             "time must be stable while the page is cached"
+        );
+    }
+
+    // The refresh endpoint must invalidate the cache: the next md5 list is
+    // regenerated (fresh time), proving the flush is wired.
+    cache_fns::do_delete_item_cache(auth.clone())
+        .await
+        .expect("delete item cache")
+        .data
+        .expect("cache delete ok");
+    let md5_resp_3 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+        .await
+        .expect("item_doc md5 after refresh")
+        .data
+        .expect("item_doc md5 payload");
+    assert_eq!(
+        md5_resp_3.len(),
+        md5_resp.len(),
+        "same page count after refresh"
+    );
+    for (before, after) in md5_resp_2.iter().zip(md5_resp_3.iter()) {
+        assert_eq!(before.md5, after.md5, "md5 must be deterministic");
+        assert_ne!(
+            before.time, after.time,
+            "refresh must regenerate the page (fresh time)"
         );
     }
 
