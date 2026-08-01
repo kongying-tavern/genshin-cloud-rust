@@ -2117,8 +2117,10 @@ name = "genshin-cloud-tests"
 version = "0.1.0"
 dependencies = [
  "_database",
+ "_functions",
  "_utils",
  "anyhow",
+ "chrono",
  "sea-orm",
  "serde",
  "serde_json",

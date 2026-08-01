@@ -45,6 +45,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ca-certificates` + `tini`. A `Docker` CI workflow validates the
   build on every PR, and `.dockerignore` keeps the context lean.
 
+- Add the DB-backed integration test harness: a `user_db` test binary
+  that provisions the `sys_user` table on a live Postgres via sea-orm's
+  `Schema` and exercises the `SafeEntityTrait` round-trip (insert →
+  read → soft-delete). Gated on `GCS_TEST_DB` so `cargo test --workspace`
+  stays green without a database; the new `integration` CI job
+  provisions Postgres and runs it. The `tests/docker` compose comment
+  no longer references the removed `#[ignore]` convention.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages

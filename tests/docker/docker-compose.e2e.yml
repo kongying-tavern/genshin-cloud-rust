@@ -3,8 +3,11 @@
 # Spin up with:
 #   docker compose -f tests/docker/docker-compose.e2e.yml up -d
 #
-# Provides PostgreSQL + MinIO + Redis for the `#[ignore]`d DB-backed tests in
-# tests/rust/. Mirrors the dev.compose.yml services but scoped to testing.
+# Provides PostgreSQL + MinIO + Redis for the DB-backed tests in tests/rust/.
+# Tests are gated on the GCS_TEST_DB env var (not #[ignore]): set it locally
+# with `GCS_TEST_DB=1 DB_PASSWORD=genshin_map cargo test --test user_db` (Redis
+# and MinIO are optional — the backend degrades gracefully without them). The
+# CI `integration` job provisions the same Postgres automatically.
 
 services:
   postgres:
