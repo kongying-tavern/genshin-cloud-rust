@@ -24,6 +24,7 @@ chrono = { workspace = true }
 [dev-dependencies]
 tokio-test = "^0.4"
 regex-lite = "^0.1"
+base64 = { workspace = true }
 
 [[test]]
 name = "utils_smoke"
