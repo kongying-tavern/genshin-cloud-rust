@@ -8,8 +8,10 @@ publish = false
 # Workspace crates under test
 _utils = { path = "../../packages/utils" }
 _database = { path = "../../packages/database" }
+_functions = { path = "../../packages/functions" }
 
-# sea-orm traits (EntityName, Iterable) for compile-time entity assertions
+# sea-orm traits (EntityName, Iterable) for compile-time entity assertions;
+# Schema + ConnectionTrait for DB-backed tests to create tables on the fly.
 sea-orm = { workspace = true }
 
 # Test runtime
@@ -17,6 +19,7 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "^0.4"
@@ -36,3 +39,11 @@ path = "tests/marker/marker_domain_test.rs"
 [[test]]
 name = "schema"
 path = "tests/schema_test.rs"
+
+# DB-backed integration test. Gated on the GCS_TEST_DB env var (set by the CI
+# `integration` job, which also provisions a Postgres service). Skips cleanly
+# when no database is available, so `cargo test --workspace` stays green
+# everywhere else.
+[[test]]
+name = "user_db"
+path = "tests/user_db_test.rs"
