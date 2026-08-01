@@ -112,6 +112,23 @@ The commit-msg hook enforces this on every `git commit`.
 详见 / See: [提交规范](./docs/zhs/guides/commit-message-convention.md) /
 [Commit Convention](./docs/en/guides/commit-message-convention.md)
 
+## 迭代工作流 / Iteration Workflow
+
+`master` 是唯一主线，受分支保护：**任何补丁都必须以 PR 形式合入**。
+从最新 master 切主题分支（`feat/`、`fix/`、`test/`、`docs/`、`refactor/`、
+`chore/`），PR 标题同样遵循 gitmoji 规范（squash 合并时标题即合并提交），
+CI 全绿后经 `celestia-devtools pr-merge`（或 `gh()` 代理函数）squash 合并，
+合并后删除分支。历史 `dev` 分支已封存为 tag `archive/dev-snapshot`。
+
+Master is the single protected mainline: **every patch lands via a PR**. Cut a
+topic branch (`feat/`, `fix/`, `test/`, `docs/`, `refactor/`, `chore/`) from the
+latest master, keep the PR title in the gitmoji format (it becomes the squash
+merge subject), wait for green CI, then squash-merge via
+`celestia-devtools pr-merge` (or the `gh()` proxy function) and delete the
+branch. The historical `dev` branch is archived as tag `archive/dev-snapshot`.
+
+迭代计划与未完成事项 backlog 见 / See [PLAN.md](./PLAN.md)。
+
 ## 许可证 / License
 
 本项目为空荧酒馆（kongying-tavern）所有。详见仓库历史与上游 Java 项目。

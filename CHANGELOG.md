@@ -7,6 +7,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Infrastructure (master-based iteration transition)
+
+- Switch to the master-based PR workflow: the `dev` branch was
+  squash-merged into master ([#18](https://github.com/langyo/genshin-cloud-rust/pull/18))
+  and archived as tag `archive/dev-snapshot`; every new patch now lands
+  via its own PR against master. Branch protection is enabled on master
+  (require PR, 6 required status checks, linear history, no force-push).
+
+- Fix three latent CI bugs: the manual sccache install referenced the
+  wrong extracted directory name (replaced with
+  `mozilla-actions/sccache-action@v0.0.11` on both OSes); the global
+  `RUSTC_WRAPPER=sccache` broke Windows jobs where sccache was absent;
+  Trufflehog rejected the duplicated `--fail` flag in `extra_args`.
+
+- Harden CI ([#19](https://github.com/langyo/genshin-cloud-rust/pull/19)):
+  the commit-msg lint now uses the org reusable workflow (lints the PR
+  title and every commit); added the cargo-deny workflow (advisories,
+  bans, licenses, sources); allowed the four permissive licenses required
+  by the dependency graph (`bzip2-1.0.6`, `NCSA`, `CDLA-Permissive-2.0`,
+  `BSL-1.0`) and ignored RUSTSEC-2023-0071 with justification (the `rsa`
+  crate is a transitive-only dependency that is never exercised — the
+  workspace uses HMAC JWT exclusively). Dropped the retired `dev` branch
+  from all workflow triggers.
+
+- Add [PLAN.md](./PLAN.md): the iteration plan — unfinished-work
+  inventory, the master-based PR ruleset, and the milestone backlog
+  (M1 infra & test harness, M2 tech-debt cleanup, M3 authZ/OAuth,
+  M4 caching, M5 docs & release).
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
