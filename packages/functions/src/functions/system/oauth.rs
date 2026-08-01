@@ -322,6 +322,27 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
     })
 }
 
+/// 生成 JWKS（JSON Web Key Set），向第三方分发当前 JWT 密钥的公钥信息。
+///
+/// 当前使用 HMAC-SHA256（HS256）签名，JWKS 以 `kty: oct` 形式公布 HMAC 密钥
+/// （RFC 7517 §6.4）。若未来切换到 RS256（如 JWK 轮换），此端点改为分发
+/// RSA 公钥。
+pub async fn do_jwks() -> Result<serde_json::Value> {
+    use base64::Engine;
+
+    let key = _utils::jwt::jwt_secret_raw();
+    let k = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(key.as_bytes());
+    Ok(serde_json::json!({
+        "keys": [{
+            "kty": "oct",
+            "kid": "genshin-cloud-hmac-v1",
+            "alg": "HS256",
+            "use": "sig",
+            "k": k,
+        }],
+    }))
+}
+
 pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;

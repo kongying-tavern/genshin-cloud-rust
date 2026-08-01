@@ -655,4 +655,21 @@ async fn area_and_item_doc_business_assertions() {
         oauth_fns::map_scope("write").is_err(),
         "unknown scope must be rejected"
     );
+
+    // ── Assertion 7: JWKS publishes the HMAC key in oct form ─────────────────
+    let jwks = oauth_fns::do_jwks().await.expect("do_jwks");
+    let key = &jwks["keys"][0];
+    assert_eq!(key["kty"], "oct");
+    assert_eq!(key["alg"], "HS256");
+    assert_eq!(key["use"], "sig");
+    let k = key["k"].as_str().expect("k is a string");
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(k)
+        .expect("k is valid base64url");
+    assert_eq!(
+        decoded,
+        _utils::jwt::jwt_secret_raw().as_bytes(),
+        "JWKS key material must match the JWT secret"
+    );
 }

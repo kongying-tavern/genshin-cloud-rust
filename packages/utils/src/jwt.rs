@@ -16,13 +16,19 @@ pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     // Install the rust_crypto (ring-based) provider before any JWT operation.
     let _ = DEFAULT_PROVIDER.install_default();
 
-    let key = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into());
+    let key = jwt_secret_raw();
     (
         EncodingKey::from_secret(key.as_bytes()),
         DecodingKey::from_secret(key.as_bytes()),
     )
 });
+
+/// The raw JWT secret (env `JWT_SECRET`, with the dev default). Exposed for
+/// the JWKS endpoint, which publishes the HMAC key in oct form.
+pub fn jwt_secret_raw() -> String {
+    std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into())
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

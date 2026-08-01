@@ -4,13 +4,18 @@ mod system;
 use anyhow::Result;
 
 use axum::{
-    Router, extract::DefaultBodyLimit, http::StatusCode, middleware::from_extractor,
-    response::IntoResponse, routing::post,
+    Router,
+    extract::DefaultBodyLimit,
+    http::StatusCode,
+    middleware::from_extractor,
+    response::IntoResponse,
+    routing::{get, post},
 };
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
+        .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .merge(api::router().await?)
         .nest_service("/cdn", cdn_proxy())
@@ -20,6 +25,18 @@ pub async fn router() -> Result<Router> {
         .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
 
     Ok(ret)
+}
+
+/// JWKS 公钥分发端点（`GET /.well-known/jwks.json`），无鉴权。
+async fn jwks() -> axum::response::Response {
+    match _functions::functions::system::oauth::do_jwks().await {
+        Ok(v) => axum::Json(v).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("JWKS generation failed: {e}"),
+        )
+            .into_response(),
+    }
 }
 
 /// CDN proxy with fallback. Tries remote CDN first, falls back to a locally

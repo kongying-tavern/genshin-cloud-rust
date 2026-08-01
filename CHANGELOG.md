@@ -113,6 +113,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `All`. `api_db` test covers the policy gates, device registration,
   and scope mapping against live Postgres.
 
+- Add the JWKS endpoint (PLAN.md M3): `GET /.well-known/jwks.json`
+  publishes the current HMAC (HS256) key in RFC 7517 `oct` form
+  (`kty: oct`, base64url `k`), unauthenticated. New
+  `jwt_secret_raw()` accessor keeps the key material single-sourced.
+  `api_db` test verifies the key material round-trips with the JWT
+  secret.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
