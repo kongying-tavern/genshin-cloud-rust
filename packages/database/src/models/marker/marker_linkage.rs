@@ -23,25 +23,21 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 组 ID
-    /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub group_id: String,
     /// 起始点点位 ID
     /// 会根据是否反向与 to_id 交换
-    /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub from_id: i64,
     /// 终止点点位 ID
     /// 会根据是否反向与 from_id 交换
-    /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub to_id: i64,
     /// 关联操作类型
-    /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub link_action: MarkerLinkageLinkAction,
     /// 是否反向
-    /// TODO: 更正实际数据库中的表关系，这个列其实不能为空
     pub link_reverse: bool,
     /// 路线
-    /// 默认为空数组
-    /// FIXME: 数据库里没有任何数据案例，全是空数组，这里的进一步类型限制就暂时做不了
+    /// 默认为空数组。类型保持宽松（`Option<Json>`）：当前数据库样本中该列
+    /// 均为空数组，缺少真实数据案例，进一步的结构化（如固定字段的路线
+    /// 类型）待真实数据验证后再收紧。
     pub path: Option<serde_json::Value>,
     /// 额外数据
     pub extra: Option<serde_json::Value>,

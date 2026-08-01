@@ -48,6 +48,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   all 11 languages with the current one highlighted. The previously
   Chinese-only placeholders and truncated switchers are gone.
 
+- Clarify the stale schema TODOs (PLAN.md F11, docs-only): the
+  `marker_linkage` "cannot be null" TODOs contradicted the already
+  non-null field types (removed); its `path` FIXME now states why the
+  type stays loose (no real data samples yet). `sys_user_archive.data`
+  documents the intentional opaque-JSON design, and `sys_user_device.status`
+  documents the `0 = normal / non-zero = disabled` convention used by the
+  OAuth access-policy checks.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)
