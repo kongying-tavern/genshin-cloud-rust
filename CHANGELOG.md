@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Port the score field-level weighting (the last known Java-parity gap from
+  the 0.2.0 release): `do_generate_score` now filters history to the
+  `Position` (type=4) rows and weights each contribution by the number of
+  fields in its content JSON (Added/Modified by field count, Deleted = 1),
+  instead of counting every edit as 1. `do_get_score_data` reads the real
+  score from `score_stat.content` (`fieldWeight`, falling back to `count`)
+  instead of returning a fixed 1.0 per row. `api_db` test asserts the
+  weighting (3-field + 1-field rows → score 4, non-Position rows ignored)
+  and the read-back.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)
