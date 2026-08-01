@@ -159,9 +159,10 @@ Reviewing ───────────────────────�
 1. 每个贡献者写一行进 `score_stat`，作为评分基数。
 
 这条管线把「打点 → 审核 → 晋升 → 计入评分」闭环连起来：玩家打的点越多、通过率
-越高，`score_stat` 里的分数越高，社区里就能识别出靠谱的贡献者。Java 侧还有更
-精细的**字段级 diff**（`ScoreDataPunctuateVo`，按改动了多少个字段加权），Rust 侧
-当前是简化版（按编辑次数计数），完整字段 diff 列为后续待办（见 `score.rs:25` 注释）。
+越高，`score_stat` 里的分数越高，社区里就能识别出靠谱的贡献者。评分按 Java
+`ScoreDataPunctuateVo` 的语义做了**字段级加权**：每条打点记录的权重 = 其内容
+JSON 的字段数（改动规模越大分越高），Rust 侧在 `score.rs` 的 `entry_weight`
+实现（`Added`/`Modified` 按字段数、`Deleted` 计 1、解析失败计 1）。
 
 ## 7. 与 Java 实现的对齐
 
@@ -181,14 +182,5 @@ Rust 侧复用了 `SafeEntityTrait` 的软删除 + 乐观锁语义（见
 
 ## 8. 已知简化与后续待办
 
-- **打点计数的字段级 diff**：`do_generate_score` 目前按编辑次数计分，Java 侧按
-
-字段改动数加权。待补 `ScoreDataPunctuateVo` 的等价实现。
-
-- **审核侧权限**：`do_pass` / `do_reject` 的 `_auth: AuthInfo` 目前未做角色校验，
-
-生产部署前需在路由层补「仅编辑以上角色可调用」的中间件。
-
-- **晋升的事务性**：`do_pass` 里「写 marker + 删 punctuate」目前是两条独立 SQL，
-
-极端情况下（写成功、删失败）会留下孤儿 punctuate。后续可包进一个 sea-orm 事务。
+- **RSA/JWKS 轮换**：token 签名为 HMAC-SHA256（JWKS 以 `oct` 形式公布密钥）；
+  Java 侧为 RSA 密钥对 + JWK 轮换，切换时需引入密钥管理与轮换机制。

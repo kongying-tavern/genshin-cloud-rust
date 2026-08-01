@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   weighting (3-field + 1-field rows → score 4, non-Position rows ignored)
   and the read-back.
 
+- Resync the gap documentation: the roadmap batch-4 status is now **Done**
+  (score weighting landed), and the punctuate-workflow design doc drops the
+  stale "audit permission" / "transactionality" / "field diff" follow-ups
+  (all fixed in the M2/M3 PRs); only the RSA/JWKS rotation gap remains.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

@@ -44,7 +44,7 @@ current status.
 | 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `specialFlag`. Establishes the `SafeEntityTrait` pattern and the five-layer domain template every later port copies. | Medium | **Done** — used as the porting template |
 | 2 | **icon / item / tag families** | `Icon`, `IconType`, `IconTypeLink`, `Item`, `ItemType`, `ItemTypeLink`, plus the `Tag` / `TagType` taxonomy. Includes the `selectPageItemByCondition` `specialFlag` filter and copy/join/move_type. | Low–Medium | **Done** (covered by the `api_db` integration tests) |
 | 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. `RouteVO` page/search/batch queries are wired. | Low–Medium | **Done** |
-| 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation. | High | **Mostly done** — the score field-level diff (`ScoreDataPunctuateVo`) is not ported yet (current aggregation is simplified) |
+| 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation (field-weighted). | High | **Done** |
 | 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing, archive rename/delete_slot. | Medium | **Done** — device registration + access-policy checks are wired |
 | 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`, with an in-process moka cache (300s TTL) and refresh endpoints. | High | **Done** |
 | 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Mostly done** — still HMAC (HS256) signing; the RSA keypair + JWK rotation are not implemented |
@@ -61,8 +61,6 @@ current status.
 
 ## Known gaps (remaining parity with Java)
 
-- Batch 4: `score::do_generate_score` is a simplified aggregation (counts
-  edits); the Java field-level diff (`ScoreDataPunctuateVo`) is not ported.
 - Batch 7: tokens are HMAC-SHA256; the Java side uses an RSA keypair with JWK
   rotation. The JWKS endpoint currently publishes the HMAC key in `oct` form;
   switching to RSA requires key management and rotation.
