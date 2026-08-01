@@ -23,6 +23,7 @@ chrono = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "^0.4"
+regex-lite = "^0.1"
 
 [[test]]
 name = "utils_smoke"
@@ -47,3 +48,11 @@ path = "tests/schema_test.rs"
 [[test]]
 name = "user_db"
 path = "tests/user_db_test.rs"
+
+# DB-backed API business-assertion test. Same GCS_TEST_DB gate as user_db;
+# seeds area + item rows and asserts the business-layer functions return real
+# data (not just 401/403 smoke checks). Covers area list/add and the
+# BinaryMD5 item_doc pipeline.
+[[test]]
+name = "api_db"
+path = "tests/api_db_test.rs"

@@ -53,6 +53,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provisions Postgres and runs it. The `tests/docker` compose comment
   no longer references the removed `#[ignore]` convention.
 
+- Add the `api_db` business-assertion test: seeds area + item rows on a
+  live Postgres (tables built FK-free via DDL rewriting so each domain
+  is independent) and asserts the business-layer functions return real
+  data — `area::do_list`/`do_add` and the BinaryMD5 `item_doc`
+  pipeline. Upgrades the e2e smoke checks (which treated 401/403 as
+  "route exists ✓") into actual data assertions. Runs in the same
+  `integration` CI job.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
