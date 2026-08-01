@@ -2,26 +2,146 @@ use anyhow::{Result, anyhow};
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::{ActiveValue::Set, prelude::*};
+use sea_orm::{ActiveValue::Set, QueryOrder, prelude::*};
 
 use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
+    db_operations::SafeEntityTrait,
     jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
-        SystemActionLogAction,
+        AccessPolicyItemEnum, SystemActionLogAction,
         auth::{OauthAnonymousResponse, OauthLoginResponse, OauthScopeType, OauthTokenType},
     },
 };
 
+/// 按用户的 access_policy 校验登录环境（IP / 设备）。
+///
+/// 数据源为 `sys_user_device` 表：
+/// - `ip:same_last_ip`：请求 IP 必须等于该用户最近一次登录的 IP
+/// - `dev:same_last_device`：请求 User-Agent 必须等于最近一次登录的设备
+/// - `ip:block_disallow_ip` / `dev:block_disallow_device`：命中 `status != 0`
+///   （禁用）的登记条目时拒绝
+/// - 其余策略（允许列表、地区等）在当前数据模型下无对应存储，放行
+/// - 无任何历史记录（首次登录）时，same_* 类策略放行
+async fn check_access_policy(
+    user_id: i64,
+    access_policy: &[AccessPolicyItemEnum],
+    ip: SocketAddr,
+    user_agent: &str,
+) -> Result<()> {
+    let db = &DB_CONN.wait().pg_conn;
+    let last = models::system::sys_user_device::Entity::find_safety()
+        .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
+        .order_by_desc(models::system::sys_user_device::Column::LastLoginTime)
+        .one(db)
+        .await?;
+
+    for policy in access_policy {
+        match policy {
+            AccessPolicyItemEnum::IpSameLastIp => {
+                if let Some(dev) = &last
+                    && let Some(last_ip) = &dev.ipv4
+                    && ip.ip().to_string() != *last_ip
+                {
+                    return Err(anyhow!(
+                        "Access denied: IP {} does not match the last login IP {last_ip}",
+                        ip
+                    ));
+                }
+            },
+            AccessPolicyItemEnum::DevSameLastDevice => {
+                if let Some(dev) = &last
+                    && dev.device_id != *user_agent
+                {
+                    return Err(anyhow!(
+                        "Access denied: device does not match the last login device"
+                    ));
+                }
+            },
+            AccessPolicyItemEnum::IpBlockDisallowIp => {
+                let blocked = models::system::sys_user_device::Entity::find_safety()
+                    .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
+                    .filter(models::system::sys_user_device::Column::Status.ne(0))
+                    .filter(
+                        models::system::sys_user_device::Column::Ipv4.eq(Some(ip.ip().to_string())),
+                    )
+                    .one(db)
+                    .await?;
+                if blocked.is_some() {
+                    return Err(anyhow!("Access denied: IP {} is blocked", ip));
+                }
+            },
+            AccessPolicyItemEnum::DevBlockDisallowDevice => {
+                let blocked = models::system::sys_user_device::Entity::find_safety()
+                    .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
+                    .filter(models::system::sys_user_device::Column::Status.ne(0))
+                    .filter(models::system::sys_user_device::Column::DeviceId.eq(user_agent))
+                    .one(db)
+                    .await?;
+                if blocked.is_some() {
+                    return Err(anyhow!("Access denied: device is blocked"));
+                }
+            },
+            // 允许列表 / 地区类策略：当前数据模型无对应存储，放行
+            _ => {},
+        }
+    }
+    Ok(())
+}
+
+/// 登录成功后登记设备（upsert `sys_user_device`：user_id + device_id 唯一）。
+async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result<()> {
+    let db = &DB_CONN.wait().pg_conn;
+    let existing = models::system::sys_user_device::Entity::find_safety()
+        .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
+        .filter(models::system::sys_user_device::Column::DeviceId.eq(user_agent))
+        .one(db)
+        .await?;
+
+    let now = chrono::Utc::now().naive_utc();
+    if let Some(dev) = existing {
+        let mut am: models::system::sys_user_device::ActiveModel = dev.into();
+        am.ipv4 = Set(Some(ip.ip().to_string()));
+        am.last_login_time = Set(Some(now));
+        models::system::sys_user_device::Entity::update_safety(am)?
+            .exec(db)
+            .await?;
+    } else {
+        let am = models::system::sys_user_device::ActiveModel {
+            version: Set(0),
+            id: Set(0),
+            create_time: Set(now),
+            update_time: Set(None),
+            creator_id: Set(None),
+            updater_id: Set(None),
+            del_flag: Set(false),
+            user_id: Set(Some(user_id)),
+            device_id: Set(user_agent.to_string()),
+            ipv4: Set(Some(ip.ip().to_string())),
+            status: Set(0),
+            last_login_time: Set(Some(now)),
+        };
+        models::system::sys_user_device::Entity::insert(am)
+            .exec(db)
+            .await?;
+    }
+    Ok(())
+}
+
 async fn oauth_password_login_inner(
     item: models::system::sys_user::Model,
     password_raw: String,
+    ip: SocketAddr,
+    user_agent: &str,
 ) -> Result<OauthLoginResponse> {
     if !verify_password(password_raw, item.password.clone())? {
         return Err(anyhow!("Invalid password"));
     }
+
+    // 身份验证通过后，按用户的 access_policy 校验登录环境
+    check_access_policy(item.id, &item.access_policy.0, ip, user_agent).await?;
 
     let jti = Uuid::now_v7();
     let now = chrono::Utc::now();
@@ -109,17 +229,27 @@ pub async fn oauth_password_login(
         .ok_or(anyhow!("User not found"))?;
     let user_id = item.id;
 
-    // TODO: 根据 access_policy 指定的模式，对请求做各种检查
-    let ret = oauth_password_login_inner(item, password_raw).await;
+    let ret = oauth_password_login_inner(item, password_raw, ip, &user_agent).await;
+
+    if ret.is_ok() {
+        // 登录成功：登记设备（幂等 upsert）
+        let _ = record_device(user_id, ip, &user_agent).await;
+    }
 
     models::system::sys_action_log::ActiveModel {
+        version: Set(0),
+        id: Set(0),
+        create_time: Set(chrono::Utc::now().naive_utc()),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
         user_id: Set(Some(user_id)),
-        ipv4: Set(Some(ip.to_string())),
+        ipv4: Set(Some(ip.ip().to_string())),
         device_id: Set(user_agent),
         action: Set(SystemActionLogAction::Login),
         is_error: Set(ret.is_err()),
         extra_data: Set(Default::default()),
-        ..Default::default()
     }
     .insert(&DB_CONN.wait().pg_conn)
     .await?;
@@ -127,9 +257,22 @@ pub async fn oauth_password_login(
     ret
 }
 
-pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousResponse> {
+/// 把请求中的 scope 字符串映射为 `OauthScopeType`。
+/// 当前仅支持 `all`（默认，大小写不敏感）；未知 scope 直接拒绝，避免
+/// 静默降级为全局权限。
+pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
+    let normalized = scope.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "" | "all" => Ok(OauthScopeType::All),
+        other => Err(anyhow!("Unsupported scope: {other}")),
+    }
+}
+
+pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
     // 使用系统匿名用户 id = 0 表示客户端凭据/匿名访问
     let id: i64 = 0;
+
+    let scope_enum = map_scope(&scope)?;
 
     let jti = Uuid::now_v7();
     let now = chrono::Utc::now();
@@ -174,7 +317,7 @@ pub async fn oauth_client_credentials(_scope: String) -> Result<OauthAnonymousRe
         access_token,
         token_type: OauthTokenType::Bearer,
         expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
-        scope: OauthScopeType::All, // TODO: map scope string to enum if needed
+        scope: scope_enum,
         jti,
     })
 }

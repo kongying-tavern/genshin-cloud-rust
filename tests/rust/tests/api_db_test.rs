@@ -15,10 +15,13 @@ use _database::DB_CONN;
 use _database::models::{
     area::area as area_model, item::item as item_model, marker::marker as marker_model,
     marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
+    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
+    system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
     area as area_fns, item_doc, marker as marker_fns, punctuate_audit as audit_fns,
 };
+use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -31,8 +34,8 @@ use _utils::{
         },
     },
     types::{
-        AccessPolicyList, HiddenFlag, IconStyleType, MarkerPunctuateMethodType,
-        MarkerPunctuateStatus, SystemUserRole,
+        AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, IconStyleType,
+        MarkerPunctuateMethodType, MarkerPunctuateStatus, SystemUserRole,
     },
 };
 use sea_orm::{
@@ -135,6 +138,36 @@ async fn seed_punctuate(
     Ok(mp_model::Entity::insert(am).exec(db).await?.last_insert_id)
 }
 
+async fn seed_user(
+    db: &sea_orm::DatabaseConnection,
+    username: &str,
+    policy: Vec<AccessPolicyItemEnum>,
+    now: chrono::NaiveDateTime,
+) -> anyhow::Result<i64> {
+    let am = sys_user_model::ActiveModel {
+        id: NotSet,
+        version: Set(0),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        username: Set(username.to_string()),
+        password: Set(_utils::bcrypt::generate_storage_password("pw123").unwrap()),
+        nickname: Set(None),
+        qq: Set(None),
+        phone: Set(None),
+        logo: Set(None),
+        role_id: Set(SystemUserRole::MapUser),
+        access_policy: Set(AccessPolicyList(policy)),
+        remark: Set(None),
+    };
+    Ok(sys_user_model::Entity::insert(am)
+        .exec(db)
+        .await?
+        .last_insert_id)
+}
+
 fn stub_auth() -> AuthInfo {
     stub_auth_with_role(SystemUserRole::Admin)
 }
@@ -166,6 +199,9 @@ async fn area_and_item_doc_business_assertions() {
 
     // ── Setup: FK-free tables for area + item ────────────────────────────────
     let ddls = [
+        ddl_without_foreign_keys(sys_user_model::Entity),
+        ddl_without_foreign_keys(device_model::Entity),
+        ddl_without_foreign_keys(action_log_model::Entity),
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
@@ -175,6 +211,9 @@ async fn area_and_item_doc_business_assertions() {
     recreate_tables_fklless(
         db,
         &[
+            "sys_user",
+            "sys_user_device",
+            "sys_action_log",
             "area",
             "item",
             "marker",
@@ -530,5 +569,90 @@ async fn area_and_item_doc_business_assertions() {
     assert!(
         p1_gone.is_none(),
         "pass must hard-delete the punctuate record"
+    );
+
+    // ── Assertion 6: oauth access_policy checks + device registration ────────
+    let ip_a = "1.2.3.4:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ip_b = "9.9.9.9:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ua = "test-agent/1.0";
+
+    // 1) same_last_ip: first login from ip_a succeeds and registers the device;
+    //    a second login from ip_b is rejected.
+    seed_user(
+        db,
+        "policy_same_ip",
+        vec![AccessPolicyItemEnum::IpSameLastIp],
+        now,
+    )
+    .await
+    .expect("seed policy user");
+    oauth_fns::oauth_password_login("policy_same_ip".into(), "pw123".into(), ip_a, ua.into())
+        .await
+        .expect("first login from ip_a succeeds");
+    let device = device_model::Entity::find_safety()
+        .filter(device_model::Column::DeviceId.eq(ua))
+        .one(db)
+        .await
+        .expect("fetch registered device")
+        .expect("device registered after login");
+    assert_eq!(device.ipv4.as_deref(), Some("1.2.3.4"));
+    assert!(
+        oauth_fns::oauth_password_login("policy_same_ip".into(), "pw123".into(), ip_b, ua.into())
+            .await
+            .is_err(),
+        "same_last_ip policy must reject a different IP"
+    );
+
+    // 2) dev:block_disallow_device: a disabled device entry blocks login.
+    let seed_user2 = seed_user(
+        db,
+        "policy_block_dev",
+        vec![AccessPolicyItemEnum::DevBlockDisallowDevice],
+        now,
+    )
+    .await
+    .expect("seed blocked-device user");
+    let blocked_am = device_model::ActiveModel {
+        id: NotSet,
+        version: Set(0),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        user_id: Set(Some(seed_user2)),
+        device_id: Set("evil-agent".into()),
+        ipv4: Set(None),
+        status: Set(1),
+        last_login_time: Set(None),
+    };
+    device_model::Entity::insert(blocked_am)
+        .exec(db)
+        .await
+        .expect("seed disabled device");
+    assert!(
+        oauth_fns::oauth_password_login(
+            "policy_block_dev".into(),
+            "pw123".into(),
+            ip_a,
+            "evil-agent".into(),
+        )
+        .await
+        .is_err(),
+        "dev:block_disallow_device must reject a blocked device"
+    );
+
+    // 3) scope mapping: "all"/"" → All, unknown → error.
+    assert!(matches!(
+        oauth_fns::map_scope("all").expect("all"),
+        _utils::types::auth::OauthScopeType::All
+    ));
+    assert!(matches!(
+        oauth_fns::map_scope("").expect("empty"),
+        _utils::types::auth::OauthScopeType::All
+    ));
+    assert!(
+        oauth_fns::map_scope("write").is_err(),
+        "unknown scope must be rejected"
     );
 }
