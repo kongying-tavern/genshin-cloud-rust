@@ -5,8 +5,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use jsonwebtoken::{
-    DecodingKey, EncodingKey, Header, Validation, crypto::rust_crypto::DEFAULT_PROVIDER, decode,
-    encode,
+    Algorithm, DecodingKey, EncodingKey, Header, Validation, crypto::rust_crypto::DEFAULT_PROVIDER,
+    decode, encode,
+};
+use rsa::{
+    pkcs1::DecodeRsaPrivateKey,
+    pkcs8::{DecodePrivateKey, EncodePublicKey},
+    traits::PublicKeyParts,
 };
 
 use crate::models::SysUserVO;
@@ -28,6 +33,150 @@ pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
 pub fn jwt_secret_raw() -> String {
     std::env::var("JWT_SECRET")
         .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into())
+}
+
+/// The RSA private key PEM (env `JWT_RSA_PRIVATE_KEY_PEM`, optional).
+/// When set, tokens are signed with RS256 and the JWKS endpoint publishes the
+/// RSA public key. When unset, the workspace stays on HS256.
+pub fn jwt_rsa_private_key_pem() -> Option<String> {
+    std::env::var("JWT_RSA_PRIVATE_KEY_PEM").ok()
+}
+
+/// Whether RS256 signing is active (an RSA private key is configured).
+pub fn is_rsa_signing() -> bool {
+    jwt_rsa_private_key_pem().is_some()
+}
+
+/// The active signing algorithm.
+pub fn jwt_alg() -> Algorithm {
+    if is_rsa_signing() {
+        Algorithm::RS256
+    } else {
+        Algorithm::HS256
+    }
+}
+
+/// Lazily parsed key material for both algorithms.
+pub struct JwtKeys {
+    /// Key used to sign new tokens (HS256 secret or RS256 private key).
+    pub encoding: EncodingKey,
+    /// RS256 verification key, present when RSA is configured.
+    pub decoding_rsa: Option<DecodingKey>,
+    /// HS256 verification key (always available — legacy tokens stay valid).
+    pub decoding_hmac: DecodingKey,
+    /// RSA public key for JWKS publication (n/e export), when configured.
+    pub rsa_public_pem: Option<String>,
+}
+
+static JWT_KEYS: Lazy<JwtKeys> = Lazy::new(|| {
+    let _ = DEFAULT_PROVIDER.install_default();
+
+    let hmac = jwt_secret_raw();
+    let encoding_hmac = EncodingKey::from_secret(hmac.as_bytes());
+    let decoding_hmac = DecodingKey::from_secret(hmac.as_bytes());
+
+    let Some(pem) = jwt_rsa_private_key_pem() else {
+        return JwtKeys {
+            encoding: encoding_hmac,
+            decoding_rsa: None,
+            decoding_hmac,
+            rsa_public_pem: None,
+        };
+    };
+
+    match rsa::RsaPrivateKey::from_pkcs8_pem(&pem)
+        .or_else(|_| rsa::RsaPrivateKey::from_pkcs1_pem(&pem))
+    {
+        Ok(private) => {
+            let public = private.to_public_key();
+            let public_pem = public.to_public_key_pem(rsa::pkcs8::LineEnding::LF).ok();
+            let decoding_rsa = public_pem
+                .as_deref()
+                .and_then(|p| DecodingKey::from_rsa_pem(p.as_bytes()).ok());
+            let encoding = match EncodingKey::from_rsa_pem(pem.as_bytes()) {
+                Ok(k) => k,
+                Err(e) => {
+                    eprintln!("failed to parse RSA private key PEM: {e}; falling back to HS256");
+                    encoding_hmac
+                },
+            };
+            JwtKeys {
+                encoding,
+                decoding_rsa,
+                decoding_hmac,
+                rsa_public_pem: public_pem,
+            }
+        },
+        Err(e) => {
+            eprintln!("failed to parse RSA private key PEM: {e}; falling back to HS256");
+            JwtKeys {
+                encoding: encoding_hmac,
+                decoding_rsa: None,
+                decoding_hmac,
+                rsa_public_pem: None,
+            }
+        },
+    }
+});
+
+/// Sign a token with the active algorithm.
+pub fn encoding_key() -> &'static EncodingKey {
+    &JWT_KEYS.encoding
+}
+
+/// Verification keys with their matching algorithms. The active algorithm
+/// comes first, the fallback second — tokens signed before an RSA/HS256
+/// migration stay verifiable.
+pub fn decoding_key_pairs() -> Vec<(&'static DecodingKey, Algorithm)> {
+    if is_rsa_signing() {
+        let mut v = Vec::new();
+        if let Some(k) = &JWT_KEYS.decoding_rsa {
+            v.push((k, Algorithm::RS256));
+        }
+        v.push((&JWT_KEYS.decoding_hmac, Algorithm::HS256));
+        v
+    } else {
+        vec![(&JWT_KEYS.decoding_hmac, Algorithm::HS256)]
+    }
+}
+
+/// The RSA public key PEM (when RS256 is configured) for JWKS publication.
+pub fn rsa_public_key_pem() -> Option<&'static str> {
+    JWT_KEYS.rsa_public_pem.as_deref()
+}
+
+/// Build the JWKS (JSON Web Key Set) for the active signing scheme.
+///
+/// RS256: publishes the RSA public key (kty: RSA, base64url n/e).
+/// HS256: publishes the HMAC key in RFC 7517 §6.4 `oct` form.
+pub fn jwks() -> anyhow::Result<serde_json::Value> {
+    use base64::Engine;
+    if let Some(pem) = rsa_public_key_pem() {
+        let public = <rsa::RsaPublicKey as rsa::pkcs8::DecodePublicKey>::from_public_key_pem(pem)?;
+        let n = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public.n().to_bytes_be());
+        let e = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public.e().to_bytes_be());
+        return Ok(serde_json::json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": "genshin-cloud-rsa-v1",
+                "alg": "RS256",
+                "use": "sig",
+                "n": n,
+                "e": e,
+            }],
+        }));
+    }
+
+    let k = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(jwt_secret_raw().as_bytes());
+    Ok(serde_json::json!({
+        "keys": [{
+            "kty": "oct",
+            "kid": "genshin-cloud-hmac-v1",
+            "alg": "HS256",
+            "use": "sig",
+            "k": k,
+        }],
+    }))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,11 +229,21 @@ pub async fn generate_token(now: DateTime<Utc>, user_id: i64, jti: Uuid) -> Resu
         exp: now + EXPIRED_APPEND_DURATION,
     };
 
-    encode(&Header::default(), &claims, &JWT_SECRET.0).context("Failed to encode token")
+    encode(&Header::new(jwt_alg()), &claims, encoding_key()).context("Failed to encode token")
 }
 
 pub async fn verify_token(token: &str) -> Result<Claims> {
-    let token_data =
-        decode::<Claims>(token, &JWT_SECRET.1, &Validation::default()).context("Invalid token")?;
-    Ok(token_data.claims)
+    // Try the active algorithm first, then the fallback — so tokens signed
+    // before an RSA/HS256 migration stay verifiable.
+    let mut last_err = None;
+    for (key, alg) in decoding_key_pairs() {
+        match decode::<Claims>(token, key, &Validation::new(alg)) {
+            Ok(token_data) => return Ok(token_data.claims),
+            Err(e) => last_err = Some(e),
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Invalid token: {}",
+        last_err.map(|e| e.to_string()).unwrap_or_default()
+    ))
 }

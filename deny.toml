@@ -6,11 +6,11 @@ unsound = "workspace"
 yanked = "warn"
 ignore = [
     # Marvin Attack (timing sidechannel in RSA decryption): the `rsa` crate is
-    # only pulled in transitively by jsonwebtoken's rust_crypto backend. This
-    # workspace uses HMAC (HS256, jsonwebtoken defaults) exclusively, and any
-    # future RSA signatures (JWKS milestone) go through `ring`, which is
-    # constant-time — the `rsa` crate is never exercised. Revisit if a code
-    # path ever selects an RSA algorithm from the `rsa` crate.
+    # used for RS256 token signing and RSA public-key export (JWKS) only when
+    # JWT_RSA_PRIVATE_KEY_PEM is configured — there is no RSA *decryption*
+    # path anywhere in this workspace (tokens are verified with the public
+    # key; HMAC HS256 is the default when no RSA key is set). The advisory
+    # targets PKCS#1 v1.5 decryption timing, which is never exercised.
     "RUSTSEC-2023-0071",
 ]
 

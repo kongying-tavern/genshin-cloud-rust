@@ -24,6 +24,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   stale "audit permission" / "transactionality" / "field diff" follow-ups
   (all fixed in the M2/M3 PRs); only the RSA/JWKS rotation gap remains.
 
+### Security
+
+- Add RS256 signing with RSA JWKS (the last roadmap gap): when
+  `JWT_RSA_PRIVATE_KEY_PEM` is set (PKCS#8 or PKCS#1 PEM), tokens are
+  signed with RS256 and `/.well-known/jwks.json` publishes the RSA
+  public key (`kty: RSA`, base64url `n`/`e`). Without it, the
+  workspace keeps HS256 (`kty: oct`) as before. Verification accepts
+  both algorithms (active first, then fallback), so tokens signed
+  before an RSA migration stay valid. `api_db` test generates an
+  ephemeral RSA key and exercises the whole flow (login → RS256
+  sign/verify → JWKS RSA shape) end-to-end. `.env.example` documents
+  the knob; the deny.toml RUSTSEC-2023-0071 justification is updated
+  (the `rsa` crate now performs signing/key export, never RSA
+  decryption).
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

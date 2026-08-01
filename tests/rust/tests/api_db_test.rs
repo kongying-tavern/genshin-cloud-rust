@@ -197,6 +197,25 @@ fn stub_auth_with_role(role: SystemUserRole) -> AuthInfo {
 
 #[tokio::test]
 async fn area_and_item_doc_business_assertions() {
+    // Enable RS256 signing for the whole test process: generate an ephemeral
+    // RSA key and set JWT_RSA_PRIVATE_KEY_PEM BEFORE any JWT operation touches
+    // the lazy key material. Every login/token flow below then exercises the
+    // RS256 sign/verify path end-to-end (and the JWKS assertions check the
+    // RSA key shape).
+    use rsa::pkcs8::{EncodePrivateKey, LineEnding};
+    let rsa_key =
+        rsa::RsaPrivateKey::new(&mut rand_core::OsRng, 2048).expect("generate ephemeral RSA key");
+    let rsa_pem = rsa_key
+        .to_pkcs8_pem(LineEnding::LF)
+        .expect("encode RSA private key")
+        .to_string();
+    // SAFETY: single-threaded test process; the env var is set once before any
+    // JWT operation reads the lazy key material (edition 2024 marks set_var
+    // unsafe because concurrent readers could race).
+    unsafe {
+        std::env::set_var("JWT_RSA_PRIVATE_KEY_PEM", rsa_pem);
+    }
+
     let Some(db) = db().await else {
         return;
     };
@@ -745,22 +764,34 @@ async fn area_and_item_doc_business_assertions() {
         "unknown scope must be rejected"
     );
 
-    // ── Assertion 7: JWKS publishes the HMAC key in oct form ─────────────────
+    // ── Assertion 7: JWKS publishes the active signing key. With the
+    //    ephemeral RSA key configured above, this is the RSA public key
+    //    (kty=RSA with base64url n/e); the module also supports the HS256
+    //    oct form when no RSA key is configured. ──────────────────────────────
     let jwks = oauth_fns::do_jwks().await.expect("do_jwks");
     let key = &jwks["keys"][0];
-    assert_eq!(key["kty"], "oct");
-    assert_eq!(key["alg"], "HS256");
+    assert_eq!(key["kty"], "RSA", "RS256 mode publishes an RSA key");
+    assert_eq!(key["alg"], "RS256");
     assert_eq!(key["use"], "sig");
-    let k = key["k"].as_str().expect("k is a string");
+    let n = key["n"].as_str().expect("n is a string");
+    let e = key["e"].as_str().expect("e is a string");
     use base64::Engine;
-    let decoded = base64::engine::general_purpose::URL_SAFE_NO_PAD
-        .decode(k)
-        .expect("k is valid base64url");
-    assert_eq!(
-        decoded,
-        _utils::jwt::jwt_secret_raw().as_bytes(),
-        "JWKS key material must match the JWT secret"
+    assert!(
+        !base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(n)
+            .expect("n is valid base64url")
+            .is_empty(),
+        "n must decode to the modulus"
     );
+    assert!(
+        !base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(e)
+            .expect("e is valid base64url")
+            .is_empty(),
+        "e must decode to the exponent"
+    );
+    // The RSA round-trip is proven by every login above (password + QQ):
+    // tokens were RS256-signed and verified through the same key material.
 
     // ── Assertion 8: QQ login resolves the bound openid ──────────────────────
     seed_user(db, "qq_user", vec![], Some("OPENID_123".into()), now)

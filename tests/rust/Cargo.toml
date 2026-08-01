@@ -25,6 +25,8 @@ chrono = { workspace = true }
 tokio-test = "^0.4"
 regex-lite = "^0.1"
 base64 = { workspace = true }
+rsa = { version = "^0.9", features = ["pem"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
 
 [[test]]
 name = "utils_smoke"

@@ -32,6 +32,7 @@ yuuka = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }
+rsa = { version = "^0.9", features = ["pem"] }
 
 image = { workspace = true }
 sqids = { workspace = true }
