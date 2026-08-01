@@ -36,6 +36,7 @@ sqids = { workspace = true }
 bzip2 = { workspace = true }
 flate2 = { workspace = true }
 md5 = { workspace = true }
+moka = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }
