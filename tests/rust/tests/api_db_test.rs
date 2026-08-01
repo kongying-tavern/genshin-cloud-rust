@@ -11,17 +11,14 @@
 //! dependency graph (sys_user → icon → icon_type → area → item → ...) just to
 //! test one domain. Future domain tests can reuse `recreate_tables_fklless`.
 
-use sea_orm::{
-    ActiveValue::NotSet, ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter,
-    Schema, sea_query::TableCreateStatement,
-};
-
 use _database::DB_CONN;
 use _database::models::{
     area::area as area_model, item::item as item_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model,
+    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
 };
-use _functions::functions::api::{area as area_fns, item_doc, marker as marker_fns};
+use _functions::functions::api::{
+    area as area_fns, item_doc, marker as marker_fns, punctuate_audit as audit_fns,
+};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -33,9 +30,16 @@ use _utils::{
             MarkerTweakRequest, TweakMeta,
         },
     },
-    types::{AccessPolicyList, HiddenFlag, IconStyleType, SystemUserRole},
+    types::{
+        AccessPolicyList, HiddenFlag, IconStyleType, MarkerPunctuateMethodType,
+        MarkerPunctuateStatus, SystemUserRole,
+    },
 };
-
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Schema,
+    sea_query::TableCreateStatement,
+};
 /// Skip when no database is configured. Mirrors `user_db_test::db`.
 async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
     if std::env::var("GCS_TEST_DB").is_err() {
@@ -96,7 +100,46 @@ async fn link_count(db: &sea_orm::DatabaseConnection, marker_id: i64) -> anyhow:
         .await?)
 }
 
+async fn seed_punctuate(
+    db: &sea_orm::DatabaseConnection,
+    punctuate_id: i64,
+    method_type: MarkerPunctuateMethodType,
+    now: chrono::NaiveDateTime,
+) -> anyhow::Result<i64> {
+    let am = mp_model::ActiveModel {
+        id: NotSet,
+        version: Set(0),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        punctuate_id: Set(punctuate_id),
+        original_marker_id: Set(None),
+        marker_title: Set(Some("Audit Marker".into())),
+        item_list: Set(serde_json::json!([])),
+        position: Set("3.0,4.0".into()),
+        content: Set(String::new()),
+        picture: Set(None),
+        marker_creator_id: Set(1),
+        picture_creator_id: Set(None),
+        video_path: Set(None),
+        author: Set(2),
+        status: Set(MarkerPunctuateStatus::Reviewing),
+        audit_remark: Set(None),
+        method_type: Set(method_type),
+        refresh_time: Set(0),
+        hidden_flag: Set(HiddenFlag::Visible),
+        extra: Set(None),
+    };
+    Ok(mp_model::Entity::insert(am).exec(db).await?.last_insert_id)
+}
+
 fn stub_auth() -> AuthInfo {
+    stub_auth_with_role(SystemUserRole::Admin)
+}
+
+fn stub_auth_with_role(role: SystemUserRole) -> AuthInfo {
     let now = chrono::Utc::now();
     AuthInfo {
         info: SysUserVO {
@@ -106,7 +149,7 @@ fn stub_auth() -> AuthInfo {
             qq: None,
             phone: None,
             logo: None,
-            role_id: SystemUserRole::Admin,
+            role_id: role,
             access_policy: AccessPolicyList(vec![]),
             remark: None,
         },
@@ -127,13 +170,23 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
+        ddl_without_foreign_keys(mp_model::Entity),
     ];
-    recreate_tables_fklless(db, &["area", "item", "marker", "marker_item_link"], &ddls)
-        .await
-        .expect("recreate area + item + marker tables");
+    recreate_tables_fklless(
+        db,
+        &[
+            "area",
+            "item",
+            "marker",
+            "marker_item_link",
+            "marker_punctuate",
+        ],
+        &ddls,
+    )
+    .await
+    .expect("recreate area + item + marker + punctuate tables");
 
     // ── Seed one area + two items (different hidden_flag → 2 MD5 groups) ─────
-    use sea_orm::ActiveValue::Set;
     let now = chrono::Utc::now().naive_utc();
 
     let area_am = area_model::ActiveModel {
@@ -387,7 +440,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // RemoveLeft removes 1003
     marker_fns::do_tweak(
-        auth,
+        auth.clone(),
         MarkerTweakRequest {
             marker_ids: vec![marker_id],
             tweaks: vec![MarkerTweakConfig {
@@ -411,5 +464,71 @@ async fn area_and_item_doc_business_assertions() {
         link_count(db, marker_id).await.expect("count"),
         0,
         "RemoveLeft removes the link"
+    );
+
+    // ── Assertion 5: punctuate audit enforces roles and commits atomically ───
+    // Seed two Reviewing "Added" punctuates.
+    seed_punctuate(db, 9001, MarkerPunctuateMethodType::Added, now)
+        .await
+        .expect("seed punctuate 9001");
+    seed_punctuate(db, 9002, MarkerPunctuateMethodType::Added, now)
+        .await
+        .expect("seed punctuate 9002");
+    let marker_before = marker_model::Entity::find_safety()
+        .count(db)
+        .await
+        .expect("count markers");
+
+    // Non-auditor role (MapUser) must be rejected for pass and reject
+    let user_auth = stub_auth_with_role(SystemUserRole::MapUser);
+    assert!(
+        audit_fns::do_pass(user_auth.clone(), 9001).await.is_err(),
+        "MapUser must not be allowed to pass an audit"
+    );
+    assert!(
+        audit_fns::do_reject(user_auth, 9001, "nope".into())
+            .await
+            .is_err(),
+        "MapUser must not be allowed to reject an audit"
+    );
+
+    // Admin rejects p2 → status becomes Rejected with the remark
+    audit_fns::do_reject(auth.clone(), 9002, "bad data".into())
+        .await
+        .expect("admin rejects")
+        .data
+        .expect("reject ok");
+    let rejected = mp_model::Entity::find_safety()
+        .filter(mp_model::Column::PunctuateId.eq(9002))
+        .one(db)
+        .await
+        .expect("fetch rejected")
+        .expect("rejected punctuate still exists");
+    assert_eq!(rejected.status, MarkerPunctuateStatus::Rejected);
+    assert_eq!(rejected.audit_remark.as_deref(), Some("bad data"));
+
+    // Admin passes 9001 → marker inserted AND punctuate record hard-deleted
+    audit_fns::do_pass(auth.clone(), 9001)
+        .await
+        .expect("admin passes")
+        .data
+        .expect("pass ok");
+    let marker_after = marker_model::Entity::find_safety()
+        .count(db)
+        .await
+        .expect("count markers after pass");
+    assert_eq!(
+        marker_after,
+        marker_before + 1,
+        "pass must insert exactly one marker"
+    );
+    let p1_gone = mp_model::Entity::find_safety()
+        .filter(mp_model::Column::PunctuateId.eq(9001))
+        .one(db)
+        .await
+        .expect("check punctuate after pass");
+    assert!(
+        p1_gone.is_none(),
+        "pass must hard-delete the punctuate record"
     );
 }

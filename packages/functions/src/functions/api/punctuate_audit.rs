@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, TransactionTrait, prelude::*};
 
 use _database::{
     DB_CONN, models::marker::marker as marker_model, models::marker::marker_punctuate as mp_model,
@@ -10,8 +10,22 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{common::EmptyResponse, wrapper::CommonResponse},
-    types::{MarkerPunctuateMethodType, MarkerPunctuateStatus},
+    types::{MarkerPunctuateMethodType, MarkerPunctuateStatus, SystemUserRole},
 };
+
+/// 审核操作的角色门槛：系统管理员或地图管理员。
+fn require_auditor(auth: &AuthInfo) -> Result<()> {
+    if matches!(
+        auth.info.role_id,
+        SystemUserRole::Admin | SystemUserRole::MapManager
+    ) {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "Insufficient role: audit requires Admin or MapManager"
+        ))
+    }
+}
 
 /// 按 punctuate_id 查询单条打点审核信息
 pub async fn do_get_id(
@@ -88,16 +102,18 @@ pub async fn do_get_list_by_id(
 /// - Modified：更新 original_marker_id 对应的 marker，删除 punctuate 记录
 /// - Deleted：软删除 original_marker_id 对应的 marker，删除 punctuate 记录
 pub async fn do_pass(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     punctuate_id: i64,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
+    let txn = db.begin().await?;
     let now = Utc::now().naive_utc();
 
     let mp = mp_model::Entity::find_safety()
         .filter(mp_model::Column::PunctuateId.eq(punctuate_id))
         .filter(mp_model::Column::Status.eq(MarkerPunctuateStatus::Reviewing))
-        .one(db)
+        .one(&txn)
         .await?
         .ok_or_else(|| anyhow!("无打点相关信息，或该打点不在审核中状态"))?;
 
@@ -124,9 +140,9 @@ pub async fn do_pass(
                 hidden_flag: Set(mp.hidden_flag),
                 extra: Set(mp.extra),
             };
-            let res = marker_model::Entity::insert(am).exec(db).await?;
+            let res = marker_model::Entity::insert(am).exec(&txn).await?;
             // 删除 punctuate 记录（硬删除——它已完成使命）
-            mp_model::Entity::delete_by_id(mp.id).exec(db).await?;
+            mp_model::Entity::delete_by_id(mp.id).exec(&txn).await?;
             res.last_insert_id
         },
         MarkerPunctuateMethodType::Modified => {
@@ -136,7 +152,7 @@ pub async fn do_pass(
                 .ok_or_else(|| anyhow!("无法找到修改点位的原始id"))?;
 
             let old = marker_model::Entity::find_safety_by_id(orig_id)
-                .one(db)
+                .one(&txn)
                 .await?
                 .ok_or_else(|| anyhow!("无法找到原始id对应的原始点位"))?;
 
@@ -153,9 +169,9 @@ pub async fn do_pass(
             if mp.video_path.is_some() {
                 am.video_path = Set(mp.video_path);
             }
-            let updated = marker_model::Entity::update_safety(am)?.exec(db).await?;
+            let updated = marker_model::Entity::update_safety(am)?.exec(&txn).await?;
             // 删除 punctuate 记录
-            mp_model::Entity::delete_by_id(mp.id).exec(db).await?;
+            mp_model::Entity::delete_by_id(mp.id).exec(&txn).await?;
             updated.id
         },
         MarkerPunctuateMethodType::Deleted => {
@@ -165,19 +181,20 @@ pub async fn do_pass(
                 .ok_or_else(|| anyhow!("无法找到删除点位的原始id"))?;
 
             let old = marker_model::Entity::find_safety_by_id(orig_id)
-                .one(db)
+                .one(&txn)
                 .await?
                 .ok_or_else(|| anyhow!("无法找到原始id对应的原始点位"))?;
 
             marker_model::Entity::delete_safety(old.into())?
-                .exec(db)
+                .exec(&txn)
                 .await?;
             // 删除 punctuate 记录
-            mp_model::Entity::delete_by_id(mp.id).exec(db).await?;
+            mp_model::Entity::delete_by_id(mp.id).exec(&txn).await?;
             orig_id
         },
     };
 
+    txn.commit().await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "id": result_id
     }))))
@@ -187,10 +204,11 @@ pub async fn do_pass(
 ///
 /// 对应 Java `PunctuateAuditService.rejectPunctuate`。
 pub async fn do_reject(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     punctuate_id: i64,
     audit_remark: String,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
 
     let mp = mp_model::Entity::find_safety()
@@ -208,10 +226,8 @@ pub async fn do_reject(
 }
 
 /// 删除打点审核记录（软删除）
-pub async fn do_delete(
-    _auth: AuthInfo,
-    punctuate_id: i64,
-) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, punctuate_id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
 
     let mp = mp_model::Entity::find_safety()
