@@ -49,7 +49,7 @@ pub struct DeviceListParams {
     /// 设备状态
     pub status: Option<i64>,
     /// 用户ID
-    pub user_id: i64,
+    pub user_id: Option<i64>,
 }
 
 /// 获取用户设备

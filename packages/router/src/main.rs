@@ -13,6 +13,14 @@ use _database::init_db_conn;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    // Install the ring crypto provider for jsonwebtoken (v10 requires an
+    // explicit process-level CryptoProvider). This must happen before any
+    // JWT encode/decode call. We use ring (not aws-lc-rs) to stay consistent
+    // with the workspace's aws-lc-free rustls+ring policy.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     env_logger::Builder::new()
         .filter(None, log::LevelFilter::Info)
         .init();

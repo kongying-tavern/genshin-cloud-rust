@@ -1,8 +1,7 @@
 """Shared configuration for e2e orchestration scripts.
 
-All paths and ports are env-var driven with sensible fallbacks.
-The Vue3 frontend can be specified via E2E_VUE_FRONTEND, auto-discovered
-as a sibling directory, or cloned from git if neither works.
+Handles both Windows-native and WSL execution. When running under WSL,
+Windows paths in .env (D:\\...) are auto-converted to /mnt/d/... via wslpath.
 """
 
 import os
@@ -11,61 +10,83 @@ from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
-# This script lives at <repo>/scripts/e2e/config.py
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-
-# Rust backend binary name
 RUST_BIN = "_router"
 
-# ── Vue frontend path resolution ─────────────────────────────────────────────
-#
-# Precedence:
-#   1. E2E_VUE_FRONTEND env var (absolute path)
-#   2. Sibling directory auto-discovery (parent / "vue_map_register_v3")
-#   3. If not found and E2E_VUE_GIT is set, clone it
 
-E2E_VUE_GIT = os.environ.get(
-    "E2E_VUE_GIT", "https://github.com/kongying-tavern/vue_map_register_v3.git"
-)
+def _is_wsl() -> bool:
+    """Detect WSL by checking /proc/version for 'microsoft'."""
+    try:
+        with open("/proc/version", encoding="utf-8", errors="replace") as f:
+            return "microsoft" in f.read().lower()
+    except Exception:
+        return False
+
+
+def _win_to_native(path_str: str) -> str:
+    """Convert a Windows path to the native format.
+
+    On WSL, use `wslpath -u` to convert D:\\foo → /mnt/d/foo.
+    On Windows, return as-is.
+    """
+    if _is_wsl():
+        try:
+            result = subprocess.run(
+                ["wslpath", "-u", path_str],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+    return path_str
+
+
+def _load_dotenv() -> None:
+    """Load .env from REPO_ROOT into os.environ (if not already set)."""
+    env_file = REPO_ROOT / ".env"
+    if not env_file.exists():
+        return
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if k and k not in os.environ:
+            os.environ[k] = v
+
+
+_load_dotenv()
+
+# ── Vue frontend path (required in .env) ─────────────────────────────────────
 
 
 def _resolve_vue_frontend() -> Path:
-    # 1. Explicit env override
     env_path = os.environ.get("E2E_VUE_FRONTEND")
-    if env_path:
-        p = Path(env_path).resolve()
-        if (p / "package.json").exists():
-            return p
-        raise FileNotFoundError(
-            f"E2E_VUE_FRONTEND={env_path} does not contain package.json"
+    if not env_path:
+        raise RuntimeError(
+            "E2E_VUE_FRONTEND is not set.\n"
+            "Add it to .env, e.g.:\n"
+            "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3"
         )
-
-    # 2. Auto-discover sibling directories
-    candidates = [
-        REPO_ROOT.parent / "vue_map_register_v3",
-        REPO_ROOT.parent / "vue_map_register",
-    ]
-    for c in candidates:
-        if (c / "package.json").exists():
-            return c.resolve()
-
-    # 3. Clone from git into target/e2e/vue_frontend
-    clone_dir = REPO_ROOT / "target" / "e2e" / "vue_frontend"
-    if not (clone_dir / "package.json").exists():
-        print(f"📦 Cloning Vue frontend from {E2E_VUE_GIT}...")
-        clone_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["git", "clone", "--depth", "1", E2E_VUE_GIT, str(clone_dir)],
-            check=True,
+    # Convert Windows path to native if running in WSL
+    native_path = _win_to_native(env_path)
+    p = Path(native_path).resolve()
+    if not (p / "package.json").exists():
+        raise RuntimeError(
+            f"E2E_VUE_FRONTEND={env_path}\n"
+            f"  Resolved to: {p}\n"
+            f"  Does not contain package.json — wrong path?"
         )
-    return clone_dir.resolve()
+    return p
 
 
 VUE_FRONTEND = _resolve_vue_frontend()
 
 # ── Ports ────────────────────────────────────────────────────────────────────
 
-RUST_PORT = int(os.environ.get("E2E_RUST_PORT", "8101"))
+RUST_PORT = int(os.environ.get("E2E_RUST_PORT", os.environ.get("PORT", "8101")))
 VUE_PORT = int(os.environ.get("E2E_VUE_PORT", "9000"))
 SHIRABE_PORT = int(os.environ.get("E2E_SHIRABE_PORT", "3100"))
 

@@ -16,11 +16,13 @@
 # ── Tool resolution ───────────────────────────────────────────────────────────
 
 # On Windows prefer `python` — `python3` is often the broken WindowsApps Store
-# stub that exits 49. On Unix, `python3` is the norm.
-python_cmd := if os_family() == "windows" {
-    if which("python") != "" { "python" } else { "python3" }
+# stub that exits 49. On Unix/WSL, `python3` is the norm; `python` may not exist.
+python_cmd := if which("python") != "" {
+    "python"
+} else if which("python3") != "" {
+    "python3"
 } else {
-    if which("python3") != "" { "python3" } else { "python" }
+    "python3"
 }
 
 # Resolve the celestia-devtools CLI: installed entry point, or module fallback.

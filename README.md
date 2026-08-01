@@ -54,18 +54,26 @@ configuration, for example:
 DB_PASSWORD=<password>
 ```
 
-正式开始前，请确保已安装 [`just`](https://github.com/casey/just)、`cargo` 与
-`docker`；如果需要本地调试，还需要 `docker-compose`。
+正式开始前，请确保已安装 [`just`](https://github.com/casey/just) 与 `cargo`。
+使用 `just dev` 启动开发栈（Rust 后端 + Vue3 前端）前，需要先在 `.env`
+中配置 `E2E_VUE_FRONTEND` 指向本地 Vue3 前端项目的绝对路径（从
+[kongying-tavern/`vue_map_register_v3`](https://github.com/kongying-tavern/`vue_map_register_v3`)
+克隆）。
 
-Before starting, make sure [`just`](https://github.com/casey/just), `cargo`,
-and `docker` are installed. Local debugging additionally requires
-`docker-compose`.
+Before starting, make sure [`just`](https://github.com/casey/just) and `cargo`
+are installed. To use `just dev` (Rust backend + Vue3 frontend dev stack), set
+`E2E_VUE_FRONTEND` in `.env` to the absolute path of your local Vue3 frontend
+project (cloned from
+[kongying-tavern/`vue_map_register_v3`](https://github.com/kongying-tavern/`vue_map_register_v3`)).
 
 ```bash
 just init          # 初始化开发环境 / initialize the dev environment
 just hooks         # 安装 commit-msg 钩子 / install the commit-msg hook
 just build         # 构建（release） / build (release)
-just dev           # 启动开发栈（Rust + Vue）/ start dev stack
+just dev           # 启动开发栈（Rust + Vue）/ start dev stack (Rust + Vue)
+just dev mock      # 启动 + Shirabe 浏览器 e2e 测试 / start + Shirabe e2e tests
+just dev stop      # 停止 / stop
+just dev status    # 状态 / check status
 ```
 
 ## 工作区结构 / Workspace Layout

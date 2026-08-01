@@ -254,8 +254,6 @@ pub async fn do_get_list_by_info(
         v
     } else {
         marker_model::Entity::find_safety()
-            .select_only()
-            .column(marker_model::Column::Id)
             .all(db)
             .await?
             .into_iter()
@@ -270,13 +268,17 @@ pub async fn do_get_list_by_info(
         })));
     }
 
-    let items = marker_model::Entity::find_safety()
-        .filter(marker_model::Column::Id.is_in(ids))
-        .all(db)
-        .await?;
-    let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(model_to_vo(it));
+    // Chunk the IDs to avoid exceeding sqlx's 65535 parameter limit
+    // (104K markers would create 104K bind params).
+    let mut arr = Vec::new();
+    for chunk in ids.chunks(10000) {
+        let items = marker_model::Entity::find_safety()
+            .filter(marker_model::Column::Id.is_in(chunk))
+            .all(db)
+            .await?;
+        for it in items {
+            arr.push(model_to_vo(it));
+        }
     }
     Ok(CommonResponse::new(Ok(MarkerListResponse {
         total: arr.len(),

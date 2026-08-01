@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::{impl_safe_operation, types::ScopeStatType};
+use _utils::impl_safe_operation;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "score_stat", schema_name = "genshin_map")]
@@ -37,8 +37,9 @@ pub struct Model {
     /// 用户 ID
     #[sea_orm(indexed)]
     pub user_id: Option<i64>,
-    /// 统计内容 JSON
-    pub content: ScopeStatType,
+    /// 统计内容 JSON（字段级 diff 数据）
+    #[sea_orm(column_type = "Json")]
+    pub content: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
