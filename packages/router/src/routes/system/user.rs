@@ -62,6 +62,8 @@ pub struct UserRegisterQQParams {
     pub username: String,
     /// 初始密码
     pub password: String,
+    /// QQ openid（QQ 授权后绑定）
+    pub qq: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -179,6 +181,7 @@ pub async fn register_qq(
         payload.role_id,
         payload.username,
         payload.password,
+        payload.qq,
     )
     .await
     .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?

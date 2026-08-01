@@ -120,6 +120,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `api_db` test verifies the key material round-trips with the JWT
   secret.
 
+- Implement QQ third-party login (PLAN.md M3): `POST /oauth/qq`
+  exchanges a QQ openid for a local token, matching `sys_user.qq`
+  (bound via `/user/register/qq`, which now stores the openid).
+  `oauth_qq_login` runs the same access-policy checks, device
+  registration, and login logging as password login; token issuance
+  was extracted into a shared `issue_token` helper. Unregistered
+  openids fail with an explicit error. `api_db` test covers both the
+  bound and unbound paths against live Postgres.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages

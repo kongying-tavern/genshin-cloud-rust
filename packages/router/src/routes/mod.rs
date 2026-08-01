@@ -15,6 +15,7 @@ use axum::{
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
+        .route("/oauth/qq", post(system::oauth::qq_login))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .merge(api::router().await?)

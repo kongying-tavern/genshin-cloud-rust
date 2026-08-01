@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::DB_CONN;
 use _database::models::system::sys_user as sys_user_model;
@@ -28,7 +32,7 @@ pub async fn do_register(
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -50,6 +54,7 @@ pub async fn do_register(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_register_qq(
     _auth: AuthInfo,
     access_policy: Vec<AccessPolicyItemEnum>,
@@ -58,18 +63,34 @@ pub async fn do_register_qq(
     role_id: SystemUserRole,
     username: String,
     password: String,
+    qq: String,
 ) -> Result<()> {
-    // QQ 注册与普通注册逻辑一致（占位实现）
-    do_register(
-        _auth,
-        access_policy,
-        logo,
-        remark,
-        role_id,
-        username,
-        password,
-    )
-    .await
+    let _ = (&access_policy, &logo, &remark, &role_id, &username);
+    let db = &DB_CONN.wait().pg_conn;
+
+    let now = Utc::now().naive_utc();
+    let am = sys_user_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+
+        username: Set(username),
+        password: Set(_utils::bcrypt::generate_storage_password(&password)?),
+        nickname: Set(None),
+        qq: Set(Some(qq)),
+        phone: Set(None),
+        logo: Set(Some(logo)),
+        role_id: Set(role_id),
+        access_policy: Set(_utils::types::AccessPolicyList(access_policy)),
+        remark: Set(Some(remark)),
+    };
+
+    sys_user_model::Entity::insert(am).exec(db).await?;
+    Ok(())
 }
 
 pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {

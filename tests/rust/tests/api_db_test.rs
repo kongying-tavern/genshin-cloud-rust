@@ -142,6 +142,7 @@ async fn seed_user(
     db: &sea_orm::DatabaseConnection,
     username: &str,
     policy: Vec<AccessPolicyItemEnum>,
+    qq: Option<String>,
     now: chrono::NaiveDateTime,
 ) -> anyhow::Result<i64> {
     let am = sys_user_model::ActiveModel {
@@ -155,7 +156,7 @@ async fn seed_user(
         username: Set(username.to_string()),
         password: Set(_utils::bcrypt::generate_storage_password("pw123").unwrap()),
         nickname: Set(None),
-        qq: Set(None),
+        qq: Set(qq),
         phone: Set(None),
         logo: Set(None),
         role_id: Set(SystemUserRole::MapUser),
@@ -582,6 +583,7 @@ async fn area_and_item_doc_business_assertions() {
         db,
         "policy_same_ip",
         vec![AccessPolicyItemEnum::IpSameLastIp],
+        None,
         now,
     )
     .await
@@ -608,6 +610,7 @@ async fn area_and_item_doc_business_assertions() {
         db,
         "policy_block_dev",
         vec![AccessPolicyItemEnum::DevBlockDisallowDevice],
+        None,
         now,
     )
     .await
@@ -671,5 +674,24 @@ async fn area_and_item_doc_business_assertions() {
         decoded,
         _utils::jwt::jwt_secret_raw().as_bytes(),
         "JWKS key material must match the JWT secret"
+    );
+
+    // ── Assertion 8: QQ login resolves the bound openid ──────────────────────
+    seed_user(db, "qq_user", vec![], Some("OPENID_123".into()), now)
+        .await
+        .expect("seed qq user");
+
+    // Registered openid → token issued
+    let resp = oauth_fns::oauth_qq_login("OPENID_123".into(), ip_a, ua.into())
+        .await
+        .expect("qq login succeeds for a bound openid");
+    assert!(!resp.access_token.is_empty());
+
+    // Unregistered openid → error
+    assert!(
+        oauth_fns::oauth_qq_login("OPENID_UNKNOWN".into(), ip_a, ua.into())
+            .await
+            .is_err(),
+        "unregistered openid must fail"
     );
 }

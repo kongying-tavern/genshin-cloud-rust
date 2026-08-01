@@ -10,8 +10,30 @@ use axum::{
 
 use crate::middlewares::{ExtractIP, ExtractUserAgent};
 use _functions::functions::system::oauth::{
-    oauth_client_credentials, oauth_password_login, oauth_refresh,
+    oauth_client_credentials, oauth_password_login, oauth_qq_login, oauth_refresh,
 };
+
+#[derive(Debug, Deserialize)]
+pub struct QqLoginParams {
+    /// QQ 授权后客户端拿到的 openid
+    pub qq_openid: String,
+}
+
+/// QQ 第三方登录
+/// POST /oauth/qq
+#[tracing::instrument(skip(params))]
+pub async fn qq_login(
+    ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
+    ExtractIP(ip): ExtractIP,
+    ExtractUserAgent(user_agent): ExtractUserAgent,
+    Json(params): Json<QqLoginParams>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let ip = ip.unwrap_or(native_ip);
+    let ret = oauth_qq_login(params.qq_openid, ip, user_agent)
+        .await
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    Ok(Json(ret).into_response())
+}
 
 #[derive(Debug, Deserialize)]
 pub struct LoginQuery {

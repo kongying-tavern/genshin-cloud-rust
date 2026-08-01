@@ -2,7 +2,11 @@ use anyhow::{Result, anyhow};
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
-use sea_orm::{ActiveValue::Set, QueryOrder, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryOrder,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models};
 use _utils::{
@@ -111,7 +115,7 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     } else {
         let am = models::system::sys_user_device::ActiveModel {
             version: Set(0),
-            id: Set(0),
+            id: NotSet,
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(None),
@@ -130,26 +134,15 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     Ok(())
 }
 
-async fn oauth_password_login_inner(
-    item: models::system::sys_user::Model,
-    password_raw: String,
-    ip: SocketAddr,
-    user_agent: &str,
-) -> Result<OauthLoginResponse> {
-    if !verify_password(password_raw, item.password.clone())? {
-        return Err(anyhow!("Invalid password"));
-    }
-
-    // 身份验证通过后，按用户的 access_policy 校验登录环境
-    check_access_policy(item.id, &item.access_policy.0, ip, user_agent).await?;
-
+/// 为用户签发 access/refresh token（含 Redis 会话存储，Redis 不可用时降级）。
+async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLoginResponse> {
     let jti = Uuid::now_v7();
     let now = chrono::Utc::now();
     let access_token = generate_token(now, item.id, jti).await?;
     let refresh_token = generate_token(now, item.id, jti).await?;
 
     let id = item.id;
-    let vo: SysUserVO = item.into();
+    let vo: SysUserVO = item.clone().into();
 
     // Store token in Redis if available (graceful degradation for e2e mode
     // where Redis is not running — token verification will fall back to
@@ -189,6 +182,22 @@ async fn oauth_password_login_inner(
         scope: OauthScopeType::All,
         jti,
     })
+}
+
+async fn oauth_password_login_inner(
+    item: models::system::sys_user::Model,
+    password_raw: String,
+    ip: SocketAddr,
+    user_agent: &str,
+) -> Result<OauthLoginResponse> {
+    if !verify_password(password_raw, item.password.clone())? {
+        return Err(anyhow!("Invalid password"));
+    }
+
+    // 身份验证通过后，按用户的 access_policy 校验登录环境
+    check_access_policy(item.id, &item.access_policy.0, ip, user_agent).await?;
+
+    issue_token(&item).await
 }
 
 pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
@@ -238,7 +247,7 @@ pub async fn oauth_password_login(
 
     models::system::sys_action_log::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(chrono::Utc::now().naive_utc()),
         update_time: Set(None),
         creator_id: Set(None),
@@ -266,6 +275,53 @@ pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
         "" | "all" => Ok(OauthScopeType::All),
         other => Err(anyhow!("Unsupported scope: {other}")),
     }
+}
+
+/// QQ 第三方登录：客户端完成 QQ 授权后，用拿到的 openid 换取本站 token。
+///
+/// 按 `sys_user.qq` 匹配用户；未注册的 openid 返回明确错误（注册走
+/// `/user/register/qq`，把 openid 写入 `qq` 字段）。与密码登录一致地执行
+/// access_policy 检查、设备登记与登录日志。
+pub async fn oauth_qq_login(
+    qq_openid: String,
+    ip: SocketAddr,
+    user_agent: String,
+) -> Result<OauthLoginResponse> {
+    let db = &DB_CONN.wait().pg_conn;
+    let item = models::system::sys_user::Entity::find()
+        .filter(models::system::sys_user::Column::DelFlag.eq(false))
+        .filter(models::system::sys_user::Column::Qq.eq(Some(qq_openid)))
+        .one(db)
+        .await?
+        .ok_or(anyhow!("QQ account not registered"))?;
+    let user_id = item.id;
+
+    // 身份由 openid 提供；同样校验登录环境
+    check_access_policy(item.id, &item.access_policy.0, ip, &user_agent).await?;
+    let ret = issue_token(&item).await;
+
+    if ret.is_ok() {
+        let _ = record_device(user_id, ip, &user_agent).await;
+    }
+    models::system::sys_action_log::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(chrono::Utc::now().naive_utc()),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        user_id: Set(Some(user_id)),
+        ipv4: Set(Some(ip.ip().to_string())),
+        device_id: Set(user_agent),
+        action: Set(SystemActionLogAction::Login),
+        is_error: Set(ret.is_err()),
+        extra_data: Set(Default::default()),
+    }
+    .insert(&DB_CONN.wait().pg_conn)
+    .await?;
+
+    ret
 }
 
 pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
