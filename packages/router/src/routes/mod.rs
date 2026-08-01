@@ -40,6 +40,23 @@ async fn jwks() -> axum::response::Response {
     }
 }
 
+/// CDN 上游地址：默认 `v3.yuanshen.site`，可用 `CDN_UPSTREAM` 环境变量覆盖
+/// （例如自建 CDN 或内网镜像）。URL 不带尾斜杠。
+fn cdn_upstream() -> String {
+    std::env::var("CDN_UPSTREAM")
+        .unwrap_or_else(|_| "https://v3.yuanshen.site".into())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// 本地 dadian 配置文件路径（`CDN_DADIAN_CONFIG`，可选）。
+/// 指向一个预生成的 bz2 压缩配置；未设置时 `/cdn/dadian-preview.json.bz2`
+/// 降级为内置的空配置（开发期行为）。
+fn dadian_config_file() -> Option<Vec<u8>> {
+    let path = std::env::var("CDN_DADIAN_CONFIG").ok()?;
+    std::fs::read(path).ok()
+}
+
 /// CDN proxy with fallback. Tries remote CDN first, falls back to a locally
 /// generated minimal dadian config if the remote file is unavailable.
 fn cdn_proxy() -> axum::Router {
@@ -48,25 +65,34 @@ fn cdn_proxy() -> axum::Router {
     use axum::response::{IntoResponse, Response};
 
     let client = std::sync::Arc::new(reqwest::Client::new());
+    let upstream = cdn_upstream();
+    let dadian_override = dadian_config_file();
 
     Router::new()
         .fallback(
             move |State(client): State<std::sync::Arc<reqwest::Client>>,
                   req: Request<axum::body::Body>| {
                 let client = client.clone();
+                let upstream = upstream.clone();
+                let dadian_override = dadian_override.clone();
                 async move {
                     let path = req.uri().path().trim_start_matches("/cdn");
 
                     // Special case: serve locally generated dadian config
                     if path == "/dadian-preview.json.bz2" {
-                        let config = serde_json::json!({
-                            "tiles": {},
-                            "application": {"avatar": [], "nameCard": []},
-                            "editor": {},
-                            "plugins": {}
-                        });
-                        let json_bytes = serde_json::to_vec(&config).unwrap_or_default();
-                        let bz2_bytes = bz2_bump(&json_bytes);
+                        let bz2_bytes = match dadian_override {
+                            Some(bytes) => bytes,
+                            None => {
+                                let config = serde_json::json!({
+                                    "tiles": {},
+                                    "application": {"avatar": [], "nameCard": []},
+                                    "editor": {},
+                                    "plugins": {}
+                                });
+                                let json_bytes = serde_json::to_vec(&config).unwrap_or_default();
+                                bz2_bump(&json_bytes)
+                            },
+                        };
                         return Response::builder()
                             .status(200)
                             .header("Content-Type", "application/octet-stream")
@@ -81,8 +107,8 @@ fn cdn_proxy() -> axum::Router {
                             .into_response();
                     }
 
-                    // All other CDN paths: proxy to v3.yuanshen.site
-                    let url = format!("https://v3.yuanshen.site{}", path);
+                    // All other CDN paths: proxy to the configured upstream
+                    let url = format!("{upstream}{path}");
 
                     match client.get(&url).send().await {
                         Ok(resp) => {
