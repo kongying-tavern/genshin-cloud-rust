@@ -2,7 +2,11 @@ use anyhow::{Result, anyhow};
 
 // serde_json not needed after concrete response conversion
 
-use sea_orm::{ActiveValue::Set, ExprTrait, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    ExprTrait, QueryFilter, QuerySelect,
+    prelude::*,
+};
 
 use _database::{
     DB_CONN, models::item::item as item_model, models::item::item_type_link as link_model,
@@ -139,7 +143,7 @@ pub async fn do_join_type(
             let now = chrono::Utc::now().naive_utc();
             let active = link_model::ActiveModel {
                 version: Set(0),
-                id: Set(0),
+                id: NotSet,
                 create_time: Set(now),
                 update_time: Set(None),
                 creator_id: Set(None),
@@ -227,7 +231,7 @@ pub async fn do_copy_to_area(
             for l in links {
                 let active = link_model::ActiveModel {
                     version: Set(0),
-                    id: Set(0),
+                    id: NotSet,
                     create_time: Set(chrono::Utc::now().naive_utc()),
                     update_time: Set(None),
                     creator_id: Set(None),
@@ -254,7 +258,7 @@ pub async fn do_add(
 
     let active = item_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -281,7 +285,7 @@ pub async fn do_add(
         let now = chrono::Utc::now().naive_utc();
         let active = link_model::ActiveModel {
             version: Set(0),
-            id: Set(0),
+            id: NotSet,
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(None),

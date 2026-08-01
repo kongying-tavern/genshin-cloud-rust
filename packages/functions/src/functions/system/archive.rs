@@ -2,7 +2,11 @@
 
 use anyhow::{Result, anyhow};
 use chrono::Utc;
-use sea_orm::{ActiveValue::Set, QueryFilter, QueryOrder, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QueryOrder,
+    prelude::*,
+};
 
 use _database::{DB_CONN, models::system::sys_user_archive as archive_model};
 use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
@@ -72,7 +76,7 @@ pub async fn do_save(
 
     let am = archive_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(Some(user_id)),

@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QuerySelect, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QuerySelect,
+    prelude::*,
+};
 
 use _utils::{
     jwt::AuthInfo,
@@ -87,7 +91,7 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
 
     let active = item_model::ActiveModel {
         version: Set(0),
-        id: Set(0),
+        id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

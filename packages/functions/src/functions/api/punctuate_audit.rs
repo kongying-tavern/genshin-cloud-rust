@@ -1,7 +1,11 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 
-use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, TransactionTrait, prelude::*};
+use sea_orm::{
+    ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect, TransactionTrait,
+    prelude::*,
+};
 
 use _database::{
     DB_CONN, models::marker::marker as marker_model, models::marker::marker_punctuate as mp_model,
@@ -122,7 +126,7 @@ pub async fn do_pass(
             // 新增：将 punctuate 数据写入 marker 表
             let am = marker_model::ActiveModel {
                 version: Set(0),
-                id: Set(0),
+                id: NotSet,
                 create_time: Set(now),
                 update_time: Set(None),
                 creator_id: Set(Some(mp.author)),
