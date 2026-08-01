@@ -3,7 +3,7 @@ authors = ["langyo <langyo.china@gmail.com>"]
 edition = "2024"
 name = "_utils"
 publish = false
-version = "0.1.0"
+version.workspace = true
 
 [lib]
 crate-type = ["rlib"]

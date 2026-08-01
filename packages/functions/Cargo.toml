@@ -3,7 +3,7 @@ authors = ["langyo <langyo.china@gmail.com>"]
 edition = "2024"
 publish = false
 name = "_functions"
-version = "0.1.0"
+version.workspace = true
 
 [dependencies]
 _database = { path = "../database", version = "*" }
