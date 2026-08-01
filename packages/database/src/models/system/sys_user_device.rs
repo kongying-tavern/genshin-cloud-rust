@@ -29,7 +29,9 @@ pub struct Model {
     /// IPv4
     pub ipv4: Option<String>,
     /// 设备状态
-    /// TODO: 测试数据库里，这个值似乎全是 0
+    /// 0 = 正常（登录时登记/刷新）；非 0 = 禁用。OAuth access_policy 的
+    /// `dev:block_disallow_device` / `ip:block_disallow_ip` 策略按
+    /// `status != 0` 判定命中并拒绝登录（见 oauth.rs 的 check_access_policy）。
     pub status: i32,
     /// 上次登录时间
     pub last_login_time: Option<DateTime>,
