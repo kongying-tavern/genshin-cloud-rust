@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [master, dev]
+    branches: [master]
   pull_request:
-    branches: [master, dev]
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -53,25 +53,11 @@ jobs:
       - name: Run integration tests
         run: cargo test --workspace --tests --no-fail-fast
 
+  # Delegates to the org reusable workflow, which lints both the PR title
+  # (the squash-merge subject) and every commit in the PR/push range.
   commit-msg:
     name: Commit Message Lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install celestia-devtools
-        run: pip install "git+https://github.com/celestia-island/celestia-devtools.git"
-
-      - name: Lint commit messages
-        run: |
-          # Lint all commits in the push/PR range against the gitmoji convention.
-          git log --format='%s' origin/${{ github.base_ref || github.event.repository.default_branch }}..HEAD 2>/dev/null | \
-            celestia-devtools commit-msg-lint check --stdin-subjects || \
-          git log --format='%s' -n ${{ github.event.push.commits[0].size || 1 }} HEAD | \
-            celestia-devtools commit-msg-lint check --stdin-subjects
+    uses: celestia-island/celestia-devtools/.github/workflows/commit-msg-lint.yml@master
 
   secrets-scan:
     name: Secrets Scan

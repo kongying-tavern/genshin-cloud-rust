@@ -4,6 +4,15 @@ db-path = "~/.cargo/advisory-db"
 unmaintained = "workspace"
 unsound = "workspace"
 yanked = "warn"
+ignore = [
+    # Marvin Attack (timing sidechannel in RSA decryption): the `rsa` crate is
+    # only pulled in transitively by jsonwebtoken's rust_crypto backend. This
+    # workspace uses HMAC (HS256, jsonwebtoken defaults) exclusively, and any
+    # future RSA signatures (JWKS milestone) go through `ring`, which is
+    # constant-time — the `rsa` crate is never exercised. Revisit if a code
+    # path ever selects an RSA algorithm from the `rsa` crate.
+    "RUSTSEC-2023-0071",
+]
 
 [licenses]
 version = 2
@@ -19,6 +28,11 @@ allow = [
     "Unicode-3.0",
     "Zlib",
     "MPL-2.0",
+    # Permissive licenses required by the current dependency graph:
+    "bzip2-1.0.6",        # libbz2-rs-sys (via bzip2)
+    "NCSA",               # libfuzzer-sys (via image/ravif)
+    "CDLA-Permissive-2.0", # webpki-roots / webpki-root-certs (via sqlx, reqwest)
+    "BSL-1.0",            # xxhash-rust (via redis)
 ]
 confidence-threshold = 0.8
 
