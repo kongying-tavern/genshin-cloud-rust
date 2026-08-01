@@ -396,6 +396,26 @@ async fn area_and_item_doc_business_assertions() {
         );
     }
 
+    // The BinaryMD5 pages are cached in-process: a second call must return the
+    // same md5 AND the same stable `time` (not a fresh request timestamp).
+    let md5_resp_2 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+        .await
+        .expect("item_doc md5 second call")
+        .data
+        .expect("item_doc md5 payload");
+    assert_eq!(
+        md5_resp_2.len(),
+        md5_resp.len(),
+        "same page count on second call"
+    );
+    for (first, second) in md5_resp.iter().zip(md5_resp_2.iter()) {
+        assert_eq!(first.md5, second.md5, "md5 must be stable across calls");
+        assert_eq!(
+            first.time, second.time,
+            "time must be stable while the page is cached"
+        );
+    }
+
     // ── Assertion 4: marker ItemList tweak maintains marker_item_link ────────
     // Seed one marker, then exercise Append / InsertIfAbsent / Replace /
     // RemoveLeft against its item links.

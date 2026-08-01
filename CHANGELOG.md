@@ -140,6 +140,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   assigns ids. The `api_db` test adds a repeated `area::do_add`
   regression assertion.
 
+- Add the in-process BinaryMD5 page cache (PLAN.md M4/F5): item,
+  marker, and marker-link doc endpoints now serve their GZIP pages
+  from a moka cache (Java's Caffeine equivalent, 300s TTL) instead of
+  re-serializing the whole dataset on every request. The md5-list
+  `time` field is now the page's generation timestamp (stable within
+  the cache TTL) rather than the request time, so clients no longer
+  see spurious "data changed" signals. `binary_doc` exposes
+  `get_or_compute` / `invalidate` for the future refresh wiring.
+  `api_db` test asserts the md5 + time are stable across repeated
+  calls.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
