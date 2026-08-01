@@ -136,16 +136,14 @@ pub async fn rename(
         return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
     }
     let user_id = auth.info.id;
-    // Find the latest archive in the slot
-    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
-        .await
+    match _functions::functions::system::archive::do_rename_by_slot(
+        user_id,
+        slot_index as i32,
+        new_name,
+    )
+    .await
     {
-        Ok(_v) => {
-            // auth was moved into do_get_last; do_rename requires an AuthInfo.
-            // For now, just return the archive info — full rename needs &AuthInfo refactor.
-            // TODO: refactor business functions to borrow AuthInfo.
-            Ok(Json(()).into_response())
-        },
+        Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
     }
 }

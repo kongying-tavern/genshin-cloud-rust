@@ -102,6 +102,26 @@ pub async fn do_rename(_auth: AuthInfo, id: i64, name: String) -> Result<CommonR
     Ok(CommonResponse::new(Ok(())))
 }
 
+/// Rename an archive slot (renames the latest archive in the slot).
+pub async fn do_rename_by_slot(
+    user_id: i64,
+    slot_index: i32,
+    new_name: String,
+) -> Result<CommonResponse<()>> {
+    let db = &DB_CONN.wait().pg_conn;
+    let a = archive_model::Entity::find_safety()
+        .filter(archive_model::Column::UserId.eq(user_id))
+        .filter(archive_model::Column::SlotIndex.eq(slot_index))
+        .order_by_desc(archive_model::Column::CreateTime)
+        .one(db)
+        .await?
+        .ok_or_else(|| anyhow!("Archive not found"))?;
+    let mut am: archive_model::ActiveModel = a.into();
+    am.name = Set(Some(new_name));
+    archive_model::Entity::update_safety(am)?.exec(db).await?;
+    Ok(CommonResponse::new(Ok(())))
+}
+
 /// Restore from an archive (return the archived data).
 pub async fn do_restore(_auth: AuthInfo, id: i64) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;

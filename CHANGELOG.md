@@ -61,6 +61,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   "route exists ✓") into actual data assertions. Runs in the same
   `integration` CI job.
 
+- Wire the archive rename handler: the route previously stubbed the
+  response (it could not call `do_rename` because `auth` was moved into
+  `do_get_last`). New `do_rename_by_slot(user_id, slot_index, name)`
+  renames the latest archive in the slot; the route now returns the real
+  operation result.
+
 ### Dependencies (dev branch)
 
 - Upgrade the workspace to edition 2024 across all four packages
