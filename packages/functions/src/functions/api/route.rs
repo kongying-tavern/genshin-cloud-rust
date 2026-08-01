@@ -9,10 +9,27 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         common::EmptyResponse,
-        route::{RouteAddRequest, RouteEmptyResponse, RouteSearchRequest, RouteUpdateRequest},
+        route::{
+            RouteAddRequest, RoutePageResponse, RouteSearchRequest, RouteUpdateRequest, RouteVO,
+        },
         wrapper::{CommonResponse, Pagination},
     },
 };
+
+fn to_vo(r: route_model::Model) -> RouteVO {
+    RouteVO {
+        id: r.id,
+        name: r.name,
+        content: r.content,
+        marker_list: r.marker_list.0,
+        hidden_flag: r.hidden_flag,
+        video: r.video,
+        extra: r.extra,
+        creator_nickname: r.creator_nickname,
+        creator_id: r.creator_id,
+        create_time: r.create_time,
+    }
+}
 
 /// 新增路线
 pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
@@ -99,31 +116,32 @@ pub async fn do_update(
 pub async fn do_get_page(
     _auth: AuthInfo,
     payload: Pagination,
-) -> Result<CommonResponse<RouteEmptyResponse>> {
+) -> Result<CommonResponse<RoutePageResponse>> {
     let db = &DB_CONN.wait().pg_conn;
     let size = payload.size.unwrap_or(10) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
     let total = route_model::Entity::find_safety().count(db).await?;
-    let _items = route_model::Entity::find_safety()
+    let items = route_model::Entity::find_safety()
         .limit(size)
         .offset(offset)
         .all(db)
-        .await?;
-
-    // TODO: map _items into RouteVO once the VO type is defined (the current
-    // RouteEmptyResponse is a placeholder). The query is correct; only the
-    // response shape needs the VO.
-    let _ = total;
-    Ok(CommonResponse::new(Ok(RouteEmptyResponse {})))
+        .await?
+        .into_iter()
+        .map(to_vo)
+        .collect();
+    Ok(CommonResponse::new(Ok(RoutePageResponse {
+        total: total as i64,
+        items,
+    })))
 }
 
 /// 按创建人/名称搜索路线
 pub async fn do_get_search(
     _auth: AuthInfo,
     payload: RouteSearchRequest,
-) -> Result<RouteEmptyResponse> {
+) -> Result<RoutePageResponse> {
     let db = &DB_CONN.wait().pg_conn;
     let mut query = route_model::Entity::find_safety();
 
@@ -141,25 +159,37 @@ pub async fn do_get_search(
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
-    let _items = query.limit(size).offset(offset).all(db).await?;
-    // TODO: map into RouteVO once the VO type exists.
-    Ok(RouteEmptyResponse {})
+    let total = query.clone().count(db).await?;
+    let items = query
+        .limit(size)
+        .offset(offset)
+        .all(db)
+        .await?
+        .into_iter()
+        .map(to_vo)
+        .collect();
+    Ok(RoutePageResponse {
+        total: total as i64,
+        items,
+    })
 }
 
 /// 按 ID 列表批量查询路线
 pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<f64>,
-) -> Result<CommonResponse<RouteEmptyResponse>> {
+) -> Result<CommonResponse<Vec<RouteVO>>> {
     let db = &DB_CONN.wait().pg_conn;
     let ids: Vec<i64> = payload.iter().map(|f| *f as i64).collect();
 
-    let _items = route_model::Entity::find_safety()
+    let items = route_model::Entity::find_safety()
         .filter(route_model::Column::Id.is_in(ids))
         .all(db)
-        .await?;
-    // TODO: map into RouteVO once the VO type exists.
-    Ok(CommonResponse::new(Ok(RouteEmptyResponse {})))
+        .await?
+        .into_iter()
+        .map(to_vo)
+        .collect();
+    Ok(CommonResponse::new(Ok(items)))
 }
 
 /// 软删除路线
