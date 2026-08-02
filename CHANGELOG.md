@@ -114,6 +114,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   walk); the CDN proxy client has connect (5s) and overall (15s)
   timeouts instead of hanging indefinitely on a stuck upstream.
 
+- Apply the dropped filters and tighten tracing (secondary-audit
+  minors): the action-log list now filters by `action` (the parameter
+  was parsed but ignored), the device list now honors the requested
+  `user_id` (it was hard-coded to `None`), and the four user handlers
+  taking passwords (`register`, `register_qq`, `update_password`,
+  `update_password_by_admin`) skip the payload in their tracing spans
+  so credentials never land in logs.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

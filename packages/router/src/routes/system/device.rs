@@ -76,7 +76,7 @@ pub async fn list(
 
     match _functions::functions::system::device::do_list(
         auth,
-        None,
+        payload.user_id,
         payload.device_id,
         payload.status.map(|s| s as i32),
         size,
