@@ -21,7 +21,7 @@ use _database::models::{
 };
 use _functions::functions::api::{
     area as area_fns, cache as cache_fns, item_doc, marker as marker_fns,
-    punctuate_audit as audit_fns, score as score_fns,
+    punctuate as punctuate_fns, punctuate_audit as audit_fns, score as score_fns,
 };
 use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
@@ -658,6 +658,14 @@ async fn area_and_item_doc_business_assertions() {
     assert!(
         audit_fns::do_pass(user_auth.clone(), 9001).await.is_err(),
         "MapUser must not be allowed to pass an audit"
+    );
+    // A non-owner (id=1, seeded author=2) must not delete another author's
+    // punctuate.
+    assert!(
+        punctuate_fns::do_delete(user_auth.clone(), 9001)
+            .await
+            .is_err(),
+        "a user must not delete another author's punctuate"
     );
     assert!(
         audit_fns::do_reject(user_auth, 9001, "nope".into())

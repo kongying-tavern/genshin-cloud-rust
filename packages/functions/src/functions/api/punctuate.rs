@@ -16,7 +16,7 @@ use _utils::{
         punctuate::PunctuateData,
         wrapper::{CommonResponse, Pagination},
     },
-    types::MarkerPunctuateStatus,
+    types::{MarkerPunctuateStatus, SystemUserRole},
 };
 
 /// 暂存 / 提交打点
@@ -46,13 +46,17 @@ pub async fn do_submit(
                 .await?;
 
             if let Some(m) = existing {
+                // 仅允许覆盖自己的暂存记录（author 以登录身份为准，忽略请求体）
+                if m.author != auth.info.id {
+                    return Err(anyhow!("Cannot overwrite another author's punctuate"));
+                }
                 // 更新已有的暂存记录
                 let mut am: mp_model::ActiveModel = m.into();
                 apply_punctuate_fields(&mut am, &payload);
                 mp_model::Entity::update_safety(am)?.exec(db).await?;
             } else {
                 // 新建暂存记录
-                let am = new_punctuate_active_model(&payload, now);
+                let am = new_punctuate_active_model(&payload, now, auth.info.id);
                 mp_model::Entity::insert(am).exec(db).await?;
             }
         },
@@ -67,6 +71,10 @@ pub async fn do_submit(
                 .one(db)
                 .await?
                 .ok_or_else(|| anyhow!("无待提交的打点信息"))?;
+            // 仅允许提交自己的记录
+            if m.author != auth.info.id {
+                return Err(anyhow!("Cannot commit another author's punctuate"));
+            }
 
             let mut am: mp_model::ActiveModel = m.into();
             am.status = Set(MarkerPunctuateStatus::Reviewing);
@@ -146,7 +154,7 @@ pub async fn do_get_page_by_author(
     }))))
 }
 
-/// 删除打点记录（软删除）
+/// 删除打点记录（软删除；仅限作者本人或管理员）
 pub async fn do_delete(auth: AuthInfo, punctuate_id: i64) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
@@ -156,6 +164,11 @@ pub async fn do_delete(auth: AuthInfo, punctuate_id: i64) -> Result<CommonRespon
         .one(db)
         .await?
         .ok_or_else(|| anyhow!("打点信息不存在"))?;
+
+    // 仅作者可删除自己的打点；管理员可清理任意审核中记录
+    if m.author != auth.info.id && !matches!(auth.info.role_id, SystemUserRole::Admin) {
+        return Err(anyhow!("Cannot delete another author's punctuate"));
+    }
 
     mp_model::Entity::delete_safety(m.into())?.exec(db).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
@@ -182,17 +195,19 @@ fn apply_punctuate_fields(am: &mut mp_model::ActiveModel, p: &PunctuateData) {
         .map(|m| serde_json::to_value(m).unwrap_or(serde_json::Value::Null)));
 }
 
-/// 构造一条新的 marker_punctuate ActiveModel（状态 = payload.status）。
+/// 构造一条新的 marker_punctuate ActiveModel（状态 = payload.status；
+/// author 以登录身份为准，忽略请求体中的 author 字段）。
 fn new_punctuate_active_model(
     p: &PunctuateData,
     now: chrono::NaiveDateTime,
+    author_id: i64,
 ) -> mp_model::ActiveModel {
     mp_model::ActiveModel {
         version: Set(0),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
-        creator_id: Set(Some(p.author)),
+        creator_id: Set(Some(author_id)),
         updater_id: Set(None),
         del_flag: Set(false),
         punctuate_id: Set(p.punctuate_id as i64),
@@ -207,7 +222,7 @@ fn new_punctuate_active_model(
         marker_creator_id: Set(p.marker_creator_id),
         picture_creator_id: Set(p.picture_creator_id),
         video_path: Set(p.video_path.clone()),
-        author: Set(p.author),
+        author: Set(author_id),
         status: Set(p.status),
         audit_remark: Set(None),
         method_type: Set(p.method_type),

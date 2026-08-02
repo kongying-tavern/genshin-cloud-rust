@@ -68,6 +68,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   first entry wins), so clients cannot spoof their IP into access-policy
   checks or the action log.
 
+- Fix punctuate authorization (secondary audit P1): the author is now
+  taken from the authenticated identity (the request-body `author` is
+  ignored), STAGE/COMMIT refuse to touch another author's records,
+  `do_delete` is owner-or-admin only, and the four punctuate-audit
+  read endpoints require the Admin/MapManager role. Invitation
+  `info`/`consume` also reject anonymous tokens.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

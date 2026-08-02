@@ -69,7 +69,8 @@ pub async fn do_update(
 }
 
 /// Check invitation info by code.
-pub async fn do_info(_auth: AuthInfo, code: String) -> Result<CommonResponse<serde_json::Value>> {
+pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serde_json::Value>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(code))
@@ -80,7 +81,8 @@ pub async fn do_info(_auth: AuthInfo, code: String) -> Result<CommonResponse<ser
 }
 
 /// Consume (use) an invitation code — marks it as used by deleting it.
-pub async fn do_consume(_auth: AuthInfo, code: String) -> Result<CommonResponse<()>> {
+pub async fn do_consume(auth: AuthInfo, code: String) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(code))

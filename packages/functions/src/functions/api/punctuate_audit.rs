@@ -33,9 +33,10 @@ fn require_auditor(auth: &AuthInfo) -> Result<()> {
 
 /// 按 punctuate_id 查询单条打点审核信息
 pub async fn do_get_id(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     punctuate_id: i64,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
     let m = mp_model::Entity::find_safety()
         .filter(mp_model::Column::PunctuateId.eq(punctuate_id))
@@ -47,9 +48,10 @@ pub async fn do_get_id(
 
 /// 分页查询所有待审核的打点（status = Reviewing）
 pub async fn do_get_page_all(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: _utils::models::Pagination,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
     let size = payload.size.unwrap_or(10) as u64;
     let current = payload.current.unwrap_or(1);
@@ -68,9 +70,10 @@ pub async fn do_get_page_all(
 
 /// 按提交者列表查询待审核打点
 pub async fn do_get_list_by_authors(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     authors: Vec<i64>,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
     let items = mp_model::Entity::find_safety()
         .filter(mp_model::Column::Status.eq(MarkerPunctuateStatus::Reviewing))
@@ -85,9 +88,10 @@ pub async fn do_get_list_by_authors(
 
 /// 按 punctuate_id 列表批量查询
 pub async fn do_get_list_by_id(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     punctuate_ids: Vec<i64>,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    require_auditor(&auth)?;
     let db = &DB_CONN.wait().pg_conn;
     let items = mp_model::Entity::find_safety()
         .filter(mp_model::Column::PunctuateId.is_in(punctuate_ids))
