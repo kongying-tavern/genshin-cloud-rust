@@ -28,11 +28,18 @@ pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
     )
 });
 
-/// The raw JWT secret (env `JWT_SECRET`, with the dev default). Exposed for
-/// the JWKS endpoint, which publishes the HMAC key in oct form.
+/// The raw JWT secret (env `JWT_SECRET`, **required**). There is deliberately
+/// no dev default: a predictable secret would let anyone forge tokens, and the
+/// JWKS endpoint must never publish an HMAC signing key.
+///
+/// Generates a strong secret with, e.g.:
+///   openssl rand -base64 48
 pub fn jwt_secret_raw() -> String {
-    std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "下定决心，不怕牺牲，排除万难，去争取胜利".into())
+    std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+        panic!(
+            "JWT_SECRET must be set (see .env.example); generate one with: openssl rand -base64 48"
+        )
+    })
 }
 
 /// The RSA private key PEM (env `JWT_RSA_PRIVATE_KEY_PEM`, optional).
@@ -148,7 +155,11 @@ pub fn rsa_public_key_pem() -> Option<&'static str> {
 /// Build the JWKS (JSON Web Key Set) for the active signing scheme.
 ///
 /// RS256: publishes the RSA public key (kty: RSA, base64url n/e).
-/// HS256: publishes the HMAC key in RFC 7517 §6.4 `oct` form.
+/// HS256: publishes an **empty** key set — the HMAC signing key is a shared
+/// secret and must never be disclosed (RFC 7517 §6.4 `oct` keys are for
+/// verification-only consumers in trusted environments). Deployments that
+/// need JWKS-based verification should configure `JWT_RSA_PRIVATE_KEY_PEM`
+/// to switch to RS256.
 pub fn jwks() -> anyhow::Result<serde_json::Value> {
     use base64::Engine;
     if let Some(pem) = rsa_public_key_pem() {
@@ -167,16 +178,7 @@ pub fn jwks() -> anyhow::Result<serde_json::Value> {
         }));
     }
 
-    let k = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(jwt_secret_raw().as_bytes());
-    Ok(serde_json::json!({
-        "keys": [{
-            "kty": "oct",
-            "kid": "genshin-cloud-hmac-v1",
-            "alg": "HS256",
-            "use": "sig",
-            "k": k,
-        }],
-    }))
+    Ok(serde_json::json!({ "keys": [] }))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
