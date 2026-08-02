@@ -82,6 +82,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   constantly), and invalid `DB_PORT` / `REDIS_PORT` env values degrade
   gracefully instead of panicking at startup.
 
+### Chore
+
+- Drop the 11 unused direct dependencies declared in every package
+  (secondary audit P2): `flume`, `futures`, `oneshot`,
+  `percent-encoding`, `derive_more`, `yuuka`, `image`, `sqids`,
+  `bytes`, `tracing-appender`, `tracing-subscriber` had zero source
+  references across the workspace. 7 leave the lockfile entirely; the
+  other 4 remain only as transitive deps of axum/url/etc. Cargo.lock
+  shrinks from 602 to 518 packages.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

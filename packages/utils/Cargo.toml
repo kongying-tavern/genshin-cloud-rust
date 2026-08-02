@@ -11,37 +11,26 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-derive_more = { workspace = true }
 once_cell = { workspace = true }
 
 base64 = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
-percent-encoding = { workspace = true }
 
-flume = { workspace = true }
-futures = { workspace = true }
-oneshot = { workspace = true }
 tokio = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 uuid = { workspace = true }
-yuuka = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }
 rsa = { version = "^0.9", features = ["pem"] }
 
-image = { workspace = true }
-sqids = { workspace = true }
 bzip2 = { workspace = true }
 
 env_logger = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
-tracing-appender = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 sea-orm = { workspace = true }
