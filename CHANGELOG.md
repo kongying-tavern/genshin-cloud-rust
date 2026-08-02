@@ -122,6 +122,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `update_password_by_admin`) skip the payload in their tracing spans
   so credentials never land in logs.
 
+- Harden the image upload endpoint (secondary-audit minor): a
+  content-type whitelist (png/jpeg/gif/webp) rejects arbitrary file
+  uploads, single-field size is capped at 16 MiB, and the response no
+  longer leaks the server filesystem path.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
