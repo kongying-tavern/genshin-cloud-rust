@@ -148,6 +148,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   sqlx SQL logging level drops from Trace to Info so bound values
   (potentially sensitive) no longer land in logs.
 
+### Refactor
+
+- Replace the 24 inline Admin role checks across the system routes with
+  a dedicated `ExtractAdmin` axum extractor (one source of truth for
+  the Admin gate; non-Admin roles get the same 403). The invitation
+  `info` / `consume` handlers stay non-Admin (authenticated only, per
+  the registration flow) while the management endpoints become
+  uniformly Admin-gated.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

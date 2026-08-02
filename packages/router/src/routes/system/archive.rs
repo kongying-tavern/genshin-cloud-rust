@@ -8,19 +8,15 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
-use _utils::types::SystemUserRole;
+use crate::middlewares::ExtractAdmin;
 
 /// 获取指定槽位的最新存档
 /// GET /archive/last/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn get_last(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
         .await
@@ -34,12 +30,9 @@ pub async fn get_last(
 /// GET /archive/history/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn get_history(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index as i32)
         .await
@@ -53,11 +46,8 @@ pub async fn get_history(
 /// GET /archive/all_history
 #[tracing::instrument(skip(auth))]
 pub async fn get_all_history(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
         Ok(v) => Ok(Json(v).into_response()),
@@ -77,13 +67,10 @@ pub struct ArchiveSaveParams {
 /// PUT /archive/{slot_index}/{name}
 #[tracing::instrument(skip(auth))]
 pub async fn put(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path((slot_index, name)): Path<(i64, String)>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
         auth,
@@ -103,13 +90,10 @@ pub async fn put(
 /// POST /archive/save/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn save(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(slot_index): Path<i64>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
         auth,
@@ -129,12 +113,9 @@ pub async fn save(
 /// POST /archive/rename/{slot_index}/{new_name}
 #[tracing::instrument(skip(auth))]
 pub async fn rename(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path((slot_index, new_name)): Path<(i64, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_rename_by_slot(
         user_id,
@@ -152,12 +133,9 @@ pub async fn rename(
 /// DELETE /archive/restore/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
         .await
@@ -171,12 +149,9 @@ pub async fn restore(
 /// DELETE /archive/slot/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn delete_slot(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_delete_slot(user_id, slot_index as i32).await {
         Ok(v) => Ok(Json(v).into_response()),

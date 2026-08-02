@@ -7,11 +7,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
-use _utils::{
-    models::Pagination,
-    types::{ActionLogAction, SystemUserRole},
-};
+use crate::middlewares::ExtractAdmin;
+use _utils::{models::Pagination, types::ActionLogAction};
 
 /// 格式：字段+ 字段-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -65,13 +62,9 @@ pub struct ActionLogParams {
 /// POST /action_log/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Query(query): Query<ActionLogParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     let size = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10) as u64;
     let current = query
         .pagination
