@@ -41,7 +41,7 @@ while improving performance, deployment ergonomics, and type safety.
 | 对象存储 / Object storage | `minio` |
 | 鉴权 / Auth | `jsonwebtoken` + `bcrypt` |
 | 运行时 / Runtime | `tokio` |
-| 日志 / Tracing | `tracing` + `tracing-subscriber` |
+| 日志 | `tracing` + `env_logger` |
 
 ## 快速开始 / Quick Start
 

@@ -20,7 +20,7 @@ Rust 后端的目标是与 Java 参考实现 `java-genshin-map-cloud` 功能对�
 | 4 | **打点审批流 + 评分** | `punctuate`、`punctuate_audit`（pass/reject/delete，含角色校验与事务化晋升）、`score`（data/generate，字段级加权） | 高 — 状态机 + 生成逻辑 | **已完成** |
 | 5 | **系统域** | `user`、`role`、`device`、`invitation`、`action_log`、`archive`（rename/delete_slot 已补齐） | 中 — 鉴权与权限耦合 | **已完成** — 登录设备登记 + access_policy 校验已接线 |
 | 6 | **BinaryMD5 归档导出** | `item_doc`、`marker_doc`、`marker_link_doc` 的 bin/md5 端点；GZIP 压缩 + 进程内缓存（moka，300s TTL） | 高 — 二进制协议还原 | **已完成** |
-| 7 | **OAuth2 / JWKS** | `oauth` 路由（password / QQ / client_credentials）、`/.well-known/jwks.json`、access_policy 检查、scope 映射 | 高 — 安全敏感 | **大部分完成** — 仍为 HMAC(HS256) 签名；RSA 密钥对与 JWK 轮换尚未实现 |
+| 7 | **OAuth2 / JWKS** | `oauth` 路由（password / QQ / client_credentials）、`/.well-known/jwks.json`、access_policy 检查、scope 映射 | 高 — 安全敏感 | **大部分完成** — RS256 签名与 RSA JWKS 已实现（`JWT_RSA_PRIVATE_KEY_PEM`）；JWK 轮换仍未实现；HS256 模式下 JWKS 返回空 key set（不泄露 HMAC 密钥） |
 
 ## 当前状态
 
@@ -32,8 +32,7 @@ Rust 后端的目标是与 Java 参考实现 `java-genshin-map-cloud` 功能对�
 
 ## 已知差距（与 Java 的剩余差异）
 
-- 批次 7：token 签名为 HMAC-SHA256；Java 侧为 RSA 密钥对 + JWK 轮换。
-  当前 JWKS 以 `oct` 形式公布 HMAC 密钥；切换 RSA 时需引入密钥管理与轮换。
+- 批次 7：JWK 轮换未实现（密钥固定，无轮换机制）；HS256 模式下 JWKS 为空 key set（签名密钥不对外公布）。
 - 数据库 schema 与真实库的偏差待数据验证（`marker_linkage` 空值列、
   `sys_user_archive` 结构绑定等）。
 - 文档翻译：`docs/` 下仅 en/zhs 完整，其余 9 种语言为骨架。

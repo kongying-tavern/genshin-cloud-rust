@@ -149,7 +149,7 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 
 > 每行 = 一个独立 PR（分支名 + 拟定 PR 标题 + 验收 DoD）。里程碑内可并行，跨里程碑有依赖。
 
-### M1 — 基建修复与测试底座（先行，后续迭代的门槛）
+### M1 — 基建修复与测试底座（先行，后续迭代的门槛） — ✅ 已完成（PR #22–24）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |
@@ -158,7 +158,7 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 | `test/db-integration-harness` | `✅ Wire the docker compose stack into DB-backed integration tests.` | compose(PG/Redis/MinIO) 接 CI service 或 job 容器；写第一个 user 域 DB 测试作为样板；T2 的注释与现实对齐 | CI 起服务并跑通 ≥1 个 `#[ignore]`→正式测试 |
 | `test/e2e-business-assertions` | `✅ Upgrade e2e from smoke checks to authenticated business assertions.` | e2e 带登录态；401/403 不再算通过；覆盖 area/marker/item_doc 至少 3 条业务断言 | `just dev mock` 绿且断言真实数据 |
 
-### M2 — 技术债清零（CHANGELOG 已登记的 5 条 + 占位实现）
+### M2 — 技术债清零（CHANGELOG 已登记的 5 条 + 占位实现） — ✅ 已完成（PR #25–29）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |
@@ -168,7 +168,7 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 | `fix/user-domain-placeholders` | `🐛 Remove the user domain placeholder implementations.` | F8：注册默认密码、旧密码校验、sort 生效、kick_out 实现 | 四处行为对齐 Java + 测试 |
 | `fix/marker-tweak-item-list` | `🐛 Implement the ItemList branch of marker tweak.` | F9 | 行为对齐 Java + 测试 |
 
-### M3 — 权限与安全（生产部署前必须）
+### M3 — 权限与安全（生产部署前必须） — ✅ 已完成（PR #30–33）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |
@@ -177,14 +177,14 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 | `feat/jwks-endpoint` | `✨ Add the JWKS public key distribution endpoint.` | F7 后半：JWKS 路由 + 密钥轮换策略 | `/.well-known/jwks.json` 可用 |
 | `feat/qq-login` | `✨ Implement QQ third-party login.` | F7/F8 交集：`do_register_qq` 真实现 | 全流程可登录（mock QQ 侧） |
 
-### M4 — 性能与缓存
+### M4 — 性能与缓存 — 🟡 部分完成（moka 进程内缓存 + 刷新接线 PR #35–36；Redis 二级缓存未做）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |
 | `feat/binarymd5-cache` | `⚡ Add the two-tier cache for BinaryMD5 doc endpoints.` | F5：进程内缓存（moka）+ Redis 二级；MD5 `time` 改数据变更时间 | 重复请求不再重生成；失效正确 |
 | `feat/cache-refresh-wiring` | `✨ Wire the cache refresh endpoints to the Redis cache layer.` | F10：7 个 no-op DELETE 端点接线 | 刷新后缓存确实失效 + 测试 |
 
-### M5 — 文档同步与首个发布
+### M5 — 文档同步与首个发布 — ✅ 已完成（PR #37–39，v0.2.0）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |

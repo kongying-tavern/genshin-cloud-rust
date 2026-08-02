@@ -13,12 +13,12 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | --- | --- | --- |
 | area | `/area` | 地区树（含父子关系、末端标记、权限屏蔽） |
 | icon | `/icon` | 地图图标资源及其元数据 |
-| icon_type | `/iconType` | 图标分类 |
+| icon_type | `/icon_type` | 图标分类 |
 | item | `/item` | 地图条目（item），含 copy/join 等聚合操作 |
-| item_type | `/itemType` | 条目分类，含 move_type 排序 |
+| item_type | `/item_type` | 条目分类，含 move_type 排序 |
 | item_common | `/itemCommon` | 条目公共属性 |
 | marker | `/marker` | 打点（marker）的增删改查、single、tweak |
-| marker_link | `/markerLink` | 打点之间的关联关系 |
+| marker_link | `/marker_link` | 打点之间的关联关系 |
 | notice | `/notice` | 公告管理 |
 | route | `/route` | 路线（route）管理 |
 | history | `/history` | 历史版本列表 |
@@ -30,7 +30,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | --- | --- | --- |
 | item_doc | `/itemDoc` | 条目分页导出（bin 二进制 / md5 校验） |
 | marker_doc | `/markerDoc` | 打点分页导出（bin / md5） |
-| marker_link_doc | `/markerLinkDoc` | 打点关联导出 |
+| marker_link_doc | `/marker_link_doc` | 打点关联导出 |
 | res | `/res` | 资源上传（MinIO） |
 
 > `*_doc` 系列对应 Java 侧 BinaryMD5 压缩归档导出能力。
@@ -40,7 +40,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | 域 | 路径前缀 | 说明 |
 | --- | --- | --- |
 | punctuate | `/punctuate` | 用户提交打点（actions / get / manage） |
-| punctuate_audit | `/punctuateAudit` | 打点审批流（audit / delete / get） |
+| punctuate_audit | `/punctuate_audit` | 打点审批流（audit / delete / get） |
 | score | `/score` | 评分数据与生成 |
 
 ## 系统域

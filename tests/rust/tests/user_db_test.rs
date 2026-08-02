@@ -61,9 +61,8 @@ async fn recreate_table(db: &sea_orm::DatabaseConnection) -> anyhow::Result<()> 
     Ok(())
 }
 
-/// Insert a user row directly via the entity (bypassing `do_register`, which
-/// hard-codes id=0 and would collide on the second insert — see PLAN.md F8).
-/// Lets the IDENTITY column assign the id and returns it.
+/// Insert a user row directly via the entity (avoids the bcrypt round-trip of
+/// `do_register`). Lets the IDENTITY column assign the id and returns it.
 async fn seed_user(db: &sea_orm::DatabaseConnection) -> anyhow::Result<i64> {
     use chrono::Utc;
     use sea_orm::ActiveValue::Set;

@@ -94,6 +94,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Documentation
 
+- Resync the audit findings (secondary audit D-items): the Java-sync
+  roadmap batch-7 status now reflects the landed RS256/JWKS work (only
+  JWK rotation remains; HS256 mode publishes an empty key set); the
+  API-reference route prefixes match the real `/icon_type` etc. paths;
+  the architecture doc drops the non-existent logging/rate-limit
+  middleware claims; the README tech-stack table lists the actual
+  logger (`env_logger`); PLAN.md milestone headers carry completion
+  status; and a stale `user_db` test comment is fixed.
+
+### Documentation
+
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
   each language's `README.md` is now a real translated landing page (project
   intro + full document index linking to the English content, which remains

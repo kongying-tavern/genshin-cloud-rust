@@ -13,7 +13,7 @@
 | `utils` | 通用基础 | DTO/VO 类型（`src/types/`、`src/models/`）、`SafeEntityTrait` 宏、JWT、`CommonResponse` 包装 |
 | `database` | 数据访问 | sea-orm 实体，按域组织于 `src/models/<domain>/`，全局 `DB_CONN` 连接池 |
 | `functions` | 业务逻辑 | `src/functions/api/<domain>.rs` 提供 `do_*` 异步函数，编排实体读写与缓存 |
-| `router` | 接入层 | axum 路由 `src/routes/api/<domain>/`、中间件（鉴权、日志、限流）、二进制 `_router` |
+| `router` | 接入层 | axum 路由 `src/routes/api/<domain>/`、中间件（鉴权、IP 提取、User-Agent 提取）、二进制 `_router` |
 
 ## 请求流
 
