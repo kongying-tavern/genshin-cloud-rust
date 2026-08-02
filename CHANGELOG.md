@@ -48,6 +48,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   set explicit test secrets; `.env.example` documents the required
   variable.
 
+- Fix `oauth_refresh` (secondary audit P0-2): it generated fresh
+  access/refresh tokens but discarded them and returned 204 with no
+  body — the refresh flow was unusable. It now returns the new token
+  pair (`OauthLoginResponse`) via `POST /oauth/token` with
+  `grant_type=refresh_token`, rotating the jti (old tokens invalidated
+  in Redis) as before.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

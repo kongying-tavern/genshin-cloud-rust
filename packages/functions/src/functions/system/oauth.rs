@@ -389,7 +389,7 @@ pub async fn do_jwks() -> Result<serde_json::Value> {
     _utils::jwt::jwks()
 }
 
-pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
+pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> {
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;
 
@@ -408,11 +408,11 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
         return Err(anyhow!("Refresh token not found"));
     }
 
-    // 生成新的 jti 和 token
+    // 生成新的 jti 和 token（旧 token 一次性使用：旋转后立即作废）
     let new_jti = Uuid::now_v7();
     let now = chrono::Utc::now();
-    let _new_access = generate_token(now, claims.sub, new_jti).await?;
-    let _new_refresh = generate_token(now, claims.sub, new_jti).await?;
+    let access_token = generate_token(now, claims.sub, new_jti).await?;
+    let refresh_token_new = generate_token(now, claims.sub, new_jti).await?;
 
     // 保持原来的访问负载（如果有），尝试读取旧的 access payload
     let old_access_key = format!("jwt:access:{}:{}", claims.sub, claims.jti);
@@ -452,5 +452,12 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<()> {
     let _deleted_old_access: usize = redis_conn.del(old_access_key).await?;
     let _deleted_old_refresh: usize = redis_conn.del(refresh_key).await?;
 
-    Ok(())
+    Ok(OauthLoginResponse {
+        access_token,
+        refresh_token: refresh_token_new,
+        token_type: OauthTokenType::Bearer,
+        expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
+        scope: OauthScopeType::All,
+        jti: new_jti,
+    })
 }
