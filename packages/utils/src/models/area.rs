@@ -66,7 +66,7 @@ pub struct AreaVO {
     pub name: String,
     pub code: Option<String>,
     pub content: Option<String>,
-    pub icon_id: i64,
+    pub icon_tag: String,
     pub parent_id: i64,
     pub is_final: bool,
     pub hidden_flag: crate::types::HiddenFlag,

@@ -29,7 +29,7 @@ pub struct Model {
     /// 地区说明
     pub content: Option<String>,
     /// 图标 ID
-    pub icon_id: i64,
+    pub icon_tag: String,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,
@@ -63,12 +63,6 @@ pub enum Relation {
 
     #[sea_orm(belongs_to = "Entity", from = "Column::ParentId", to = "Column::Id")]
     ParentId,
-    #[sea_orm(
-        belongs_to = "super::super::icon::icon::Entity",
-        from = "Column::IconId",
-        to = "super::super::icon::icon::Column::Id"
-    )]
-    IconId,
 }
 
 pub struct ParentReferencingLink;

@@ -42,7 +42,7 @@ pub struct Model {
     #[sea_orm(default_value = 1)]
     pub default_count: i32,
     /// 图标 ID
-    pub icon_id: i64,
+    pub icon_tag: String,
     /// 图标样式类型
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
@@ -77,12 +77,6 @@ pub enum Relation {
         to = "super::super::area::area::Column::Id"
     )]
     AreaId,
-    #[sea_orm(
-        belongs_to = "super::super::icon::icon::Entity",
-        from = "Column::IconId",
-        to = "super::super::icon::icon::Column::Id"
-    )]
-    IconId,
 }
 
 impl_safe_operation! {

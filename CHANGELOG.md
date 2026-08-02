@@ -56,6 +56,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   documents the `0 = normal / non-zero = disabled` convention used by the
   OAuth access-policy checks.
 
+### Fixed (legacy-database alignment)
+
+- Align `area` / `item` / `item_type` with the legacy Java database: the
+  `icon_id` (bigint) column is replaced with the old schema's
+  `icon_tag` (varchar, e.g. `"C:FD"`), and the fake `parse::<i64>()`
+  resolution of the tag string is removed — the tag is now stored and
+  returned verbatim. The bogus icon foreign-key relations are dropped
+  (the old schema has no such FK). Verified against the full 461 MB
+  legacy dump: the remaining 22 shared tables now match column-for-column.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)
