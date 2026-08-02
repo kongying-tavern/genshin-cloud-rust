@@ -47,7 +47,7 @@ current status.
 | 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation (field-weighted). | High | **Done** |
 | 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing, archive rename/delete_slot. | Medium | **Done** — device registration + access-policy checks are wired |
 | 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`, with an in-process moka cache (300s TTL) and refresh endpoints. | High | **Done** |
-| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Mostly done** — still HMAC (HS256) signing; the RSA keypair + JWK rotation are not implemented |
+| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Mostly done** — RS256 signing with RSA JWKS landed (`JWT_RSA_PRIVATE_KEY_PEM`); JWK rotation is still missing; in HS256 mode the JWKS endpoint returns an empty key set (the HMAC secret is never disclosed) |
 
 ## Current state
 
@@ -61,9 +61,10 @@ current status.
 
 ## Known gaps (remaining parity with Java)
 
-- Batch 7: tokens are HMAC-SHA256; the Java side uses an RSA keypair with JWK
-  rotation. The JWKS endpoint currently publishes the HMAC key in `oct` form;
-  switching to RSA requires key management and rotation.
+- Batch 7: JWK rotation is not implemented (the key is fixed); in HS256
+  mode the JWKS endpoint returns an empty key set — the HMAC signing
+  secret is never disclosed (set `JWT_RSA_PRIVATE_KEY_PEM` for
+  JWKS-based verification).
 - Database schema deviations from the real database await data validation
   (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
 - Translation: only `docs/en` and `docs/zhs` are complete; the other 9
