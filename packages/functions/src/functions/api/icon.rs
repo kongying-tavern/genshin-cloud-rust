@@ -36,11 +36,8 @@ pub async fn do_add(
         updater_id: Set(None),
         del_flag: Set(false),
 
-        // 数据库列：url, tag, description, url_variants
+        name: Set(payload.name),
         url: Set(payload.url),
-        tag: Set(payload.name),
-        description: Set(String::new()),
-        url_variants: Set(Default::default()),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
@@ -62,7 +59,7 @@ pub async fn do_list(
         query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
-        query = query.filter(icon_model::Column::Tag.contains(name));
+        query = query.filter(icon_model::Column::Name.contains(name));
     }
 
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
@@ -80,10 +77,8 @@ pub async fn do_list(
     for it in items {
         arr.push(IconVO {
             id: it.id,
+            name: it.name,
             url: it.url,
-            tag: it.tag,
-            description: it.description,
-            url_variants: it.url_variants,
         });
     }
     let payload = IconListResponse {
@@ -102,10 +97,8 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
     let payload = IconSingleResponse {
         item: IconVO {
             id: item.id,
+            name: item.name,
             url: item.url,
-            tag: item.tag,
-            description: item.description,
-            url_variants: item.url_variants,
         },
     };
     Ok(CommonResponse::new(Ok(payload)))
@@ -132,7 +125,7 @@ pub async fn do_update(_auth: AuthInfo, payload: IconUpdateRequest) -> Result<Co
         .await?;
     let item = item.ok_or(anyhow!("Icon not found"))?;
     let mut am: icon_model::ActiveModel = item.into();
-    am.tag = Set(payload.base.name);
+    am.name = Set(payload.base.name);
     am.url = Set(payload.base.url);
     icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)

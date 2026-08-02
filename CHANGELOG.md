@@ -66,6 +66,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (the old schema has no such FK). Verified against the full 461 MB
   legacy dump: the remaining 22 shared tables now match column-for-column.
 
+- Align the `icon` entity with the legacy Java database: the old schema
+  has only `name` + `url` columns; the `tag` / `description` /
+  `url_variants` columns (and the now-unused `IconURLVariants` type)
+  are removed, the entity and `IconVO` now expose `name` (the request
+  model already used `name` — `do_add` previously mis-stored it into
+  `tag`). The name filter now queries `name` instead of `tag`.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

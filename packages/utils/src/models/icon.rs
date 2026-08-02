@@ -48,10 +48,8 @@ pub struct IconListRequest {
 #[serde(rename_all = "camelCase")]
 pub struct IconVO {
     pub id: i64,
+    pub name: String,
     pub url: String,
-    pub tag: String,
-    pub description: String,
-    pub url_variants: crate::types::IconURLVariants,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
