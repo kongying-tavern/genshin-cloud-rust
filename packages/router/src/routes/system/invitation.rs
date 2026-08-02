@@ -7,11 +7,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
-use _utils::{
-    models::wrapper::Pagination,
-    types::{AccessPolicyItemEnum, SystemUserRole},
-};
+use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
+use _utils::{models::wrapper::Pagination, types::AccessPolicyItemEnum};
 
 /// 获取用户邀请列表的请求参数
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -86,13 +83,9 @@ pub struct InvitationInfoRequest {
 /// POST /invitation/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     let size = payload
         .pagination
         .as_ref()
@@ -122,13 +115,9 @@ pub async fn list(
 /// POST /invitation/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     match _functions::functions::system::invitation::do_update(
         auth,
         payload.code,
@@ -172,13 +161,9 @@ pub async fn consume(
 /// DELETE /invitation/{invitation_id}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(invitation_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     match _functions::functions::system::invitation::do_delete(auth, invitation_id).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),

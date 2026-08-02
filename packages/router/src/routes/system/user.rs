@@ -7,12 +7,9 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractAdmin;
 use _functions::functions::system::user::*;
-use _utils::{
-    models::Pagination,
-    types::{AccessPolicyItemEnum, SystemUserRole},
-};
+use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UserSort {
@@ -141,13 +138,9 @@ pub struct UserKickOutParams {
 /// POST /user/register
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserRegisterParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_register(
         auth,
         payload.access_policy,
@@ -166,13 +159,9 @@ pub async fn register(
 /// POST /user/register/qq
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register_qq(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_register_qq(
         auth,
         payload.access_policy,
@@ -192,13 +181,9 @@ pub async fn register_qq(
 /// GET /user/info/{userId}
 #[tracing::instrument(skip(auth))]
 pub async fn get_info(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(user_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(Json(
         do_get_info(auth, user_id)
             .await
@@ -211,13 +196,9 @@ pub async fn get_info(
 /// POST /user/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_update(
         auth,
         payload.id,
@@ -238,13 +219,9 @@ pub async fn update(
 /// POST /user/update_password
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdatePasswordParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_update_password(
         auth,
         payload.access_policy,
@@ -264,13 +241,9 @@ pub async fn update_password(
 /// POST /user/update_password_by_admin
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password_by_admin(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(
         do_update_password_by_admin(auth, payload.password, payload.user_id)
             .await
@@ -283,13 +256,9 @@ pub async fn update_password_by_admin(
 /// DELETE /user/{workId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_delete(auth, work_id)
         .await
         .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
@@ -300,13 +269,9 @@ pub async fn delete(
 /// POST /user/info/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(Json(
         do_list(
             auth,
@@ -328,13 +293,9 @@ pub async fn list(
 /// DELETE /user/kick_out/{workId}
 #[tracing::instrument(skip(auth))]
 pub async fn kick_out(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     Ok(do_kick_out(auth, work_id)
         .await
         .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?

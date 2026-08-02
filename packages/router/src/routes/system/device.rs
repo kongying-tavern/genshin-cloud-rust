@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
-use _utils::{models::wrapper::Pagination, types::SystemUserRole};
+use crate::middlewares::ExtractAdmin;
+use _utils::models::wrapper::Pagination;
 
 /// 格式：字段+ 字段-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,13 +56,9 @@ pub struct DeviceListParams {
 /// POST /device/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     let size = payload
         .pagination
         .as_ref()
@@ -101,13 +97,9 @@ pub struct DeviceUpdateParams {
 /// POST /device/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
     let status = payload
         .status
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
