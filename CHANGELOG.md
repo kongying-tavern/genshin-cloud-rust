@@ -127,6 +127,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   uploads, single-field size is capped at 16 MiB, and the response no
   longer leaks the server filesystem path.
 
+### Performance
+
+- Eliminate the per-request full-table scan in the BinaryMD5 doc
+  endpoints (secondary-audit P2): `item_doc` / `marker_doc` /
+  `marker_link_doc` now serve both the md5 list and the compressed
+  pages from a **result-level cache** (same 300s TTL as the page
+  cache). A warm `list_page_bin_md5` / `list_page_bin` request
+  performs zero database queries — previously every request re-ran
+  `find_safety().all()` over the whole dataset (100k+ markers) before
+  consulting the per-page cache. The refresh endpoints flush both
+  caches.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
