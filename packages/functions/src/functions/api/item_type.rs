@@ -34,8 +34,8 @@ pub async fn do_update(
 
     let mut am: item_type_model::ActiveModel = item.into();
     // icon_tag -> icon_id
-    let icon_id_val = payload.icon_tag.parse::<i64>().unwrap_or(0);
-    am.icon_id = Set(icon_id_val);
+
+    am.icon_tag = Set(payload.icon_tag);
 
     if let Some(name) = payload.name {
         am.name = Set(name);
@@ -104,7 +104,7 @@ pub async fn do_get_list(
         .map(|i| ItemTypeVO {
             id: i.id,
             name: i.name,
-            icon_id: i.icon_id,
+            icon_tag: i.icon_tag,
             content: i.content,
             parent_id: i.parent_id,
             is_final: i.is_final,
@@ -128,7 +128,7 @@ pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeA
         .map(|i| ItemTypeVO {
             id: i.id,
             name: i.name,
-            icon_id: i.icon_id,
+            icon_tag: i.icon_tag,
             content: i.content,
             parent_id: i.parent_id,
             is_final: i.is_final,
@@ -158,7 +158,7 @@ pub async fn do_add(_auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64>
     let now = chrono::Utc::now().naive_utc();
     // name 在逻辑上为必填
     let name = payload.name.ok_or(anyhow!("name required"))?;
-    let icon_id_val = payload.icon_tag.parse::<i64>().unwrap_or(0);
+
     let sort_index = payload.sort_index.unwrap_or(0) as i32;
 
     let active = item_type_model::ActiveModel {
@@ -170,7 +170,7 @@ pub async fn do_add(_auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64>
         updater_id: Set(None),
         del_flag: Set(false),
 
-        icon_id: Set(icon_id_val),
+        icon_tag: Set(payload.icon_tag),
         name: Set(name),
         content: Set(payload.content),
         parent_id: Set(payload.parent_id),

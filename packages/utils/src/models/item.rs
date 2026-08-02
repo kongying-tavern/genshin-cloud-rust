@@ -160,7 +160,7 @@ pub struct ItemVO {
     pub default_refresh_time: i64,
     pub default_content: Option<String>,
     pub default_count: i32,
-    pub icon_id: i64,
+    pub icon_tag: String,
     pub icon_style_type: crate::types::IconStyleType,
     pub hidden_flag: crate::types::HiddenFlag,
     pub sort_index: i32,

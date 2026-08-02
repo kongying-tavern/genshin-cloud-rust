@@ -23,8 +23,6 @@ pub async fn do_add(
 ) -> Result<CommonResponse<AreaAddResponse>> {
     let now = chrono::Utc::now().naive_utc();
 
-    let icon_id_val = payload.icon_tag.parse::<i64>().unwrap_or(0);
-
     let active = area_model::ActiveModel {
         version: Set(0),
         id: NotSet,
@@ -37,7 +35,7 @@ pub async fn do_add(
         name: Set(payload.name),
         code: Set(payload.code),
         content: Set(payload.content),
-        icon_id: Set(icon_id_val),
+        icon_tag: Set(payload.icon_tag),
         parent_id: Set(payload.parent_id),
         is_final: Set(payload.is_final),
         hidden_flag: Set(payload.hidden_flag),
@@ -63,7 +61,7 @@ pub async fn do_update(
     am.name = Set(payload.area.name);
     am.code = Set(payload.area.code);
     am.content = Set(payload.area.content);
-    am.icon_id = Set(payload.area.icon_tag.parse::<i64>().unwrap_or(0));
+    am.icon_tag = Set(payload.area.icon_tag);
     am.parent_id = Set(payload.area.parent_id);
     am.is_final = Set(payload.area.is_final);
     am.hidden_flag = Set(payload.area.hidden_flag);
@@ -99,7 +97,7 @@ pub async fn do_list(
             name: it.name,
             code: it.code,
             content: it.content,
-            icon_id: it.icon_id,
+            icon_tag: it.icon_tag,
             parent_id: it.parent_id,
             is_final: it.is_final,
             hidden_flag: it.hidden_flag,
@@ -122,7 +120,7 @@ pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Area
             name: item.name,
             code: item.code,
             content: item.content,
-            icon_id: item.icon_id,
+            icon_tag: item.icon_tag,
             parent_id: item.parent_id,
             is_final: item.is_final,
             hidden_flag: item.hidden_flag,

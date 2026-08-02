@@ -8,7 +8,7 @@ use crate::{models::wrapper::Pagination, types::HiddenFlag};
 pub struct ItemTypeVO {
     pub id: i64,
     pub name: String,
-    pub icon_id: i64,
+    pub icon_tag: String,
     pub content: Option<String>,
     pub parent_id: i64,
     pub is_final: bool,

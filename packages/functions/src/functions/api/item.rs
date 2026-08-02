@@ -40,7 +40,7 @@ pub async fn do_update(
         am.default_content = Set(Some(p.default_content));
         am.default_count = Set(p.default_count as i32);
         am.default_refresh_time = Set(p.default_refresh_time.unwrap_or(0));
-        am.icon_id = Set(p.icon_tag.parse::<i64>().unwrap_or(0));
+        am.icon_tag = Set(p.icon_tag);
         am.icon_style_type = Set(p.icon_style_type);
         am.hidden_flag = Set(p.hidden_flag);
         if let Some(si) = p.sort_index {
@@ -107,7 +107,7 @@ pub async fn do_get_list(
             default_refresh_time: it.default_refresh_time,
             default_content: it.default_content,
             default_count: it.default_count,
-            icon_id: it.icon_id,
+            icon_tag: it.icon_tag,
             icon_style_type: it.icon_style_type,
             hidden_flag: it.hidden_flag,
             sort_index: it.sort_index,
@@ -177,7 +177,7 @@ pub async fn do_get_list_by_id(
             default_refresh_time: it.default_refresh_time,
             default_content: it.default_content,
             default_count: it.default_count,
-            icon_id: it.icon_id,
+            icon_tag: it.icon_tag,
             icon_style_type: it.icon_style_type,
             hidden_flag: it.hidden_flag,
             sort_index: it.sort_index,
@@ -254,7 +254,6 @@ pub async fn do_add(
     payload: ItemAddRequest,
 ) -> Result<CommonResponse<ItemAddResponse>> {
     let now = chrono::Utc::now().naive_utc();
-    let icon_id_val = payload.icon_tag.parse::<i64>().unwrap_or(0);
 
     let active = item_model::ActiveModel {
         version: Set(0),
@@ -270,7 +269,7 @@ pub async fn do_add(
         default_refresh_time: Set(payload.default_refresh_time.unwrap_or(0)),
         default_content: Set(Some(payload.default_content)),
         default_count: Set(payload.default_count as i32),
-        icon_id: Set(icon_id_val),
+        icon_tag: Set(payload.icon_tag),
         icon_style_type: Set(payload.icon_style_type),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(payload.sort_index.unwrap_or(0) as i32),
