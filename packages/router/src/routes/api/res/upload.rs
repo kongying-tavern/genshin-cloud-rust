@@ -2,10 +2,9 @@ use anyhow::Result;
 
 use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
-use std::io::Write;
-use std::path::PathBuf;
 
 use crate::middlewares::ExtractAuthInfo;
+use _functions::functions::api::res::UploadedFile;
 
 /// 允许上传的内容类型白名单。
 const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -18,9 +17,10 @@ pub async fn upload_image(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // Save uploaded files to temp dir and collect metadata
-    let tmp_dir = std::env::temp_dir();
-    let mut files_meta: Vec<serde_json::Value> = Vec::new();
+    // 收集文件字节与元数据，交给 functions 层落盘 MinIO。
+    // 注意：这里不写临时文件——无主临时文件会泄漏磁盘，且字节最终
+    // 需要原样上传。
+    let mut files: Vec<UploadedFile> = Vec::new();
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         (
@@ -51,7 +51,7 @@ pub async fn upload_image(
                 format!("multipart read bytes error: {}", e),
             )
         })?;
-        // 单字段大小上限（防磁盘耗尽）。
+        // 单字段大小上限（防内存/对象存储耗尽）。
         if data.len() > MAX_FIELD_BYTES {
             return Err((
                 StatusCode::PAYLOAD_TOO_LARGE,
@@ -59,48 +59,22 @@ pub async fn upload_image(
             ));
         }
 
-        // generate a unique filename（不信任用户文件名——仅取其扩展名）
-        let uuid = uuid::Uuid::new_v4().to_string();
-        let ext = PathBuf::from(&file_name)
-            .extension()
-            .and_then(|s| s.to_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "bin".to_string());
-        let filename = format!("upload_{}_{}.{}", uuid, chrono::Utc::now().timestamp(), ext);
-        let mut file_path = tmp_dir.clone();
-        file_path.push(&filename);
-
-        // write to file
-        let mut f = std::fs::File::create(&file_path).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("create file error: {}", e),
-            )
-        })?;
-        f.write_all(&data).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("write file error: {}", e),
-            )
-        })?;
-
         let size = data.len();
         let digest = md5::compute(&data);
         let md5_hex = format!("{:x}", digest);
 
-        // 不返回 filesystem_path：避免向客户端泄露服务器绝对路径。
-        files_meta.push(serde_json::json!({
-            "field_name": name,
-            "original_file_name": file_name,
-            "content_type": content_type,
-            "size": size,
-            "md5": md5_hex,
-        }));
+        files.push(UploadedFile {
+            field_name: name,
+            original_file_name: file_name,
+            content_type,
+            size,
+            md5: md5_hex,
+            bytes: data.to_vec(),
+        });
     }
 
-    // send metadata array to functions layer
-    let payload = serde_json::Value::Array(files_meta);
-    match _functions::functions::api::res::do_upload_image(auth, payload).await {
+    // 交给 functions 层（MinIO 未配置时明确报错，而非静默丢弃）。
+    match _functions::functions::api::res::do_upload_image(auth, files).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

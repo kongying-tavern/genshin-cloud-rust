@@ -1817,6 +1817,8 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
+ "md5",
+ "minio",
  "rand_core 0.6.4",
  "regex-lite",
  "rsa",

@@ -101,7 +101,7 @@ jobs:
           key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run DB-backed tests
-        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --no-fail-fast
+        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --no-fail-fast
 
   # Delegates to the org reusable workflow, which lints both the PR title
   # (the squash-merge subject) and every commit in the PR/push range.
