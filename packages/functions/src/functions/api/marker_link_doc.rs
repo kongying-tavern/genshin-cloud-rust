@@ -3,54 +3,30 @@
 //! Mirrors Java `MarkerLinkageDocController`. Single-blob shape (no per-flag
 //! paging): the entire dataset is one GZIP-compressed JSON blob.
 //! Two views: `list` (flat array) and `graph` (adjacency map). Both are cached
-//! in-process via `binary_doc::get_or_compute`.
+//! at the result level, so warm requests perform no database scan.
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use _database::{DB_CONN, models::marker::marker_linkage as ml_model};
 use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
 
-use super::binary_doc::{BinaryMd5Vo, CachedPage, get_or_compute, serialize_compress_md5};
+use super::binary_doc::{
+    BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
+};
 
 /// `GET /marker_link_doc/all_list_bin_md5` — MD5 of the flat linkage list blob.
 pub async fn do_all_list_bin_md5(
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let page = get_or_compute("link:list".into(), async {
-        let linkages = ml_model::Entity::find_safety().all(db).await?;
-        let (compressed, md5_hex) = serialize_compress_md5(&linkages)?;
-        Ok(CachedPage {
-            md5: md5_hex,
-            time: chrono::Utc::now().timestamp_millis(),
-            bytes: compressed,
-        })
-    })
-    .await?;
-
-    Ok(CommonResponse::new(Ok(BinaryMd5Vo {
-        md5: page.md5,
-        time: page.time,
-    })))
+    let entry = linkage_result("link:list-result", false).await?;
+    Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /marker_link_doc/all_list_bin` — the flat linkage list blob (compressed bytes).
 pub async fn do_all_list_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let page = get_or_compute("link:list".into(), async {
-        let linkages = ml_model::Entity::find_safety().all(db).await?;
-        let (compressed, md5_hex) = serialize_compress_md5(&linkages)?;
-        Ok(CachedPage {
-            md5: md5_hex,
-            time: chrono::Utc::now().timestamp_millis(),
-            bytes: compressed,
-        })
-    })
-    .await?;
-    Ok(page.bytes)
+    let entry = linkage_result("link:list-result", false).await?;
+    Ok(entry.bytes)
 }
 
 /// `GET /marker_link_doc/all_graph_bin_md5` — MD5 of the graph adjacency blob.
@@ -58,42 +34,51 @@ pub async fn do_all_graph_bin_md5(
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let page = get_or_compute("link:graph".into(), async {
-        let linkages = ml_model::Entity::find_safety().all(db).await?;
-        let graph = build_graph(&linkages);
-        let (compressed, md5_hex) = serialize_compress_md5(&graph)?;
-        Ok(CachedPage {
-            md5: md5_hex,
-            time: chrono::Utc::now().timestamp_millis(),
-            bytes: compressed,
-        })
-    })
-    .await?;
-
-    Ok(CommonResponse::new(Ok(BinaryMd5Vo {
-        md5: page.md5,
-        time: page.time,
-    })))
+    let entry = linkage_result("link:graph-result", true).await?;
+    Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /marker_link_doc/all_graph_bin` — the graph adjacency blob (compressed bytes).
 pub async fn do_all_graph_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
+    let entry = linkage_result("link:graph-result", true).await?;
+    Ok(entry.bytes)
+}
+
+/// Compute (and cache) one linkage blob view.
+async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let page = get_or_compute("link:graph".into(), async {
+    let entries = get_result_cached(key.to_string(), async {
         let linkages = ml_model::Entity::find_safety().all(db).await?;
-        let graph = build_graph(&linkages);
-        let (compressed, md5_hex) = serialize_compress_md5(&graph)?;
-        Ok(CachedPage {
-            md5: md5_hex,
-            time: chrono::Utc::now().timestamp_millis(),
-            bytes: compressed,
+        let data: serde_json::Value = if graph {
+            serde_json::to_value(build_graph(&linkages))?
+        } else {
+            serde_json::to_value(&linkages)?
+        };
+        let (compressed, md5_hex) = serialize_compress_md5(&data)?;
+        let page = get_or_compute(key.to_string(), async {
+            Ok(CachedPage {
+                md5: md5_hex,
+                time: chrono::Utc::now().timestamp_millis(),
+                bytes: compressed,
+            })
         })
+        .await?;
+        Ok(vec![ResultEntry {
+            key: key.to_string(),
+            vo: BinaryMd5Vo {
+                md5: page.md5,
+                time: page.time,
+            },
+            bytes: page.bytes,
+        }])
     })
     .await?;
-    Ok(page.bytes)
+
+    entries
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow!("empty linkage result"))
 }
 
 /// Build the adjacency map: marker_id → list of linked marker_ids.
