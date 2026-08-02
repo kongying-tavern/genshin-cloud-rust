@@ -32,22 +32,28 @@ pub async fn init_db_conn() -> anyhow::Result<()> {
 async fn build_db_map() -> Result<DatabaseConnectionMap> {
     // ── Postgres (required — startup fails if unreachable) ─────────────────
     let pg_conn = {
+        let db_port = match std::env::var("DB_PORT") {
+            Ok(v) => v
+                .parse::<u16>()
+                .map_err(|e| anyhow!("Invalid DB_PORT '{v}': {e}"))?,
+            Err(_) => 5432,
+        };
         let mut opt = ConnectOptions::new(format!(
             "postgres://{}:{}@{}:{}/{}",
             std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
             std::env::var("DB_PASSWORD").unwrap_or("".into()),
             std::env::var("DB_HOST").unwrap_or("localhost".into()),
-            std::env::var("DB_PORT")
-                .map(|str| str.parse::<u16>().unwrap())
-                .unwrap_or(5432),
+            db_port,
             std::env::var("DB_DATABASE").unwrap_or("genshin_map".into()),
         ));
         opt.max_connections(100)
             .min_connections(5)
             .connect_timeout(Duration::from_secs(8))
             .acquire_timeout(Duration::from_secs(8))
-            .idle_timeout(Duration::from_secs(8))
-            .max_lifetime(Duration::from_secs(8))
+            // idle/lifetime in minutes, not seconds — an 8s max_lifetime would
+            // recycle every connection constantly under any load.
+            .idle_timeout(Duration::from_secs(60))
+            .max_lifetime(Duration::from_secs(30 * 60))
             .sqlx_logging(true)
             .sqlx_logging_level(log::LevelFilter::Trace);
         Database::connect(opt).await?
@@ -63,7 +69,8 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
             .unwrap_or_default(),
         std::env::var("REDIS_HOST").unwrap_or("localhost".into()),
         std::env::var("REDIS_PORT")
-            .map(|str| str.parse::<u16>().unwrap())
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
             .unwrap_or(6379),
         1,
     )) {

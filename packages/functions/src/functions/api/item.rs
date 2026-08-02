@@ -221,7 +221,8 @@ pub async fn do_copy_to_area(
             .await?
         {
             let mut am: item_model::ActiveModel = item.into();
-            am.id = Set(0);
+            // 复制为新行：IDENTITY 列走自增（显式 Set(0) 会在第二次复制时撞主键）
+            am.id = NotSet;
             am.area_id = Set(area_id);
             am.create_time = Set(chrono::Utc::now().naive_utc());
             am.update_time = Set(None);
