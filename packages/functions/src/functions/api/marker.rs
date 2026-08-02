@@ -426,6 +426,17 @@ pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<MarkerItemsResponse>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
+
     let db = &DB_CONN.wait().pg_conn;
     if payload.is_empty() {
         return Ok(CommonResponse::new(Ok(MarkerItemsResponse {

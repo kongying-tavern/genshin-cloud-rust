@@ -55,7 +55,8 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
             .idle_timeout(Duration::from_secs(60))
             .max_lifetime(Duration::from_secs(30 * 60))
             .sqlx_logging(true)
-            .sqlx_logging_level(log::LevelFilter::Trace);
+            // Info 而非 Trace：Trace 会把绑定参数值（可能含敏感数据）打进日志。
+            .sqlx_logging_level(log::LevelFilter::Info);
         Database::connect(opt).await?
     };
     info!("Postgres is ready");

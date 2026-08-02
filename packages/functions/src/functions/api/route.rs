@@ -185,6 +185,17 @@ pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<f64>,
 ) -> Result<CommonResponse<Vec<RouteVO>>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
+
     let db = &DB_CONN.wait().pg_conn;
     let ids: Vec<i64> = payload.iter().map(|f| *f as i64).collect();
 
