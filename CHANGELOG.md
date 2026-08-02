@@ -188,6 +188,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Performance
 
+- Add a Redis second-level cache for the BinaryMD5 doc pages (the roadmap's
+  multi-replica gap): the marker/item/link result sets are stored in Redis
+  (versioned `binmd5:result:{epoch}:{domain}` keys, base64 bytes, 300s TTL
+  matching the in-process moka cache), so a warm replica serves
+  `list_page_bin_md5` / `list_page_bin` without re-scanning the database.
+  Invalidation is an atomic epoch bump (`INCR binmd5:epoch`) — every
+  replica drops its stale copy at once, no SCAN/DEL pass needed. Redis
+  being down degrades silently to the existing in-process cache. A new
+  `redis_cache_db` test (GCS_TEST_DB + Redis gated) asserts the epoch
+  flow; unit tests cover the base64 round-trip.
+
 - Batch the remaining N+1 deletes: score generation soft-deletes old
   `score_stat` rows and the archive `delete_slot` operation now use a
   single `update_many` statement instead of per-row find+update

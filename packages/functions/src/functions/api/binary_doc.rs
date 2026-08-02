@@ -8,12 +8,18 @@
 //!
 //! The generated pages are cached in-process (moka, like Java's Caffeine) so
 //! repeated `list_page_bin_md5` / `list_page_bin` requests don't re-serialize
-//! the whole dataset on every call.
+//! the whole dataset on every call. A **Redis second-level cache** shares the
+//! computed page sets across replicas: a warm replica can serve the pages
+//! without re-scanning the database, and invalidation bumps a versioned epoch
+//! so every replica drops its stale copy at once.
 
 use flate2::{Compression, write::GzEncoder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, time::Duration};
+
+use _database::DB_CONN;
+use redis::AsyncCommands;
 
 /// A single MD5 entry in the `list_page_bin_md5` response.
 /// Mirrors Java `BinaryMD5Vo { md5, time }`.
@@ -87,12 +93,126 @@ pub async fn invalidate(key: &str) {
     BIN_CACHE.invalidate(key).await;
 }
 
-/// Drop every cached page. The cache-refresh endpoints call this — the keys
-/// are domain-scoped (`item:*`, `marker:*`, `link:*`) but not enumerable
-/// cheaply, so a full flush is the simple correct invalidation.
-pub fn invalidate_all() {
+/// Redis namespace for the result-level cache.
+const REDIS_RESULT_PREFIX: &str = "binmd5:result:";
+/// Redis epoch key: bumping it (INCR) invalidates every replica's copy of the
+/// result cache atomically — stale keys fall out of the TTL window naturally,
+/// so no SCAN/DEL pass is needed.
+const REDIS_EPOCH_KEY: &str = "binmd5:epoch";
+/// Redis entry TTL (matches the in-process moka TTL).
+const REDIS_RESULT_TTL_SECS: u64 = 300;
+
+/// A `ResultEntry` serialized for Redis: bytes travel as base64 (JSON
+/// carries `Vec<u8>` as a number array otherwise — 4-5x bigger).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RedisResultEntry {
+    key: String,
+    vo: BinaryMd5Vo,
+    bytes_b64: String,
+}
+
+impl From<&ResultEntry> for RedisResultEntry {
+    fn from(e: &ResultEntry) -> Self {
+        use base64::Engine;
+        RedisResultEntry {
+            key: e.key.clone(),
+            vo: e.vo.clone(),
+            bytes_b64: base64::engine::general_purpose::STANDARD.encode(&e.bytes),
+        }
+    }
+}
+
+impl From<RedisResultEntry> for ResultEntry {
+    fn from(e: RedisResultEntry) -> Self {
+        use base64::Engine;
+        ResultEntry {
+            key: e.key,
+            vo: e.vo,
+            bytes: base64::engine::general_purpose::STANDARD
+                .decode(&e.bytes_b64)
+                .unwrap_or_default(),
+        }
+    }
+}
+
+/// Current Redis epoch (1 when unset). `None` when Redis is unavailable.
+async fn redis_epoch() -> Option<i64> {
+    let conn = DB_CONN.wait().redis_conn.as_ref()?;
+    let mut c = conn.get_multiplexed_async_connection().await.ok()?;
+    let epoch: Option<i64> = c.get(REDIS_EPOCH_KEY).await.ok().flatten();
+    match epoch {
+        Some(e) => Some(e),
+        None => {
+            // First touch: initialize under NX so concurrent replicas agree.
+            let _: Result<i64, redis::RedisError> = c
+                .set_options(
+                    REDIS_EPOCH_KEY,
+                    1,
+                    redis::SetOptions::default().conditional_set(redis::ExistenceCheck::NX),
+                )
+                .await;
+            Some(1)
+        },
+    }
+}
+
+/// Try to load the result set for `key` from Redis.
+async fn redis_load(key: &str) -> Option<Vec<ResultEntry>> {
+    let epoch = redis_epoch().await?;
+    let conn = DB_CONN.wait().redis_conn.as_ref()?;
+    let mut c = conn.get_multiplexed_async_connection().await.ok()?;
+    let raw: Option<String> = c
+        .get(format!("{REDIS_RESULT_PREFIX}{epoch}:{key}"))
+        .await
+        .ok()
+        .flatten()?;
+    let entries: Vec<RedisResultEntry> = serde_json::from_str(raw.as_deref()?).ok()?;
+    Some(entries.into_iter().map(Into::into).collect())
+}
+
+/// Store the result set for `key` in Redis (best-effort; Redis may be down).
+async fn redis_store(key: &str, entries: &[ResultEntry]) {
+    let Some(epoch) = redis_epoch().await else {
+        return;
+    };
+    let Some(conn) = DB_CONN.wait().redis_conn.as_ref().cloned() else {
+        return;
+    };
+    let Ok(mut c) = conn.get_multiplexed_async_connection().await else {
+        return;
+    };
+    let raw = match serde_json::to_string(
+        &entries
+            .iter()
+            .map(RedisResultEntry::from)
+            .collect::<Vec<_>>(),
+    ) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let _: Result<(), redis::RedisError> = c
+        .set_ex(
+            format!("{REDIS_RESULT_PREFIX}{epoch}:{key}"),
+            raw,
+            REDIS_RESULT_TTL_SECS,
+        )
+        .await;
+}
+
+/// Drop every cached page (in-process + Redis across replicas).
+pub async fn invalidate_all() {
     BIN_CACHE.invalidate_all();
     RESULT_CACHE.invalidate_all();
+    // Bump the Redis epoch: replicas' copies are keyed by the old epoch and
+    // expire on their own; the next request computes + stores under the new
+    // one. Best-effort — with Redis down this is a no-op.
+    let Some(conn) = DB_CONN.wait().redis_conn.as_ref() else {
+        return;
+    };
+    let Ok(mut c) = conn.get_multiplexed_async_connection().await else {
+        return;
+    };
+    let _: Result<i64, redis::RedisError> = c.incr(REDIS_EPOCH_KEY, 1).await;
 }
 
 /// Result-level cache entry: one page's md5 metadata plus its compressed
@@ -122,6 +242,10 @@ static RESULT_CACHE: Lazy<moka::future::Cache<String, Vec<ResultEntry>>> = Lazy:
 
 /// Fetch the full page set for a domain from the cache, or compute it via
 /// `compute` and store it.
+///
+/// Lookup order: in-process moka → Redis (shared across replicas) → compute.
+/// A Redis hit also warms the in-process cache, so subsequent requests are
+/// zero-DB and zero-Redis.
 pub async fn get_result_cached(
     key: String,
     compute: impl std::future::Future<Output = anyhow::Result<Vec<ResultEntry>>>,
@@ -129,7 +253,51 @@ pub async fn get_result_cached(
     if let Some(cached) = RESULT_CACHE.get(&key).await {
         return Ok(cached);
     }
+    if let Some(entries) = redis_load(&key).await {
+        RESULT_CACHE.insert(key.clone(), entries.clone()).await;
+        return Ok(entries);
+    }
     let result = compute.await?;
-    RESULT_CACHE.insert(key, result.clone()).await;
+    RESULT_CACHE.insert(key.clone(), result.clone()).await;
+    redis_store(&key, &result).await;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_entry() -> ResultEntry {
+        ResultEntry {
+            key: "marker:0:0".into(),
+            vo: BinaryMd5Vo {
+                md5: "abc123".into(),
+                time: 42,
+            },
+            bytes: vec![0xde, 0xad, 0xbe, 0xef],
+        }
+    }
+
+    #[test]
+    fn redis_entry_roundtrip_preserves_bytes() {
+        // JSON carries bytes as base64; the round-trip must restore the exact
+        // compressed payload (a broken transform would corrupt bin fetches).
+        let entry = sample_entry();
+        let redis_entry = RedisResultEntry::from(&entry);
+        assert_eq!(redis_entry.bytes_b64, "3q2+7w==");
+        let back = ResultEntry::from(redis_entry);
+        assert_eq!(back.key, entry.key);
+        assert_eq!(back.vo, entry.vo);
+        assert_eq!(back.bytes, entry.bytes);
+    }
+
+    #[tokio::test]
+    async fn epoch_keying_is_versioned() {
+        // The epoch is a plain counter; entries are keyed by it so bumping
+        // the epoch invalidates every replica's copy without a scan.
+        let epoch = 7;
+        let key = format!("{REDIS_RESULT_PREFIX}{epoch}:marker:result");
+        assert!(key.starts_with(REDIS_RESULT_PREFIX));
+        assert!(key.ends_with(":7:marker:result"));
+    }
 }

@@ -1821,6 +1821,7 @@ dependencies = [
  "md5",
  "minio",
  "rand_core 0.6.4",
+ "redis",
  "regex-lite",
  "rsa",
  "sea-orm",
