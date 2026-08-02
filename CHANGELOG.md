@@ -75,6 +75,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   read endpoints require the Admin/MapManager role. Invitation
   `info`/`consume` also reject anonymous tokens.
 
+- Fix remaining identity/pool issues (secondary audit P1): `item` copy
+  now lets the identity column assign ids (the leftover `Set(0)` would
+  collide on a second copy), the Postgres pool `max_lifetime` is 30
+  minutes / `idle_timeout` 60s (was 8s, recycling every connection
+  constantly), and invalid `DB_PORT` / `REDIS_PORT` env values degrade
+  gracefully instead of panicking at startup.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
