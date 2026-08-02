@@ -35,8 +35,6 @@ pub async fn do_add(_auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddRes
         del_flag: Set(false),
         tag: Set(payload.tag),
         icon_id: Set(payload.icon_id),
-        hidden_flag: Set(_utils::types::HiddenFlag::Visible),
-        sort_index: Set(0),
     };
 
     let res = tag_model::Entity::insert(am).exec(db).await?;
@@ -93,8 +91,6 @@ pub async fn do_list(
             id: t.id,
             tag: t.tag,
             icon_id: t.icon_id,
-            hidden_flag: t.hidden_flag,
-            sort_index: t.sort_index,
         })
         .collect();
 

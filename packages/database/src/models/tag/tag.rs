@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::{impl_safe_operation, types::HiddenFlag};
+use _utils::impl_safe_operation;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "tag", schema_name = "genshin_map")]
@@ -26,11 +26,6 @@ pub struct Model {
     pub tag: String,
     /// 图标 ID
     pub icon_id: i64,
-    /// 权限屏蔽标记
-    #[sea_orm(indexed)]
-    pub hidden_flag: HiddenFlag,
-    /// 排序索引
-    pub sort_index: i32,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

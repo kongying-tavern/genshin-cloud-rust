@@ -28,8 +28,6 @@ pub struct Model {
     pub parent_id: i64,
     /// 是否为末端类型
     pub is_final: bool,
-    /// 排序索引
-    pub sort_index: i32,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

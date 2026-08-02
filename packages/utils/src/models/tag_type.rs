@@ -53,7 +53,6 @@ pub struct TagTypeVO {
     pub name: String,
     pub parent_id: i64,
     pub is_final: bool,
-    pub sort_index: i32,
 }
 
 /// 标签类型列表响应
