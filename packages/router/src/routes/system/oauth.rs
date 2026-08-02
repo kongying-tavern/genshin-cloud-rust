@@ -132,10 +132,10 @@ pub async fn oauth(
                     "Refresh token is required for refresh token grant type".into(),
                 )
             })?;
-            oauth_refresh(refresh_token)
+            let ret = oauth_refresh(refresh_token)
                 .await
                 .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
-            return Ok(StatusCode::NO_CONTENT.into_response());
+            return Ok(Json(ret).into_response());
         },
     }
 }
