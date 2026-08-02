@@ -22,6 +22,8 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 md5 = { workspace = true }
 minio = { workspace = true }
+jsonwebtoken = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "^0.4"
@@ -68,3 +70,9 @@ path = "tests/api_db_test.rs"
 [[test]]
 name = "res_db"
 path = "tests/res_db_test.rs"
+
+# JWKS key-rotation unit test. No DB; sets JWT_* env vars before touching the
+# lazy key material (own process, same pattern as api_db).
+[[test]]
+name = "jwks_rotation"
+path = "tests/jwks_rotation_test.rs"

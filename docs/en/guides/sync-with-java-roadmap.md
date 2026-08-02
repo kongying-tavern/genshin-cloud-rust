@@ -47,7 +47,7 @@ current status.
 | 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation (field-weighted). | High | **Done** |
 | 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing, archive rename/delete_slot. | Medium | **Done** — device registration + access-policy checks are wired |
 | 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`, with an in-process moka cache (300s TTL) and refresh endpoints. | High | **Done** |
-| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Mostly done** — RS256 signing with RSA JWKS landed (`JWT_RSA_PRIVATE_KEY_PEM`); JWK rotation is still missing; in HS256 mode the JWKS endpoint returns an empty key set (the HMAC secret is never disclosed) |
+| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Done** — RS256 signing with RSA JWKS; **JWK rotation** via `JWT_RSA_VERIFY_KEYS` (historical public keys stay verifiable + published; see the rotation steps below). In HS256 mode the JWKS endpoint returns an empty key set (the HMAC secret is never disclosed) |
 
 ## Current state
 
@@ -61,14 +61,31 @@ current status.
 
 ## Known gaps (remaining parity with Java)
 
-- Batch 7: JWK rotation is not implemented (the key is fixed); in HS256
-  mode the JWKS endpoint returns an empty key set — the HMAC signing
-  secret is never disclosed (set `JWT_RSA_PRIVATE_KEY_PEM` for
-  JWKS-based verification).
 - Database schema deviations from the real database await data validation
   (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
 - Translation: only `docs/en` and `docs/zhs` are complete; the other 9
   languages are skeletons.
+
+## Rotating the JWT signing key (RS256)
+
+The signing key is `JWT_RSA_PRIVATE_KEY_PEM`; `JWT_RSA_VERIFY_KEYS`
+(comma-separated RSA **public** key PEMs) lists historical keys that must
+still verify tokens. The JWKS endpoint publishes the current key (`kid`
+`genshin-cloud-rsa-v1`) first, then each historical key in order (`v2`,
+`v3`, ...). Rotation is a two-step deploy that never invalidates live
+tokens:
+
+1. Generate the new keypair, add the **new** public key to
+   `JWT_RSA_VERIFY_KEYS` (keeping the old one), and deploy. Tokens are
+   still signed with the old key; both verify.
+2. Switch `JWT_RSA_PRIVATE_KEY_PEM` to the new private key and deploy.
+   Tokens are now signed with the new key (kid stays `v1`); the old key
+   remains in `JWT_RSA_VERIFY_KEYS` for verification.
+3. On the next rotation, drop the oldest public key from
+   `JWT_RSA_VERIFY_KEYS`.
+
+HS256 (`JWT_SECRET`) has no rotation story beyond a restart — the JWKS
+never publishes the HMAC secret.
 
 ## Follow-up
 

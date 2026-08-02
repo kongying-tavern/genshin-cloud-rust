@@ -49,6 +49,23 @@ pub fn jwt_rsa_private_key_pem() -> Option<String> {
     std::env::var("JWT_RSA_PRIVATE_KEY_PEM").ok()
 }
 
+/// Historical RSA **public** key PEMs (env `JWT_RSA_VERIFY_KEYS`, optional).
+/// **Comma**-separated list (each entry may itself be a multi-line PEM — the
+/// newlines inside a PEM must NOT be treated as separators). Keys listed
+/// here are accepted for verification (and published in the JWKS) but never
+/// used for signing — that's what makes key rotation possible without
+/// invalidating live tokens.
+pub fn jwt_rsa_verify_keys() -> Vec<String> {
+    let Some(v) = std::env::var("JWT_RSA_VERIFY_KEYS").ok() else {
+        return Vec::new();
+    };
+    v.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// Whether RS256 signing is active (an RSA private key is configured).
 pub fn is_rsa_signing() -> bool {
     jwt_rsa_private_key_pem().is_some()
@@ -63,16 +80,24 @@ pub fn jwt_alg() -> Algorithm {
     }
 }
 
+/// The JWKS key id of the i-th RSA key: v1 is always the *current* signing
+/// key (the private key's public half); the historical verify keys follow in
+/// configuration order (v2, v3, ...). Stable as long as the config order is.
+fn rsa_kid(index: usize) -> String {
+    format!("genshin-cloud-rsa-v{}", index + 1)
+}
+
 /// Lazily parsed key material for both algorithms.
 pub struct JwtKeys {
     /// Key used to sign new tokens (HS256 secret or RS256 private key).
     pub encoding: EncodingKey,
-    /// RS256 verification key, present when RSA is configured.
-    pub decoding_rsa: Option<DecodingKey>,
+    /// RSA verification keys (current + historical, in kid order), present
+    /// when RSA is configured.
+    pub decoding_rsa: Vec<DecodingKey>,
     /// HS256 verification key (always available — legacy tokens stay valid).
     pub decoding_hmac: DecodingKey,
-    /// RSA public key for JWKS publication (n/e export), when configured.
-    pub rsa_public_pem: Option<String>,
+    /// RSA public keys for JWKS publication: `(kid, pem)`, current first.
+    pub rsa_public_keys: Vec<(String, String)>,
 }
 
 static JWT_KEYS: Lazy<JwtKeys> = Lazy::new(|| {
@@ -85,9 +110,9 @@ static JWT_KEYS: Lazy<JwtKeys> = Lazy::new(|| {
     let Some(pem) = jwt_rsa_private_key_pem() else {
         return JwtKeys {
             encoding: encoding_hmac,
-            decoding_rsa: None,
+            decoding_rsa: Vec::new(),
             decoding_hmac,
-            rsa_public_pem: None,
+            rsa_public_keys: Vec::new(),
         };
     };
 
@@ -97,9 +122,22 @@ static JWT_KEYS: Lazy<JwtKeys> = Lazy::new(|| {
         Ok(private) => {
             let public = private.to_public_key();
             let public_pem = public.to_public_key_pem(rsa::pkcs8::LineEnding::LF).ok();
-            let decoding_rsa = public_pem
-                .as_deref()
-                .and_then(|p| DecodingKey::from_rsa_pem(p.as_bytes()).ok());
+            let mut rsa_keys: Vec<(String, String)> = Vec::new(); // (kid, pem)
+            if let Some(p) = public_pem {
+                rsa_keys.push((rsa_kid(0), p));
+            }
+            // Historical verify keys follow the current one, in order.
+            for (i, verify_pem) in jwt_rsa_verify_keys().iter().enumerate() {
+                // Dedup: skip a verify key that equals the current public key.
+                if rsa_keys.iter().any(|(_, p)| p == verify_pem) {
+                    continue;
+                }
+                rsa_keys.push((rsa_kid(i + 1), verify_pem.clone()));
+            }
+            let decoding_rsa = rsa_keys
+                .iter()
+                .filter_map(|(_, p)| DecodingKey::from_rsa_pem(p.as_bytes()).ok())
+                .collect();
             let encoding = match EncodingKey::from_rsa_pem(pem.as_bytes()) {
                 Ok(k) => k,
                 Err(e) => {
@@ -111,16 +149,16 @@ static JWT_KEYS: Lazy<JwtKeys> = Lazy::new(|| {
                 encoding,
                 decoding_rsa,
                 decoding_hmac,
-                rsa_public_pem: public_pem,
+                rsa_public_keys: rsa_keys,
             }
         },
         Err(e) => {
             eprintln!("failed to parse RSA private key PEM: {e}; falling back to HS256");
             JwtKeys {
                 encoding: encoding_hmac,
-                decoding_rsa: None,
+                decoding_rsa: Vec::new(),
                 decoding_hmac,
-                rsa_public_pem: None,
+                rsa_public_keys: Vec::new(),
             }
         },
     }
@@ -131,13 +169,14 @@ pub fn encoding_key() -> &'static EncodingKey {
     &JWT_KEYS.encoding
 }
 
-/// Verification keys with their matching algorithms. The active algorithm
-/// comes first, the fallback second — tokens signed before an RSA/HS256
-/// migration stay verifiable.
+/// Verification keys with their matching algorithms. RSA keys come in kid
+/// order (current first, then historical), the HMAC fallback last — tokens
+/// signed before an RSA/HS256 migration or before a key rotation stay
+/// verifiable.
 pub fn decoding_key_pairs() -> Vec<(&'static DecodingKey, Algorithm)> {
     if is_rsa_signing() {
         let mut v = Vec::new();
-        if let Some(k) = &JWT_KEYS.decoding_rsa {
+        for k in &JWT_KEYS.decoding_rsa {
             v.push((k, Algorithm::RS256));
         }
         v.push((&JWT_KEYS.decoding_hmac, Algorithm::HS256));
@@ -147,14 +186,12 @@ pub fn decoding_key_pairs() -> Vec<(&'static DecodingKey, Algorithm)> {
     }
 }
 
-/// The RSA public key PEM (when RS256 is configured) for JWKS publication.
-pub fn rsa_public_key_pem() -> Option<&'static str> {
-    JWT_KEYS.rsa_public_pem.as_deref()
-}
-
 /// Build the JWKS (JSON Web Key Set) for the active signing scheme.
 ///
-/// RS256: publishes the RSA public key (kty: RSA, base64url n/e).
+/// RS256: publishes **all** RSA public keys (current `v1` first, then the
+/// historical `JWT_RSA_VERIFY_KEYS` in order), each with its `kid` — so
+/// verifiers can follow a rotation by kid. The key used for signing is always
+/// `v1`.
 /// HS256: publishes an **empty** key set — the HMAC signing key is a shared
 /// secret and must never be disclosed (RFC 7517 §6.4 `oct` keys are for
 /// verification-only consumers in trusted environments). Deployments that
@@ -162,23 +199,24 @@ pub fn rsa_public_key_pem() -> Option<&'static str> {
 /// to switch to RS256.
 pub fn jwks() -> anyhow::Result<serde_json::Value> {
     use base64::Engine;
-    if let Some(pem) = rsa_public_key_pem() {
+    if JWT_KEYS.rsa_public_keys.is_empty() {
+        return Ok(serde_json::json!({ "keys": [] }));
+    }
+    let mut keys = Vec::new();
+    for (kid, pem) in &JWT_KEYS.rsa_public_keys {
         let public = <rsa::RsaPublicKey as rsa::pkcs8::DecodePublicKey>::from_public_key_pem(pem)?;
         let n = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public.n().to_bytes_be());
         let e = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(public.e().to_bytes_be());
-        return Ok(serde_json::json!({
-            "keys": [{
-                "kty": "RSA",
-                "kid": "genshin-cloud-rsa-v1",
-                "alg": "RS256",
-                "use": "sig",
-                "n": n,
-                "e": e,
-            }],
+        keys.push(serde_json::json!({
+            "kty": "RSA",
+            "kid": kid,
+            "alg": "RS256",
+            "use": "sig",
+            "n": n,
+            "e": e,
         }));
     }
-
-    Ok(serde_json::json!({ "keys": [] }))
+    Ok(serde_json::json!({ "keys": keys }))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
