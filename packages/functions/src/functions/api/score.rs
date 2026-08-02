@@ -51,17 +51,17 @@ pub async fn do_generate_score(
         .map(|m| m.id)
         .collect();
 
-    for id in old_ids {
-        if let Some(m) = score_stat_model::Entity::find_safety_by_id(id)
-            .one(db)
-            .await?
-        {
-            let mut am: score_stat_model::ActiveModel = m.into();
-            am.del_flag = Set(true);
-            score_stat_model::Entity::update_safety(am)?
-                .exec(db)
-                .await?;
-        }
+    // 批量软删旧行（避免逐条 find+update 的 N+1 往返）
+    if !old_ids.is_empty() {
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+        score_stat_model::Entity::update_many()
+            .col_expr(
+                score_stat_model::Column::DelFlag,
+                sea_orm::sea_query::Expr::value(true),
+            )
+            .filter(score_stat_model::Column::Id.is_in(old_ids))
+            .exec(db)
+            .await?;
     }
 
     // 2. 扫描 history 表（type = 4 = 打点/点位，对齐 Java 侧）

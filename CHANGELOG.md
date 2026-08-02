@@ -165,6 +165,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (cross-origin browser access blocked, same-origin / Vite proxy
   unaffected). `.env.example` documents the variable.
 
+### Performance
+
+- Batch the remaining N+1 deletes: score generation soft-deletes old
+  `score_stat` rows and the archive `delete_slot` operation now use a
+  single `update_many` statement instead of per-row find+update
+  round-trips.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

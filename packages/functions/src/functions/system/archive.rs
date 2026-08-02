@@ -139,16 +139,16 @@ pub async fn do_restore(_auth: AuthInfo, id: i64) -> Result<CommonResponse<serde
 /// Delete an archive slot (soft-delete every archive in the slot).
 pub async fn do_delete_slot(user_id: i64, slot_index: i32) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
-    let items = archive_model::Entity::find_safety()
+    // 批量软删（避免逐条 find+delete 的 N+1 往返）
+    archive_model::Entity::update_many()
+        .col_expr(
+            archive_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
         .filter(archive_model::Column::UserId.eq(user_id))
         .filter(archive_model::Column::SlotIndex.eq(slot_index))
-        .all(db)
+        .exec(db)
         .await?;
-    for a in items {
-        archive_model::Entity::delete_safety(a.into())?
-            .exec(db)
-            .await?;
-    }
     Ok(CommonResponse::new(Ok(())))
 }
 
