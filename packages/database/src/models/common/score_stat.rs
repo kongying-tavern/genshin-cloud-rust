@@ -39,7 +39,7 @@ pub struct Model {
     pub user_id: Option<i64>,
     /// 统计内容 JSON（字段级 diff 数据）
     #[sea_orm(column_type = "Json")]
-    pub content: serde_json::Value,
+    pub content: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

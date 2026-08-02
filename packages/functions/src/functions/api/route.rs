@@ -28,7 +28,7 @@ fn to_vo(r: route_model::Model) -> RouteVO {
         marker_list: r.marker_list.0,
         hidden_flag: r.hidden_flag,
         video: r.video,
-        extra: r.extra,
+        extra: r.extra.unwrap_or(serde_json::Value::Null),
         creator_nickname: r.creator_nickname,
         creator_id: r.creator_id,
         create_time: r.create_time,
@@ -59,7 +59,7 @@ pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
         marker_list: Set(route_model::MarkerListWrapper(marker_list)),
         hidden_flag: Set(payload.hidden_flag),
         video: Set(payload.video),
-        extra: Set(serde_json::Value::Object(
+        extra: Set(Some(serde_json::Value::Object(
             payload
                 .extra
                 .map(|m| {
@@ -68,7 +68,7 @@ pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
                         .collect()
                 })
                 .unwrap_or_default(),
-        )),
+        ))),
         creator_nickname: Set(payload.creator_nickname.unwrap_or_default()),
     };
 
@@ -100,7 +100,7 @@ pub async fn do_update(
     am.marker_list = Set(route_model::MarkerListWrapper(marker_list));
     am.hidden_flag = Set(payload.hidden_flag);
     am.video = Set(payload.video);
-    am.extra = Set(serde_json::Value::Object(
+    am.extra = Set(Some(serde_json::Value::Object(
         payload
             .extra
             .map(|m| {
@@ -109,7 +109,7 @@ pub async fn do_update(
                     .collect()
             })
             .unwrap_or_default(),
-    ));
+    )));
     am.creator_nickname = Set(payload.creator_nickname.unwrap_or_default());
 
     route_model::Entity::update_safety(am)?.exec(db).await?;

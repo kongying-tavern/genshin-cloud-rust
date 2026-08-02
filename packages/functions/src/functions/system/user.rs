@@ -46,7 +46,7 @@ pub async fn do_register(
         phone: Set(None),
         logo: Set(Some(logo)),
         role_id: Set(role_id),
-        access_policy: Set(_utils::types::AccessPolicyList(access_policy)),
+        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
         remark: Set(Some(remark)),
     };
 
@@ -85,7 +85,7 @@ pub async fn do_register_qq(
         phone: Set(None),
         logo: Set(Some(logo)),
         role_id: Set(role_id),
-        access_policy: Set(_utils::types::AccessPolicyList(access_policy)),
+        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
         remark: Set(Some(remark)),
     };
 
@@ -131,7 +131,7 @@ pub async fn do_update(
     let mut am: sys_user_model::ActiveModel = m.into();
 
     if let Some(ap) = access_policy {
-        am.access_policy = Set(_utils::types::AccessPolicyList(ap));
+        am.access_policy = Set(Some(_utils::types::AccessPolicyList(ap)));
     }
     if let Some(l) = logo {
         am.logo = Set(Some(l));

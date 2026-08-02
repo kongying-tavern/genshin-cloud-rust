@@ -103,11 +103,11 @@ pub async fn do_generate_score(
             span_start_time: Set(span_start),
             span_end_time: Set(span_end),
             user_id: Set(Some(user_id)),
-            content: Set(serde_json::json!({
+            content: Set(Some(serde_json::json!({
                 "type": "DAY",
                 "count": count,
                 "fieldWeight": score,
-            })),
+            }))),
         };
         score_stat_model::Entity::insert(am).exec(db).await?;
 
@@ -169,7 +169,7 @@ pub async fn do_get_score_data(
     let samples: Vec<ScoreSample> = stats
         .iter()
         .map(|s| {
-            let score = score_from_content(&s.content);
+            let score = score_from_content(s.content.as_ref());
             ScoreSample {
                 time: s.span_end_time.and_utc().timestamp_millis() as f64,
                 score,
@@ -188,11 +188,15 @@ pub async fn do_get_score_data(
 
 /// 从 score_stat.content JSON 提取分数：优先 `fieldWeight`（字段级加权），
 /// 旧数据回退到 `count`（编辑次数），都缺失时按 0。
-fn score_from_content(content: &serde_json::Value) -> f64 {
+fn score_from_content(content: Option<&serde_json::Value>) -> f64 {
     content
-        .get("fieldWeight")
+        .and_then(|c| c.get("fieldWeight"))
         .and_then(|v| v.as_f64())
-        .or_else(|| content.get("count").and_then(|v| v.as_f64()))
+        .or_else(|| {
+            content
+                .and_then(|c| c.get("count"))
+                .and_then(|v| v.as_f64())
+        })
         .unwrap_or(0.0)
 }
 

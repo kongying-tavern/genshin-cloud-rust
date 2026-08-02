@@ -37,7 +37,7 @@ pub struct Model {
     pub is_error: bool,
     /// 附加信息
     #[sea_orm(column_type = "Json")]
-    pub extra_data: SysActionLogExtra,
+    pub extra_data: Option<SysActionLogExtra>,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

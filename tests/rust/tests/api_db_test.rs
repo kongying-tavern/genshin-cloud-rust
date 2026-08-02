@@ -163,7 +163,7 @@ async fn seed_user(
         phone: Set(None),
         logo: Set(None),
         role_id: Set(SystemUserRole::MapUser),
-        access_policy: Set(AccessPolicyList(policy)),
+        access_policy: Set(Some(AccessPolicyList(policy))),
         remark: Set(None),
     };
     Ok(sys_user_model::Entity::insert(am)
@@ -886,7 +886,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("fetch score stats");
     assert_eq!(stats.len(), 1, "one score_stat row for the contributor");
-    let content = &stats[0].content;
+    let content = stats[0].content.as_ref().expect("score content set");
     assert_eq!(content["count"], 2, "two Position edits counted");
     assert_eq!(
         content["fieldWeight"], 4.0,
