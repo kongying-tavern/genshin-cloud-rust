@@ -26,6 +26,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- Support JWT signing-key rotation (the last RS256 gap): the new
+  `JWT_RSA_VERIFY_KEYS` env (comma-separated RSA **public** key PEMs)
+  keeps historical keys verifiable after a rotation, and the JWKS
+  endpoint now publishes **all** RSA keys with stable kids (current =
+  `genshin-cloud-rsa-v1`, historical = `v2`, `v3`, ... in config order).
+  Rotation is a two-step deploy that never invalidates live tokens
+  (documented in `docs/en/guides/sync-with-java-roadmap.md` and
+  `.env.example`). A new `jwks_rotation` test signs with an old key and
+  asserts it still verifies, the JWKS carries both keys with distinct
+  moduli, and the v1 key matches the active private key.
+
 - Add RS256 signing with RSA JWKS (the last roadmap gap): when
   `JWT_RSA_PRIVATE_KEY_PEM` is set (PKCS#8 or PKCS#1 PEM), tokens are
   signed with RS256 and `/.well-known/jwks.json` publishes the RSA

@@ -1817,6 +1817,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
+ "jsonwebtoken",
  "md5",
  "minio",
  "rand_core 0.6.4",
@@ -1827,6 +1828,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-test",
+ "uuid",
 ]
 
 [[package]]
