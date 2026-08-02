@@ -5,6 +5,9 @@ use _utils::{impl_safe_operation, types::MarkerLinkageLinkAction};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "marker_linkage", schema_name = "genshin_map")]
+/// 可空性说明：旧库中 group_id / from_id / to_id / link_action / link_reverse
+/// 均为「可空 + DEFAULT 兜底」（'' / 0 / false）且无任何 NULL 数据实例（461 MB
+/// 备份扫描验证），因此实体保持非 Option（我们写入必填、读取安全）。
 pub struct Model {
     /// 乐观锁
     pub version: i64,
