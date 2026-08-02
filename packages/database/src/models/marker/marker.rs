@@ -31,8 +31,10 @@ pub struct Model {
     /// 形如 "{x},{y}" 的格式，其中 x 与 y 均为浮点数文本
     pub position: String,
     /// 点位说明
+    #[sea_orm(column_type = "Text")]
     pub content: String,
     /// 点位图片
+    #[sea_orm(column_type = "Text")]
     pub picture: Option<String>,
     /// 点位初始标记者
     pub marker_creator_id: i64,

@@ -41,6 +41,7 @@ pub struct Model {
     #[sea_orm(indexed)]
     pub phone: Option<String>,
     /// 头像链接
+    #[sea_orm(column_type = "Text")]
     pub logo: Option<String>,
 
     /// 角色
@@ -49,6 +50,7 @@ pub struct Model {
     #[sea_orm(column_type = "Json")]
     pub access_policy: AccessPolicyList,
     /// 备注
+    #[sea_orm(column_type = "Text")]
     pub remark: Option<String>,
 }
 

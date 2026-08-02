@@ -27,6 +27,7 @@ pub struct Model {
     /// 标题
     pub title: String,
     /// 内容
+    #[sea_orm(column_type = "Text")]
     pub content: Option<String>,
     /// 有效期开始时间
     pub valid_time_start: Option<DateTime>,

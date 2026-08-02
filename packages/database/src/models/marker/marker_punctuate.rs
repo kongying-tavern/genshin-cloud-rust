@@ -38,8 +38,10 @@ pub struct Model {
     /// 点位坐标
     pub position: String,
     /// 点位说明
+    #[sea_orm(column_type = "Text")]
     pub content: String,
     /// 点位图片
+    #[sea_orm(column_type = "Text")]
     pub picture: Option<String>,
     /// 点位初始标记者
     pub marker_creator_id: i64,
