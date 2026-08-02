@@ -25,7 +25,7 @@ pub async fn do_delete_area_cache(auth: AuthInfo) -> Result<CommonResponse<Empty
 /// 清除物品缓存（BinaryMD5 item 页）。
 pub async fn do_delete_item_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all();
+    binary_doc::invalidate_all().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -44,14 +44,14 @@ pub async fn do_delete_icon_tag_cache(auth: AuthInfo) -> Result<CommonResponse<E
 /// 清除点位缓存（BinaryMD5 marker 页）。
 pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all();
+    binary_doc::invalidate_all().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
 /// 清除点位连线缓存（BinaryMD5 link list/graph 页）。
 pub async fn do_delete_marker_link_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all();
+    binary_doc::invalidate_all().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
