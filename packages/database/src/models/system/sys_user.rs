@@ -48,7 +48,7 @@ pub struct Model {
     pub role_id: SystemUserRole,
     /// 权限策略
     #[sea_orm(column_type = "Json")]
-    pub access_policy: AccessPolicyList,
+    pub access_policy: Option<AccessPolicyList>,
     /// 备注
     #[sea_orm(column_type = "Text")]
     pub remark: Option<String>,
@@ -87,7 +87,7 @@ impl From<Model> for SysUserVO {
             phone: val.phone,
             logo: val.logo,
             role_id: val.role_id,
-            access_policy: val.access_policy,
+            access_policy: val.access_policy.unwrap_or_default(),
             remark: val.remark,
         }
     }

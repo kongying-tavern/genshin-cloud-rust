@@ -36,7 +36,7 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub video: Option<String>,
     /// 额外信息
-    pub extra: serde_json::Value,
+    pub extra: Option<serde_json::Value>,
     /// 创建人昵称
     pub creator_nickname: String,
 }

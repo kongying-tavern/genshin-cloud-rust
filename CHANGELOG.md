@@ -84,6 +84,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exactly (verified column-for-column, type-for-type against the
   461 MB legacy dump).
 
+- Make four columns nullable to match the legacy data: `score_stat.content`
+  (18 047 NULL rows in the dump), `sys_action_log.extra_data` (2 406),
+  `sys_user.access_policy` (197), and `route.extra` (1) were non-Option
+  in our entities but nullable in the legacy schema with actual NULL
+  data — reading the legacy database would have failed on those rows.
+  Entities and business code (score read-back, oauth policy checks,
+  route VO mapping, register/update writes, action-log writes) are
+  updated; `Option` accessors unwrap to defaults where the value is
+  always written by us.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

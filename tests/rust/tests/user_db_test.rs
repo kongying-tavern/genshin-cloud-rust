@@ -83,7 +83,9 @@ async fn seed_user(db: &sea_orm::DatabaseConnection) -> anyhow::Result<i64> {
         phone: Set(None),
         logo: Set(None),
         role_id: Set(SystemUserRole::MapUser),
-        access_policy: Set(AccessPolicyList(vec![AccessPolicyItemEnum::IpSameLastIp])),
+        access_policy: Set(Some(AccessPolicyList(vec![
+            AccessPolicyItemEnum::IpSameLastIp,
+        ]))),
         remark: Set(None),
     };
     let res = sys_user::Entity::insert(am).exec(db).await?;

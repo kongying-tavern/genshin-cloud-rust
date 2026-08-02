@@ -195,7 +195,8 @@ async fn oauth_password_login_inner(
     }
 
     // 身份验证通过后，按用户的 access_policy 校验登录环境
-    check_access_policy(item.id, &item.access_policy.0, ip, user_agent).await?;
+    let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
+    check_access_policy(item.id, &policy, ip, user_agent).await?;
 
     issue_token(&item).await
 }
@@ -258,7 +259,7 @@ pub async fn oauth_password_login(
         device_id: Set(user_agent),
         action: Set(SystemActionLogAction::Login),
         is_error: Set(ret.is_err()),
-        extra_data: Set(Default::default()),
+        extra_data: Set(Some(Default::default())),
     }
     .insert(&DB_CONN.wait().pg_conn)
     .await?;
@@ -297,7 +298,8 @@ pub async fn oauth_qq_login(
     let user_id = item.id;
 
     // 身份由 openid 提供；同样校验登录环境
-    check_access_policy(item.id, &item.access_policy.0, ip, &user_agent).await?;
+    let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
+    check_access_policy(item.id, &policy, ip, &user_agent).await?;
     let ret = issue_token(&item).await;
 
     if ret.is_ok() {
@@ -316,7 +318,7 @@ pub async fn oauth_qq_login(
         device_id: Set(user_agent),
         action: Set(SystemActionLogAction::Login),
         is_error: Set(ret.is_err()),
-        extra_data: Set(Default::default()),
+        extra_data: Set(Some(Default::default())),
     }
     .insert(&DB_CONN.wait().pg_conn)
     .await?;
