@@ -109,6 +109,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   response shape; without credentials they report an explicit SKIP
   (never a pass). `.env.example` documents the new variables.
 
+- Harden the remaining secondary-audit minors: `do_kick_out` now uses
+  SCAN + pipeline instead of blocking `KEYS` (with a batched cursor
+  walk); the CDN proxy client has connect (5s) and overall (15s)
+  timeouts instead of hanging indefinitely on a stuck upstream.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
