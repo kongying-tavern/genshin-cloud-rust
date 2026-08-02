@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use _utils::{impl_safe_operation, types::IconURLVariants};
+use _utils::impl_safe_operation;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
 #[sea_orm(table_name = "icon", schema_name = "genshin_map")]
@@ -22,15 +22,10 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
+    /// 图标名称（旧库列名 `name`，与 Java 侧一致）
+    pub name: String,
     /// 图标 URL
     pub url: String,
-    /// 图标标签
-    pub tag: String,
-    /// 图标描述
-    pub description: String,
-    /// 图标变体 URL 信息
-    #[sea_orm(column_type = "Json")]
-    pub url_variants: IconURLVariants,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
