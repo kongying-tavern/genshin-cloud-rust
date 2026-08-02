@@ -25,6 +25,7 @@ pub async fn do_add(
     auth: AuthInfo,
     payload: IconAddRequest,
 ) -> Result<CommonResponse<IconAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
     let active = icon_model::ActiveModel {
@@ -105,7 +106,8 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
 }
 
 // 删除（软删除）
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let item = icon_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -119,7 +121,8 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
 }
 
 // 更新图标
-pub async fn do_update(_auth: AuthInfo, payload: IconUpdateRequest) -> Result<CommonResponse<()>> {
+pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let item = icon_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;

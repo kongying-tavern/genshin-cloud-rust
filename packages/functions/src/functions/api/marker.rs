@@ -54,9 +54,10 @@ fn model_to_vo(it: marker_model::Model) -> MarkerVO {
 }
 
 pub async fn do_tweak(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerTweakRequest,
 ) -> Result<CommonResponse<MarkerEmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     for marker_id in payload.marker_ids.iter() {
@@ -273,9 +274,10 @@ async fn insert_item_link(
 }
 
 pub async fn do_add_single(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerAddRequest,
 ) -> Result<CommonResponse<MarkerAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
     let active = marker_model::ActiveModel {
@@ -307,9 +309,10 @@ pub async fn do_add_single(
 }
 
 pub async fn do_update_single(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerUpdateData,
 ) -> Result<CommonResponse<MarkerEmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let m = marker_model::Entity::find_safety_by_id(payload.id)
@@ -464,7 +467,8 @@ pub async fn do_get_page(
     })))
 }
 
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerEmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerEmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let m = marker_model::Entity::find_safety_by_id(id).one(db).await?;
     let m = m.ok_or(anyhow!("Marker not found"))?;

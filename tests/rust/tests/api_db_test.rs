@@ -195,6 +195,13 @@ fn stub_auth_with_role(role: SystemUserRole) -> AuthInfo {
     }
 }
 
+/// The anonymous client-credentials identity (user id 0): read-only.
+fn stub_anonymous_auth() -> AuthInfo {
+    let mut auth = stub_auth_with_role(SystemUserRole::Visitor);
+    auth.info.id = 0;
+    auth
+}
+
 #[tokio::test]
 async fn area_and_item_doc_business_assertions() {
     // Enable RS256 signing for the whole test process: generate an ephemeral
@@ -395,6 +402,27 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("area list payload");
     assert_eq!(after_third.0.len(), 3, "three areas after repeated adds");
+
+    // Anonymous (client-credentials, id=0) tokens must be rejected on writes.
+    assert!(
+        area_fns::do_add(
+            stub_anonymous_auth(),
+            AreaAddRequest {
+                name: "Anonymous Rejected".into(),
+                code: None,
+                content: None,
+                icon_tag: "0".into(),
+                parent_id: -1,
+                is_final: false,
+                hidden_flag: HiddenFlag::Visible,
+                sort_index: 0,
+                special_flag: 0,
+            },
+        )
+        .await
+        .is_err(),
+        "anonymous token must be rejected for area writes"
+    );
 
     // ── Assertion 3: item_doc do_list_page_bin_md5 returns one MD5 per
     //    hidden_flag group (2 items, 2 distinct flags → 2 entries), each a

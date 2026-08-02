@@ -55,6 +55,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `grant_type=refresh_token`, rotating the jti (old tokens invalidated
   in Redis) as before.
 
+- Reject anonymous write operations (secondary audit P1): the
+  client-credentials token (user id 0, `scope=all`) could previously
+  call every `/api/*` write endpoint. New `AuthInfo::require_non_anonymous`
+  guard is applied to all 49 business write functions (add/update/delete/
+  tweak/copy/upload/submit/link/move/join/...). Anonymous tokens remain
+  valid for reads (map browsing).
+
+- Stop trusting proxy headers by default (secondary audit P1): the IP
+  extractor now uses the socket address unless `TRUST_PROXY_HEADERS=1`
+  is set (in which case `X-Real-IP` / `X-Forwarded-For` are honored,
+  first entry wins), so clients cannot spoof their IP into access-policy
+  checks or the action log.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

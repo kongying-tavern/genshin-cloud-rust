@@ -26,9 +26,10 @@ use _utils::{
 ///
 /// 对应 Java `PunctuateService.stage` / `PunctuateService.commit`。
 pub async fn do_submit(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: PunctuateData,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let now = Utc::now().naive_utc();
 
@@ -82,9 +83,10 @@ pub async fn do_submit(
 
 /// 更新打点内容（仅 Pending/Rejected 状态可改）
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: PunctuateData,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let m = mp_model::Entity::find_safety()
@@ -145,10 +147,8 @@ pub async fn do_get_page_by_author(
 }
 
 /// 删除打点记录（软删除）
-pub async fn do_delete(
-    _auth: AuthInfo,
-    punctuate_id: i64,
-) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, punctuate_id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let m = mp_model::Entity::find_safety()

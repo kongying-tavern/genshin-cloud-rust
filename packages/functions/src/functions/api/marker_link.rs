@@ -22,9 +22,10 @@ use _utils::{
 
 // Upsert 标记连接：如果传入 id > 0 -> 更新该记录；否则插入新记录
 pub async fn do_link(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: Vec<MarkerLinkage>,
 ) -> Result<CommonResponse<Vec<MarkerLinkUpsertResult>>> {
+    auth.require_non_anonymous()?;
     let mut ret = Vec::with_capacity(payload.len());
     for p in payload {
         if p.id > 0 {
@@ -151,9 +152,10 @@ pub async fn do_get_graph(
 }
 
 pub async fn do_delete(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerLinkDeleteRequest,
 ) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     if let Some(ids) = payload.ids {
         for id in ids {

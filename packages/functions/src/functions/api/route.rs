@@ -36,7 +36,8 @@ fn to_vo(r: route_model::Model) -> RouteVO {
 }
 
 /// 新增路线
-pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
+pub async fn do_add(auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let now = Utc::now().naive_utc();
 
@@ -78,9 +79,10 @@ pub async fn do_add(_auth: AuthInfo, payload: RouteAddRequest) -> Result<i64> {
 
 /// 更新路线
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: RouteUpdateRequest,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let r = route_model::Entity::find_safety_by_id(payload.id)
@@ -197,7 +199,8 @@ pub async fn do_get_list_by_id(
 }
 
 /// 软删除路线
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let r = route_model::Entity::find_safety_by_id(id).one(db).await?;

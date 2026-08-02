@@ -86,7 +86,8 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<It
     Ok(CommonResponse::new(Ok(payload)))
 }
 
-pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse<ItemAddResponse>> {
+pub async fn do_add(auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse<ItemAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
     let active = item_model::ActiveModel {
@@ -115,9 +116,10 @@ pub async fn do_add(_auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse
 }
 
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: serde_json::Value,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
     let item = item_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
@@ -138,7 +140,8 @@ pub async fn do_update(
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = item_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;

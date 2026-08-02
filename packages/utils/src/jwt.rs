@@ -189,6 +189,23 @@ pub struct AuthInfo {
     pub expires_at: DateTime<Utc>,
 }
 
+impl AuthInfo {
+    /// Whether this token belongs to the anonymous client-credentials identity
+    /// (user id 0). Anonymous tokens are for read-only browsing: write
+    /// operations must call `require_non_anonymous`.
+    pub fn is_anonymous(&self) -> bool {
+        self.info.id == 0
+    }
+
+    /// Reject anonymous (client-credentials) tokens on write operations.
+    pub fn require_non_anonymous(&self) -> anyhow::Result<()> {
+        if self.is_anonymous() {
+            anyhow::bail!("Anonymous token is not allowed for this operation")
+        }
+        Ok(())
+    }
+}
+
 mod jwt_numeric_date {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{Deserialize, Deserializer, Serializer};

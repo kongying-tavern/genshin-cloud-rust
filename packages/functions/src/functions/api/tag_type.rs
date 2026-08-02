@@ -22,7 +22,8 @@ use _utils::{
 };
 
 /// 新增标签类型
-pub async fn do_add(_auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagTypeAddResponse> {
+pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagTypeAddResponse> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let now = Utc::now().naive_utc();
 
@@ -47,9 +48,10 @@ pub async fn do_add(_auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagT
 
 /// 更新标签类型
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: TagTypeUpdateRequest,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let t = tag_type_model::Entity::find_safety_by_id(payload.id)
@@ -102,7 +104,8 @@ pub async fn do_list(
 }
 
 /// 软删除标签类型
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let t = tag_type_model::Entity::find_safety_by_id(id)
