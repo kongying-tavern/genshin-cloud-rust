@@ -139,7 +139,7 @@ pub struct UserKickOutParams {
 
 /// 注册用户
 /// POST /user/register
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn register(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterParams>,
@@ -164,7 +164,7 @@ pub async fn register(
 
 /// 用QQ注册用户
 /// POST /user/register/qq
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn register_qq(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterQQParams>,
@@ -236,7 +236,7 @@ pub async fn update(
 
 /// 更新用户密码
 /// POST /user/update_password
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordParams>,
@@ -262,7 +262,7 @@ pub async fn update_password(
 
 /// 更新用户密码（管理员）
 /// POST /user/update_password_by_admin
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn update_password_by_admin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
