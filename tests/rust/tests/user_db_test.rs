@@ -116,6 +116,13 @@ fn stub_auth() -> AuthInfo {
 
 #[tokio::test]
 async fn user_db_round_trip() {
+    // JWT_SECRET is required (no default); set a test secret before any JWT
+    // operation touches the lazy key material.
+    // SAFETY: single-threaded test process; set once at the start.
+    unsafe {
+        std::env::set_var("JWT_SECRET", "integration-test-secret");
+    }
+
     let Some(db) = db().await else {
         return;
     };

@@ -214,6 +214,7 @@ async fn area_and_item_doc_business_assertions() {
     // unsafe because concurrent readers could race).
     unsafe {
         std::env::set_var("JWT_RSA_PRIVATE_KEY_PEM", rsa_pem);
+        std::env::set_var("JWT_SECRET", "integration-test-secret");
     }
 
     let Some(db) = db().await else {

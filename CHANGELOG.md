@@ -39,6 +39,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (the `rsa` crate now performs signing/key export, never RSA
   decryption).
 
+- Fix the JWKS key-disclosure hole: `JWT_SECRET` no longer has a
+  predictable dev default (the process now refuses to start without it —
+  generate with `openssl rand -base64 48`), and the JWKS endpoint
+  publishes an **empty** key set in HS256 mode instead of disclosing the
+  HMAC signing key in `oct` form. Deployments needing JWKS-based
+  verification must configure `JWT_RSA_PRIVATE_KEY_PEM` (RS256). Tests
+  set explicit test secrets; `.env.example` documents the required
+  variable.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):
