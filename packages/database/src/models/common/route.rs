@@ -33,6 +33,7 @@ pub struct Model {
     #[sea_orm(indexed)]
     pub hidden_flag: HiddenFlag,
     /// 视频地址
+    #[sea_orm(column_type = "Text")]
     pub video: Option<String>,
     /// 额外信息
     pub extra: serde_json::Value,

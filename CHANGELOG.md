@@ -77,6 +77,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   have (`hidden_flag` / `sort_index`): the entities, VOs, and business
   code are aligned so the schema now matches the old DDL exactly.
 
+- Align the text-column types with the legacy database: 11 long-text
+  fields across history / item / marker / marker_punctuate / notice /
+  route / sys_user / sys_user_invitation now use `Text` instead of
+  the default `varchar`, so the generated DDL matches the old schema
+  exactly (verified column-for-column, type-for-type against the
+  461 MB legacy dump).
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)

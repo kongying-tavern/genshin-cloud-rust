@@ -37,6 +37,7 @@ pub struct Model {
     pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
+    #[sea_orm(column_type = "Text")]
     pub default_content: Option<String>,
     /// 默认数量
     #[sea_orm(default_value = 1)]
