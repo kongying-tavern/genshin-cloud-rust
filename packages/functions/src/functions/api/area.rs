@@ -21,6 +21,7 @@ pub async fn do_add(
     auth: AuthInfo,
     payload: AreaAddRequest,
 ) -> Result<CommonResponse<AreaAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
     let active = area_model::ActiveModel {
@@ -49,9 +50,10 @@ pub async fn do_add(
 
 // 更新地区
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: AreaUpdateRequest,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = area_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -131,7 +133,8 @@ pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Area
 }
 
 // 删除（软删除）
-pub async fn do_delete(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;

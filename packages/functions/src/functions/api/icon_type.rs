@@ -20,9 +20,10 @@ use _utils::{
 
 // 更新图标类型
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: IconTypeUpdateRequest,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     // 使用安全查找带乐观锁的函数
     let item = icon_type_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
@@ -69,7 +70,8 @@ pub async fn do_list(_auth: AuthInfo) -> Result<CommonResponse<IconTypeListRespo
 }
 
 // 删除（软删除）
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = icon_type_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -83,7 +85,8 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
 }
 
 // 新增图标类型，返回新 ID
-pub async fn do_add(_auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64> {
+pub async fn do_add(auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64> {
+    auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
     let active = icon_type_model::ActiveModel {

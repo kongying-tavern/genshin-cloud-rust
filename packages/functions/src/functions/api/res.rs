@@ -7,8 +7,9 @@ pub async fn do_get() -> Result<CommonResponse<EmptyResponse>> {
 }
 
 pub async fn do_upload_image(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }

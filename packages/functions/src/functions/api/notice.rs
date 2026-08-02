@@ -21,9 +21,10 @@ use _utils::{
 };
 
 pub async fn do_update_notice(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: NoticeUpdateRequest,
 ) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let n = notice_model::Entity::find_safety_by_id(payload.id)
@@ -101,7 +102,8 @@ pub async fn do_get_notice_list(
     Ok(CommonResponse::new(Ok(payload)))
 }
 
-pub async fn do_delete_notice(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let n = notice_model::Entity::find_safety_by_id(id).one(db).await?;
     let n = n.ok_or(anyhow!("Notice not found"))?;
@@ -112,9 +114,10 @@ pub async fn do_delete_notice(_auth: AuthInfo, id: i64) -> Result<CommonResponse
 }
 
 pub async fn do_add_notice(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: NoticeAddRequest,
 ) -> Result<CommonResponse<NoticeAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
     let active = notice_model::ActiveModel {
         version: Set(0),

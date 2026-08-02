@@ -25,10 +25,11 @@ use _utils::{
 
 // 批量更新物品（支持单条或多条）
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     _edit_same: bool,
     payload: Vec<ItemUpdateData>,
 ) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     for p in payload {
         let item = item_model::Entity::find_safety_by_id(p.id)
             .one(&DB_CONN.wait().pg_conn)
@@ -123,10 +124,11 @@ pub async fn do_get_list(
 
 // 将多个物品加入到某个类型（在 link 表中插入或更新）
 pub async fn do_join_type(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     type_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     for item_id in payload {
         // 查找现有 link
         let ex = link_model::Entity::find_safety()
@@ -191,7 +193,8 @@ pub async fn do_get_list_by_id(
     Ok(CommonResponse::new(Ok(payload)))
 }
 
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let item = item_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -206,10 +209,11 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
 
 // 复制物品到指定地区（简单实现：复制记录并关联相同类型）
 pub async fn do_copy_to_area(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     area_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<CopyCountResponse>> {
+    auth.require_non_anonymous()?;
     let mut count = 0i64;
     for id in payload {
         if let Some(item) = item_model::Entity::find_safety_by_id(id)
@@ -250,9 +254,10 @@ pub async fn do_copy_to_area(
 }
 
 pub async fn do_add(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: ItemAddRequest,
 ) -> Result<CommonResponse<ItemAddResponse>> {
+    auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
     let active = item_model::ActiveModel {

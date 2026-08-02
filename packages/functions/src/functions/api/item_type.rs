@@ -24,9 +24,10 @@ use _utils::{
 
 // 更新类型
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: ItemTypeUpdateData,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = item_type_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -140,7 +141,8 @@ pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeA
 }
 
 // 逻辑删除类型
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     let item = item_type_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -154,7 +156,8 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyR
 }
 
 // 新增类型
-pub async fn do_add(_auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64> {
+pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64> {
+    auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
     // name 在逻辑上为必填
     let name = payload.name.ok_or(anyhow!("name required"))?;
