@@ -29,6 +29,16 @@ pub async fn do_update(
     _edit_same: bool,
     payload: Vec<ItemUpdateData>,
 ) -> Result<CommonResponse<()>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
     auth.require_non_anonymous()?;
     for p in payload {
         let item = item_model::Entity::find_safety_by_id(p.id)
@@ -128,6 +138,16 @@ pub async fn do_join_type(
     type_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<()>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
     auth.require_non_anonymous()?;
     for item_id in payload {
         // 查找现有 link
@@ -165,6 +185,16 @@ pub async fn do_get_list_by_id(
     _auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<ItemListResponse>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
     let db = &DB_CONN.wait().pg_conn;
     let items = item_model::Entity::find_safety()
         .filter(item_model::Column::Id.is_in(payload))
@@ -213,6 +243,17 @@ pub async fn do_copy_to_area(
     area_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<CopyCountResponse>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
+
     auth.require_non_anonymous()?;
     let mut count = 0i64;
     for id in payload {

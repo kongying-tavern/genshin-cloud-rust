@@ -139,6 +139,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   consulting the per-page cache. The refresh endpoints flush both
   caches.
 
+- Harden the remaining security minors (secondary audit): the password
+  login now rate-limits per IP (fixed window, 5 failed attempts /
+  minute) to blunt brute force; all batch-ID endpoints (`item` join /
+  get-list / update / copy, `item_common` add, `item_type` move,
+  `marker` get-list, `route` get-list) reject payloads over 1000
+  entries so the sqlx 65535-parameter limit can't be hit; and the
+  sqlx SQL logging level drops from Trace to Info so bound values
+  (potentially sensitive) no longer land in logs.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

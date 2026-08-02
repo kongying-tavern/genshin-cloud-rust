@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use once_cell::sync::Lazy;
 use std::net::SocketAddr;
 
 use redis::{AsyncTypedCommands, SetOptions};
@@ -225,12 +226,49 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     Ok((user.into(), claims))
 }
 
+/// 登录暴力破解限流：按 IP 固定窗口（每分钟最多 5 次失败的密码登录尝试）。
+/// 只计数失败尝试（成功登录不消耗额度），窗口过后自动重置。
+const LOGIN_RATE_LIMIT_PER_MINUTE: u32 = 5;
+
+static LOGIN_FAILURES: Lazy<std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>> =
+    Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
+fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
+    let now = chrono::Utc::now().timestamp();
+    let window = now / 60;
+    let mut map = LOGIN_FAILURES.lock().unwrap();
+    let entry = map.entry(ip.to_string()).or_insert((0, window));
+    if entry.1 != window {
+        *entry = (0, window);
+    }
+    if entry.0 >= LOGIN_RATE_LIMIT_PER_MINUTE {
+        return Err(anyhow!(
+            "Too many failed login attempts; try again in a minute"
+        ));
+    }
+    Ok(())
+}
+
+fn record_login_failure(ip: SocketAddr) {
+    let now = chrono::Utc::now().timestamp();
+    let window = now / 60;
+    let mut map = LOGIN_FAILURES.lock().unwrap();
+    let entry = map.entry(ip.to_string()).or_insert((0, window));
+    if entry.1 != window {
+        *entry = (0, window);
+    }
+    entry.0 += 1;
+}
+
 pub async fn oauth_password_login(
     username: String,
     password_raw: String,
     ip: SocketAddr,
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
+    // 限流检查在用户名查询之前：避免攻击者用无效用户名做无代价探测。
+    check_login_rate_limit(ip)?;
+
     let item = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .filter(models::system::sys_user::Column::Username.eq(username))
@@ -241,7 +279,9 @@ pub async fn oauth_password_login(
 
     let ret = oauth_password_login_inner(item, password_raw, ip, &user_agent).await;
 
-    if ret.is_ok() {
+    if ret.is_err() {
+        record_login_failure(ip);
+    } else {
         // 登录成功：登记设备（幂等 upsert）
         let _ = record_device(user_id, ip, &user_agent).await;
     }

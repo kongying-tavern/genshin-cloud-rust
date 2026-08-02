@@ -87,6 +87,17 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<It
 }
 
 pub async fn do_add(auth: AuthInfo, payload: Vec<i64>) -> Result<CommonResponse<ItemAddResponse>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
+
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 

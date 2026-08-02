@@ -61,6 +61,16 @@ pub async fn do_move_to_target(
     target_type_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    const MAX_BATCH: usize = 1000;
+    if payload.len() > MAX_BATCH {
+        {
+            return Err(anyhow!(
+                "batch too large: {} > {}",
+                payload.len(),
+                MAX_BATCH
+            ));
+        }
+    }
     for item_id in payload {
         // 查找 link 记录（末端类型）
         let links = link_model::Entity::find_safety()
