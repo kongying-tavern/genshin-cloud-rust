@@ -103,6 +103,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   logger (`env_logger`); PLAN.md milestone headers carry completion
   status; and a stale `user_db` test comment is fixed.
 
+- Fix the e2e script honesty (secondary audit T-item): `run_tests.py`
+  no longer treats 401/403 as "route exists ✓". API tests now log in
+  via `E2E_USERNAME` / `E2E_PASSWORD` (password grant) and assert the
+  response shape; without credentials they report an explicit SKIP
+  (never a pass). `.env.example` documents the new variables.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

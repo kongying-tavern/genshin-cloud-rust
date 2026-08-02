@@ -63,20 +63,65 @@ def _wait_for_shirabe(timeout: float = 30) -> bool:
 
 TESTS_PASSED = 0
 TESTS_FAILED = 0
+TESTS_SKIPPED = 0
+
+
+class SkipTest(Exception):
+    """Raised when a test cannot run in the current environment (e.g. no
+    credentials configured). Reported as SKIP — never as PASS or FAIL."""
 
 
 def test(name: str, fn):
-    """Run a test function, reporting pass/fail."""
-    global TESTS_PASSED, TESTS_FAILED
+    """Run a test function, reporting pass/fail/skip."""
+    global TESTS_PASSED, TESTS_FAILED, TESTS_SKIPPED
     print(f"\n{'─' * 60}")
     print(f"TEST: {name}")
     try:
         fn()
         TESTS_PASSED += 1
         print(f"  ✅ PASS")
+    except SkipTest as e:
+        TESTS_SKIPPED += 1
+        print(f"  ⏭️  SKIP: {e}")
     except Exception as e:
         TESTS_FAILED += 1
         print(f"  ❌ FAIL: {e}")
+
+
+def _api_headers() -> dict:
+    """Authenticated headers for API calls.
+
+    When E2E_USERNAME / E2E_PASSWORD are set, logs in via the password grant
+    and returns an Authorization bearer header. Otherwise returns an empty
+    header set — the API tests then SKIP instead of treating 401/403 as a
+    pass.
+    """
+    import os
+    import urllib.parse
+
+    username = os.environ.get("E2E_USERNAME")
+    password = os.environ.get("E2E_PASSWORD")
+    if not username or not password:
+        raise SkipTest(
+            "no E2E_USERNAME / E2E_PASSWORD configured — set them to run "
+            "authenticated API assertions"
+        )
+    body = urllib.parse.urlencode({
+        "grant_type": "password",
+        "username": username,
+        "password": password,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{RUST_URL}/oauth/token",
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    token = data.get("access_token")
+    if not token:
+        raise SkipTest(f"login succeeded but no access_token in response: {data}")
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_page_loads():
@@ -120,59 +165,76 @@ def test_page_loads():
 
 
 def test_api_area_list():
-    """Verify the Rust backend serves area data through the Vite proxy."""
+    """Verify the Rust backend serves area data through the Vite proxy.
+
+    Requires configured credentials (E2E_USERNAME / E2E_PASSWORD): without
+    them the test SKIPs — a 401/403 is no longer treated as a pass.
+    """
     import urllib.error
     import urllib.request as ur
 
+    headers = _api_headers()
+    headers["Content-Type"] = "application/json"
     url = f"{VUE_URL}/api/area/get/list"
-    req = ur.Request(url, method="POST", data=b"{}",
-                     headers={"Content-Type": "application/json"})
+    req = ur.Request(url, method="POST", data=b"{}", headers=headers)
     try:
         with ur.urlopen(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
+            payload = json.loads(body)
+            if "data" not in payload and "items" not in payload:
+                raise Exception(f"unexpected response shape: {body[:200]}")
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):
-            print(f"  (Auth required — route exists ✓, HTTP {e.code})")
-        else:
-            raise Exception(f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
+            raise SkipTest(f"endpoint requires auth (HTTP {e.code}) — "
+                           "check E2E_USERNAME / E2E_PASSWORD")
+        raise Exception(f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
     except Exception as e:
         raise Exception(f"API call failed: {e}")
 
 
 def test_api_marker_doc_md5():
-    """Verify the BinaryMD5 marker doc endpoint returns MD5 list."""
+    """Verify the BinaryMD5 marker doc endpoint returns the MD5 list."""
     import urllib.request as ur
 
+    headers = _api_headers()
     url = f"{VUE_URL}/api/marker_doc/list_page_bin_md5"
-    req = ur.Request(url, method="GET")
+    req = ur.Request(url, method="GET", headers=headers)
     try:
         with ur.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
-    except Exception as e:
-        # This endpoint requires auth — a 401/403 is acceptable (proves the route exists)
-        if "401" in str(e) or "403" in str(e):
-            print(f"  (Auth required — route exists ✓)")
-        else:
-            raise Exception(f"API call failed: {e}")
+            payload = json.loads(body)
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, list):
+                raise Exception(f"expected a data list, got: {body[:200]}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise SkipTest(f"endpoint requires auth (HTTP {e.code}) — "
+                           "check E2E_USERNAME / E2E_PASSWORD")
+        raise Exception(f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
 
 
 def test_api_item_doc_md5():
-    """Verify the BinaryMD5 item doc endpoint returns MD5 list."""
+    """Verify the BinaryMD5 item doc endpoint returns the MD5 list."""
     import urllib.request as ur
 
+    headers = _api_headers()
     url = f"{VUE_URL}/api/item_doc/list_page_bin_md5"
-    req = ur.Request(url, method="GET")
+    req = ur.Request(url, method="GET", headers=headers)
     try:
         with ur.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
-    except Exception as e:
-        if "401" in str(e) or "403" in str(e):
-            print(f"  (Auth required — route exists ✓)")
-        else:
-            raise Exception(f"API call failed: {e}")
+            payload = json.loads(body)
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, list):
+                raise Exception(f"expected a data list, got: {body[:200]}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise SkipTest(f"endpoint requires auth (HTTP {e.code}) — "
+                           "check E2E_USERNAME / E2E_PASSWORD")
+        raise Exception(f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
 
 
 def test_rust_health():
@@ -233,7 +295,7 @@ def main() -> int:
 
         # Summary
         print(f"\n{'═' * 60}")
-        print(f"RESULTS: {TESTS_PASSED} passed, {TESTS_FAILED} failed")
+        print(f"RESULTS: {TESTS_PASSED} passed, {TESTS_FAILED} failed, {TESTS_SKIPPED} skipped")
         print(f"Screenshots: {SCREENSHOTS_DIR}")
         return 0 if TESTS_FAILED == 0 else 1
     finally:
