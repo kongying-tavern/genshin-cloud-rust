@@ -20,6 +20,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+md5 = { workspace = true }
+minio = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "^0.4"
@@ -59,3 +61,10 @@ path = "tests/user_db_test.rs"
 [[test]]
 name = "api_db"
 path = "tests/api_db_test.rs"
+
+# MinIO-backed res-upload test. Same GCS_TEST_DB gate plus a reachable MinIO
+# instance (MINIO_ACCESS_KEY / MINIO_SECRET_KEY set). Skips when either is
+# missing, so CI (which only provisions Postgres) stays green.
+[[test]]
+name = "res_db"
+path = "tests/res_db_test.rs"

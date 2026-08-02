@@ -159,6 +159,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Features
 
+- Wire the resource-upload endpoint to MinIO (the last roadmap gap): the
+  `PUT /res/upload/image` handler no longer writes unmanaged temp files
+  (they were never cleaned up and the bytes were silently dropped) —
+  uploaded images are stored in the `images` bucket (`uploads/` prefix,
+  key derived from the *content type*, never the client file name) and the
+  response returns public URLs (`{MINIO_BASE_URL}/images/{key}`) with the
+  file metadata. When MinIO is not configured the endpoint fails with an
+  explicit error instead of returning a fake success. A new `res_db` DB
+  test (GCS_TEST_DB + MinIO gated) round-trips an upload through MinIO.
+
 - Add a configurable CORS layer: `CORS_ALLOW_ORIGIN` (comma-separated
   allowlist) controls which browser origins may call the API with
   `Authorization` headers. Unset → no CORS headers are sent
