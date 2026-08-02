@@ -21,11 +21,53 @@ pub async fn router() -> Result<Router> {
         .merge(api::router().await?)
         .nest_service("/cdn", cdn_proxy())
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
+        .layer(cors_layer())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
         .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
 
     Ok(ret)
+}
+
+/// 可配置的 CORS 策略：
+/// - `CORS_ALLOW_ORIGIN` 设置允许的源（逗号分隔），未设置时**不允许**任何
+///   跨域请求（浏览器前端应走同源/Vite 代理）；
+/// - 允许的源会收到 `Authorization` 头放行与标准的 GET/POST/PUT/DELETE。
+fn cors_layer() -> tower_http::cors::CorsLayer {
+    use axum::http::header::HeaderValue;
+    use tower_http::cors::{AllowOrigin, CorsLayer};
+
+    let allowed = std::env::var("CORS_ALLOW_ORIGIN")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+        });
+
+    let base = CorsLayer::new()
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+        ]);
+
+    match allowed {
+        Some(origins) if !origins.is_empty() => {
+            let origins: Vec<HeaderValue> = origins.iter().filter_map(|o| o.parse().ok()).collect();
+            base.allow_origin(AllowOrigin::list(origins))
+        },
+        // 未配置白名单：不发送任何 CORS 头，浏览器默认阻止跨域读取。
+        _ => base,
+    }
 }
 
 /// JWKS 公钥分发端点（`GET /.well-known/jwks.json`），无鉴权。

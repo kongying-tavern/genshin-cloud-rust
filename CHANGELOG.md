@@ -157,6 +157,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the registration flow) while the management endpoints become
   uniformly Admin-gated.
 
+### Features
+
+- Add a configurable CORS layer: `CORS_ALLOW_ORIGIN` (comma-separated
+  allowlist) controls which browser origins may call the API with
+  `Authorization` headers. Unset → no CORS headers are sent
+  (cross-origin browser access blocked, same-origin / Vite proxy
+  unaffected). `.env.example` documents the variable.
+
 ### Documentation
 
 - Translate the nine scaffolded doc entry pages (ar/de/es/fr/ja/ko/pt/ru/zht):

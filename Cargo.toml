@@ -99,7 +99,7 @@ rustls = { version = "^0.23", default-features = false, features = [
   "tls12",
   "logging",
 ] }
-tower-http = { version = "^0.7", features = ["fs", "trace"] }
+tower-http = { version = "^0.7", features = ["fs", "trace", "cors"] }
 
 # sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
 # have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"
