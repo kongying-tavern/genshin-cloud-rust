@@ -63,8 +63,16 @@ fn cdn_proxy() -> axum::Router {
     use axum::extract::State;
     use axum::http::Request;
     use axum::response::{IntoResponse, Response};
+    use std::time::Duration;
 
-    let client = std::sync::Arc::new(reqwest::Client::new());
+    // 上游挂起时不能无限等待：连接 5s、整体 15s 超时。
+    let client = std::sync::Arc::new(
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
+            .build()
+            .expect("build cdn client"),
+    );
     let upstream = cdn_upstream();
     let dadian_override = dadian_config_file();
 

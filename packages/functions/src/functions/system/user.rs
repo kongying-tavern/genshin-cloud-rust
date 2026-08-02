@@ -271,7 +271,6 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
         // Redis 不可用时退化为无操作（与 oauth 的降级策略一致）
         return Ok(());
     };
-    use redis::AsyncCommands;
     let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await else {
         // Redis 连接失败同样降级（与 oauth 的降级策略一致）
         return Ok(());
@@ -279,11 +278,43 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
 
     let access_prefix = format!("jwt:access:{user_id}:*");
     let refresh_prefix = format!("jwt:refresh:{user_id}:*");
-    for key in redis_conn.keys::<_, Vec<String>>(access_prefix).await? {
-        let _: usize = redis_conn.del(&key).await?;
-    }
-    for key in redis_conn.keys::<_, Vec<String>>(refresh_prefix).await? {
-        let _: usize = redis_conn.del(&key).await?;
+    // 用 SCAN + pipeline 而非 KEYS：KEYS 会阻塞 Redis 主线程（大 key 空间下
+    // 长时间阻塞），SCAN 按游标分批遍历；收集后一次 pipeline 删除。
+    for prefix in [access_prefix, refresh_prefix] {
+        let keys = scan_keys(&mut redis_conn, &prefix).await?;
+        if keys.is_empty() {
+            continue;
+        }
+        let mut pipe = redis::pipe();
+        for k in &keys {
+            pipe.cmd("DEL").arg(k);
+        }
+        pipe.query_async::<()>(&mut redis_conn).await?;
     }
     Ok(())
+}
+
+/// 用 SCAN 游标分批收集匹配 pattern 的 key（不阻塞 Redis 主线程）。
+async fn scan_keys(
+    redis_conn: &mut redis::aio::MultiplexedConnection,
+    pattern: &str,
+) -> Result<Vec<String>> {
+    let mut keys = Vec::new();
+    let mut cursor: u64 = 0;
+    loop {
+        let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+            .arg(cursor)
+            .arg("MATCH")
+            .arg(pattern)
+            .arg("COUNT")
+            .arg(500)
+            .query_async(redis_conn)
+            .await?;
+        keys.extend(batch);
+        cursor = next;
+        if cursor == 0 {
+            break;
+        }
+    }
+    Ok(keys)
 }
