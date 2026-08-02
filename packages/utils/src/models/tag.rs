@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{models::Pagination, types::HiddenFlag};
+use crate::models::Pagination;
 
 /// 标签基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -58,8 +58,6 @@ pub struct TagVO {
     pub id: i64,
     pub tag: String,
     pub icon_id: i64,
-    pub hidden_flag: HiddenFlag,
-    pub sort_index: i32,
 }
 
 /// 标签列表响应

@@ -73,6 +73,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   model already used `name` — `do_add` previously mis-stored it into
   `tag`). The name filter now queries `name` instead of `tag`.
 
+- Drop the `tag` / `tag_type` columns that the legacy database does not
+  have (`hidden_flag` / `sort_index`): the entities, VOs, and business
+  code are aligned so the schema now matches the old DDL exactly.
+
 ## [0.2.0] - 2026-08-01
 
 ### Infrastructure (master-based iteration transition)
