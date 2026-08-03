@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix the demo seed to actually render: areas now carry the real frontend
+  codes (`A:MD:MENGDE` / `A:LY:LIYUE` / `A:DQ:1` — matched against
+  `AREA_ADDITIONAL_CONFIG_MAP` and the dadian tiles), and markers use game
+  coordinates (Mondstadt x 500..3500, y -2300..-4700, city ≈ [1600, -4050])
+  instead of an invented positive-y space that would have placed them far
+  off the tile map.
+
 - Serve the domain endpoints under **both** `/api/*` and the root: the
   Java contract puts every domain under `/api/*`, but the Vite dev proxy
   **strips** the `/api` prefix before forwarding (vite.config `rewrite`),

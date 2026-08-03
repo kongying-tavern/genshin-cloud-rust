@@ -72,19 +72,20 @@ def main() -> int:
 
     now = "now()"
 
-    # ── Areas (root area self-references its parent_id) ──────────────────────
+    # ── Areas (root area self-references its parent_id; codes match the
+    #    frontend's AREA_ADDITIONAL_CONFIG_MAP / dadian tiles) ───────────────
     areas = [
-        (1, "蒙德", 1),
-        (2, "璃月", 1),
-        (3, "稻妻", 1),
+        (1, "蒙德", 1, "A:MD:MENGDE"),
+        (2, "璃月", 1, "A:LY:LIYUE"),
+        (3, "稻妻", 1, "A:DQ:1"),
     ]
-    for aid, name, parent in areas:
+    for aid, name, parent, code in areas:
         cur.execute(
             f'INSERT INTO "genshin_map"."area" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, code, content, icon_tag, parent_id, is_final, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, NULL, NULL, '0', {parent}, true, 0, {aid}, 0)",
-            (name,),
+            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, true, 0, {aid}, 0)",
+            (name, code),
         )
 
     # ── Icons ────────────────────────────────────────────────────────────────
@@ -124,7 +125,9 @@ def main() -> int:
         )
 
     # ── Markers: ~150 points spread over the Mondstadt region ────────────────
-    # Teyvat coordinates; Mondstadt city sits around (2400, 1900).
+    # Game coordinates: Mondstadt spans roughly x 500..3500, y -4700..-2300
+    # (Mondstadt city ≈ [1600, -4050]); the frontend renders markers in this
+    # space on top of the 提瓦特 tile map.
     rng = random.Random(20260803)
     marker_id = 1
     title_by_item = {
@@ -138,8 +141,8 @@ def main() -> int:
     }
     for _ in range(150):
         item_id = rng.choice(list(title_by_item))
-        x = rng.randint(1800, 3200)
-        y = rng.randint(1200, 2600)
+        x = rng.randint(500, 3500)
+        y = -rng.randint(2300, 4700)
         position = f"{x}.{rng.randint(0, 9)},{y}.{rng.randint(0, 9)}"
         cur.execute(
             f'INSERT INTO "genshin_map"."marker" '
