@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Serve the domain endpoints under **both** `/api/*` and the root: the
+  Java contract puts every domain under `/api/*`, but the Vite dev proxy
+  **strips** the `/api` prefix before forwarding (vite.config `rewrite`),
+  so dev-mode frontends hit the unprefixed paths. Only `/api` (or only the
+  root, as before) broke one of the two clients — both are now mounted,
+  verified live through all three paths (direct `/api/area`, bare
+  `/area`, and `http://127.0.0.1:9000/api/area` via the Vite proxy).
+
+- Fix the e2e runner on Windows consoles: the emoji in the test report
+  crashed with `UnicodeEncodeError` under GBK/cp936; stdout/stderr are now
+  reconfigured to UTF-8. Full e2e verified locally: **5 passed, 0 failed,
+  0 skipped** (Shirabe browser + authenticated API assertions against the
+  seeded `admin` account).
+
 - Fix the e2e login client to match the backend contract: the Rust
   `/oauth/token` extracts the password grant via axum `Multipart`
   (Java-parity), so `run_tests.py`'s urlencoded login was rejected with a
