@@ -66,13 +66,19 @@ def _resolve_vue_frontend() -> Path:
     env_path = os.environ.get("E2E_VUE_FRONTEND")
     if not env_path:
         raise RuntimeError(
-            "E2E_VUE_FRONTEND is not set.\n"
+            "E2E_VUE_FRONTEND is not set — refusing to start.\n"
             "Add it to .env, e.g.:\n"
-            "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3"
+            "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3\n"
+            "  E2E_VUE_FRONTEND=../vue_map_register_v3   # relative to the repo root"
         )
     # Convert Windows path to native if running in WSL
     native_path = _win_to_native(env_path)
-    p = Path(native_path).resolve()
+    p = Path(native_path)
+    # Relative paths resolve against the repo root (not the CWD), so the
+    # .env entry is stable regardless of where the script is invoked from.
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    p = p.resolve()
     if not (p / "package.json").exists():
         raise RuntimeError(
             f"E2E_VUE_FRONTEND={env_path}\n"

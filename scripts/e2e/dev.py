@@ -32,6 +32,14 @@ def _run(script: Path, *args: str) -> int:
 
 
 def main() -> int:
+    # The Vue frontend path is mandatory (config.py refuses to import without
+    # it): surface a friendly error instead of a raw traceback.
+    try:
+        from config import VUE_FRONTEND  # noqa: F401
+    except RuntimeError as e:
+        error(TARGET, f"Refusing to start: {e}")
+        return 1
+
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 
     if cmd == "" or cmd == "start":

@@ -9,6 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Add a local schema initializer for dev/e2e: `cargo run --bin init_db`
+  (wrapped by `scripts/init_db.py`) creates the `genshin_map` schema and
+  all 24 tables idempotently, with the DDL generated straight from the
+  sea-orm entity definitions (FK-ordered, `IF NOT EXISTS`). Previously the
+  only way to get a schema was the test harness — the backend itself never
+  created tables.
+
+- Refuse to start the e2e/dev stack without a configured Vue frontend:
+  `E2E_VUE_FRONTEND` is mandatory in `.env` (relative paths now resolve
+  against the repo root, not the CWD), and `scripts/e2e/dev.py` prints a
+  friendly error and exits 1 instead of a raw traceback.
+
 - Align the BinaryMD5 blob content with the Java wire contract: the
   `item_doc` / `marker_doc` / `marker_link_doc` pages were serializing the
   raw sea-orm models (snake_case fields), while the frontend parses the
