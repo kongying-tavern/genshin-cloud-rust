@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Features
+
+- Add a demo-data seeder for local development: `python scripts/seed_demo.py`
+  fills an empty database with 3 areas, 7 items (传送锚点/七天神像/秘境/宝箱/
+  材料) and 150 markers spread over the Mondstadt region, so a fresh local
+  stack renders a visible map instead of a black screen. Idempotent — wipes
+  only the demo-scoped business tables (marker/item/area/icon/history...)
+  and re-inserts; users/roles are untouched.
+
 ### Fixed
 
 - Serve the domain endpoints under **both** `/api/*` and the root: the
