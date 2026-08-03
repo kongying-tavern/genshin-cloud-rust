@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Features
 
+- Add the missing `tag_doc` domain (the frontend's icon-tag sprite store
+  calls it): `GET /api/tag_doc/all_bin_md5` + `GET /api/tag_doc/all_bin`
+  serve the whole tag set as one GZIP-compressed JSON blob (Java `TagVo`
+  naming — `tag`, `typeIdList` from `tag_type_link`, icon `url`), cached at
+  the result level. The demo seed now also fills the `tag` / `tag_type` /
+  `tag_type_link` tables (5 tags).
+
 - Add a demo-data seeder for local development: `python scripts/seed_demo.py`
   fills an empty database with 3 areas, 7 items (传送锚点/七天神像/秘境/宝箱/
   材料) and 150 markers spread over the Mondstadt region, so a fresh local
