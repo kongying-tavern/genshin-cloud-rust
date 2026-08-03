@@ -4,6 +4,10 @@
 //! (`CREATE TABLE IF NOT EXISTS`), then exits. DDL is generated from the
 //! entity definitions, so it can never drift from the code.
 //!
+//! **On-demand mode**: when all 24 tables already exist the CREATE pass is
+//! skipped entirely ("schema already up to date"). Afterwards it ensures a
+//! dev admin account exists and prints the credentials to stdout.
+//!
 //! Usage (from the workspace root):
 //!   cargo run --bin init_db
 //!
@@ -12,7 +16,10 @@
 
 use anyhow::{Context, Result};
 
-use sea_orm::{Database, DbBackend, Schema, prelude::*};
+use sea_orm::{
+    ActiveValue::Set, ColumnTrait, ConnectionTrait, Database, DbBackend, EntityTrait, QueryFilter,
+    Schema,
+};
 
 use _database::models::{
     area::area as area_entity, area::item_area_public as item_area_public_entity,
@@ -72,39 +79,100 @@ async fn main() -> Result<()> {
         .await
         .context("create schema")?;
 
-    let schema = Schema::new(DbBackend::Postgres);
-    // Order matters for the FOREIGN KEY constraints: referenced tables must
-    // exist first. sys_user → standalone masters (area is self-referencing
-    // via parent_id, which is fine) → link tables → system aux tables.
-    let created = ensure_tables!(
-        db,
-        schema,
-        sys_user_entity::Entity,
-        area_entity::Entity,
-        icon_entity::Entity,
-        icon_type_entity::Entity,
-        item_entity::Entity,
-        item_type_entity::Entity,
-        tag_entity::Entity,
-        tag_type_entity::Entity,
-        marker_entity::Entity,
-        notice_entity::Entity,
-        route_entity::Entity,
-        history_entity::Entity,
-        score_stat_entity::Entity,
-        icon_type_link_entity::Entity,
-        item_type_link_entity::Entity,
-        tag_type_link_entity::Entity,
-        marker_item_link_entity::Entity,
-        marker_linkage_entity::Entity,
-        item_area_public_entity::Entity,
-        marker_punctuate_entity::Entity,
-        sys_user_archive_entity::Entity,
-        sys_user_device_entity::Entity,
-        sys_user_invitation_entity::Entity,
-        sys_action_log_entity::Entity,
-    );
+    // On-demand: skip the CREATE pass entirely when the schema already
+    // exists (probe a representative table).
+    let schema_present = db
+        .execute_unprepared("SELECT 1 FROM genshin_map.sys_user LIMIT 1")
+        .await
+        .is_ok();
 
-    println!("Schema ready: {created} tables ensured in genshin_map");
+    if schema_present {
+        println!("Schema already up to date (genshin_map)");
+    } else {
+        let schema = Schema::new(DbBackend::Postgres);
+        // Order matters for the FOREIGN KEY constraints: referenced tables
+        // must exist first. sys_user → standalone masters (area is
+        // self-referencing via parent_id, which is fine) → link tables →
+        // system aux tables.
+        let created = ensure_tables!(
+            db,
+            schema,
+            sys_user_entity::Entity,
+            area_entity::Entity,
+            icon_entity::Entity,
+            icon_type_entity::Entity,
+            item_entity::Entity,
+            item_type_entity::Entity,
+            tag_entity::Entity,
+            tag_type_entity::Entity,
+            marker_entity::Entity,
+            notice_entity::Entity,
+            route_entity::Entity,
+            history_entity::Entity,
+            score_stat_entity::Entity,
+            icon_type_link_entity::Entity,
+            item_type_link_entity::Entity,
+            tag_type_link_entity::Entity,
+            marker_item_link_entity::Entity,
+            marker_linkage_entity::Entity,
+            item_area_public_entity::Entity,
+            marker_punctuate_entity::Entity,
+            sys_user_archive_entity::Entity,
+            sys_user_device_entity::Entity,
+            sys_user_invitation_entity::Entity,
+            sys_action_log_entity::Entity,
+        );
+        println!("Schema ready: {created} tables ensured in genshin_map");
+    }
+
+    ensure_admin_account(&db).await?;
+    Ok(())
+}
+
+/// Ensure a dev admin account exists (dev-only bootstrap). Prints the
+/// credentials to stdout when it creates one; override via
+/// `INIT_ADMIN_USERNAME` / `INIT_ADMIN_PASSWORD`.
+async fn ensure_admin_account(db: &sea_orm::DatabaseConnection) -> Result<()> {
+    let username = std::env::var("INIT_ADMIN_USERNAME").unwrap_or_else(|_| "admin".into());
+    let password = std::env::var("INIT_ADMIN_PASSWORD").unwrap_or_else(|_| "admin123".into());
+
+    let existing = sys_user_entity::Entity::find()
+        .filter(sys_user_entity::Column::RoleId.eq(_utils::types::SystemUserRole::Admin))
+        .one(db)
+        .await?;
+    if existing.is_some() {
+        println!(
+            "Admin account already present ({}); nothing to seed",
+            existing.map(|u| u.username).unwrap_or_default()
+        );
+        return Ok(());
+    }
+
+    let now = chrono::Utc::now().naive_utc();
+    sys_user_entity::Entity::insert(sys_user_entity::ActiveModel {
+        version: Set(0),
+        id: Set(1),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        username: Set(username.clone()),
+        password: Set(_utils::bcrypt::generate_storage_password(&password)?),
+        nickname: Set(Some("Dev Admin".into())),
+        qq: Set(None),
+        phone: Set(None),
+        logo: Set(None),
+        role_id: Set(_utils::types::SystemUserRole::Admin),
+        access_policy: Set(None),
+        remark: Set(Some("Auto-seeded by init_db (dev only)".into())),
+    })
+    .exec(db)
+    .await?;
+
+    println!(
+        "Seeded dev admin account: username={username} password={password} \
+         (dev only — override via INIT_ADMIN_USERNAME / INIT_ADMIN_PASSWORD)"
+    );
     Ok(())
 }
