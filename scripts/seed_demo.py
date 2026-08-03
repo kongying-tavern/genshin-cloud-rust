@@ -67,6 +67,9 @@ def main() -> int:
         "item",
         "item_type_link",
         "item_type",
+        "tag_type_link",
+        "tag_type",
+        "tag",
         "icon",
         "area",
     ):
@@ -147,6 +150,44 @@ def main() -> int:
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"type_id, item_id) "
             f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, {type_id}, {iid})"
+        )
+
+    # ── Tags (icon-tag sprite; tag_type_link keyed by tag name) ──────────────
+    tag_types = [
+        (1, "锚点"),
+        (2, "神像"),
+        (3, "秘境"),
+        (4, "宝箱"),
+        (5, "材料"),
+    ]
+    for tid, name in tag_types:
+        cur.execute(
+            f'INSERT INTO "genshin_map"."tag_type" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"name, parent_id, is_final) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, {tid}, true)",
+            (name,),
+        )
+    tags = [
+        (1, "anchor", 1, 1),
+        (2, "statue", 1, 2),
+        (3, "domain", 1, 3),
+        (4, "chest", 1, 4),
+        (5, "material", 1, 5),
+    ]
+    for tid, tag_name, icon_id, type_id in tags:
+        cur.execute(
+            f'INSERT INTO "genshin_map"."tag" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, tag, icon_id) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, {icon_id})",
+            (tag_name,),
+        )
+        cur.execute(
+            f'INSERT INTO "genshin_map"."tag_type_link" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"type_id, tag_name) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, {type_id}, %s)",
+            (tag_name,),
         )
 
     # ── Markers: ~150 points spread over the Mondstadt region ────────────────

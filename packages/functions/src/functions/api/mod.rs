@@ -20,4 +20,5 @@ pub mod res;
 pub mod route;
 pub mod score;
 pub mod tag;
+pub mod tag_doc;
 pub mod tag_type;
