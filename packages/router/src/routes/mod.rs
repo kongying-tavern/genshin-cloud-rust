@@ -18,8 +18,12 @@ pub async fn router() -> Result<Router> {
         .route("/oauth/qq", post(system::oauth::qq_login))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
-        // Java contract: every domain endpoint lives under /api/* — the
-        // frontend and the Vite proxy (VITE_API_BASE=/api) call these paths.
+        // The domain endpoints live under /api/* (Java contract — the
+        // frontend's production build and direct clients call these paths).
+        // They are ALSO merged at the root: the Vite dev proxy rewrites
+        // `/api/*` → `/*` before forwarding (vite.config `rewrite`), so a
+        // dev-mode frontend hits the unprefixed paths. Both must work.
+        .merge(api::router().await?)
         .nest("/api", api::router().await?)
         .nest_service("/cdn", cdn_proxy())
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
