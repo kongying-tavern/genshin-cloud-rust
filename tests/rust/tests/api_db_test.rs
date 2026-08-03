@@ -15,13 +15,13 @@ use _database::DB_CONN;
 use _database::models::{
     area::area as area_model, area::item_area_public as iap_model,
     common::history as history_model, common::score_stat as score_stat_model,
-    item::item as item_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
-    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
-    system::sys_user_device as device_model,
+    icon::icon as icon_model, icon::icon_type_link as itl_model, item::item as item_model,
+    marker::marker as marker_model, marker::marker_item_link as mil_model,
+    marker::marker_punctuate as mp_model, system::sys_action_log as action_log_model,
+    system::sys_user as sys_user_model, system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
-    area as area_fns, cache as cache_fns, item_common as item_common_fns, item_doc,
+    area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
     marker as marker_fns, punctuate as punctuate_fns, punctuate_audit as audit_fns,
     score as score_fns,
 };
@@ -174,6 +174,29 @@ async fn seed_common_item(
         .last_insert_id)
 }
 
+/// Seed an icon row (used by the icon_doc assertions).
+async fn seed_icon(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    name: &str,
+) -> anyhow::Result<i64> {
+    let am = icon_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        name: Set(name.to_string()),
+        url: Set(format!("https://example.test/{name}.png")),
+    };
+    Ok(icon_model::Entity::insert(am)
+        .exec(db)
+        .await?
+        .last_insert_id)
+}
+
 async fn seed_user(
     db: &sea_orm::DatabaseConnection,
     username: &str,
@@ -271,6 +294,8 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(iap_model::Entity),
+        ddl_without_foreign_keys(icon_model::Entity),
+        ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
         ddl_without_foreign_keys(mp_model::Entity),
@@ -286,6 +311,8 @@ async fn area_and_item_doc_business_assertions() {
             "area",
             "item",
             "item_area_public",
+            "icon",
+            "icon_type_link",
             "marker",
             "marker_item_link",
             "marker_punctuate",
@@ -967,7 +994,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // do_get_score_data reads the real score (not a fixed 1.0).
     let data = score_fns::do_get_score_data(
-        auth,
+        auth.clone(),
         ScoreDataRequest {
             end_time: end_ms,
             scope: "map".into(),
@@ -1064,5 +1091,72 @@ async fn area_and_item_doc_business_assertions() {
             .name,
         "紫晶矿",
         "delete must not touch the item row"
+    );
+
+    // ── Wire-contract assertions: BinaryMD5 blob content must use the Java
+    //    camelCase field naming (frontend parses the decompressed JSON by the
+    //    Java `ItemVo`/`MarkerVo`/`IconVo` names) ───────────────────────────
+    // item_doc page: decompress and check camelCase keys.
+    let item_bin = item_doc::do_list_page_bin(auth.clone(), md5_resp[0].md5.clone())
+        .await
+        .expect("fetch item page bin");
+    let mut decoder = flate2::read::GzDecoder::new(item_bin.as_slice());
+    let mut decoded = Vec::new();
+    std::io::Read::read_to_end(&mut decoder, &mut decoded).expect("gunzip item page");
+    let page: serde_json::Value = serde_json::from_slice(&decoded).expect("item page json");
+    let first = page[0].as_object().expect("page is an array of objects");
+    assert!(
+        first.contains_key("areaId") && !first.contains_key("area_id"),
+        "item page fields must be camelCase (Java ItemVo): {:?}",
+        first.keys().collect::<Vec<_>>()
+    );
+
+    // icon_doc: seed icons + a type link, then all_bin_md5 / all_bin.
+    let icon_1 = seed_icon(db, now, "icon-a").await.expect("seed icon a");
+    let icon_2 = seed_icon(db, now, "icon-b").await.expect("seed icon b");
+    itl_model::Entity::insert(itl_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        type_id: Set(7),
+        icon_id: Set(icon_1),
+    })
+    .exec(db)
+    .await
+    .expect("seed icon type link");
+
+    let icon_md5 = icon_doc::do_all_bin_md5(auth.clone(), serde_json::Value::Null)
+        .await
+        .expect("icon_doc md5")
+        .data
+        .expect("icon_doc md5 payload");
+    assert_eq!(icon_md5.md5.len(), 32, "icon blob md5");
+    let icon_bin = icon_doc::do_all_bin(auth.clone())
+        .await
+        .expect("fetch icon bin");
+    let mut decoder = flate2::read::GzDecoder::new(icon_bin.as_slice());
+    let mut decoded = Vec::new();
+    std::io::Read::read_to_end(&mut decoder, &mut decoded).expect("gunzip icon blob");
+    let icons: Vec<serde_json::Value> = serde_json::from_slice(&decoded).expect("icon json");
+    assert_eq!(icons.len(), 2, "both icons in the blob");
+    assert!(
+        icons.iter().any(|i| i["id"] == icon_2),
+        "second icon present in the blob"
+    );
+    let with_link = icons
+        .iter()
+        .find(|i| i["id"] == icon_1)
+        .expect("icon 1 present");
+    assert_eq!(
+        with_link["typeIdList"][0], 7,
+        "icon carries its typeIdList (camelCase, Java IconVo)"
+    );
+    assert!(
+        with_link.get("type_id_list").is_none(),
+        "no snake_case leak in the icon blob"
     );
 }

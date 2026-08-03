@@ -25,6 +25,7 @@ minio = { workspace = true }
 jsonwebtoken = { workspace = true }
 uuid = { workspace = true }
 redis = { workspace = true }
+flate2 = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "^0.4"

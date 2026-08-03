@@ -46,7 +46,7 @@ pub async fn router() -> Result<Router> {
             post(user::update_password_by_admin),
         )
         .route("/user/{work_id}", delete(user::delete))
-        .route("/user/info/list", post(user::list))
+        .route("/user/info/userList", post(user::list))
         .route("/user/kick_out/{work_id}", delete(user::kick_out))
         .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>());
 

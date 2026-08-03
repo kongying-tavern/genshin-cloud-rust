@@ -12,11 +12,32 @@ use anyhow::{Result, anyhow};
 use std::collections::BTreeMap;
 
 use _database::{DB_CONN, models::item::item as item_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait,
+    jwt::AuthInfo,
+    models::{item::ItemVO, wrapper::CommonResponse},
+};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
 };
+
+/// camelCase item view for the BinaryMD5 pages (Java `ItemVo` naming).
+fn item_to_vo(it: &item_model::Model) -> ItemVO {
+    ItemVO {
+        id: it.id,
+        name: it.name.clone(),
+        area_id: it.area_id,
+        default_refresh_time: it.default_refresh_time,
+        default_content: it.default_content.clone(),
+        default_count: it.default_count,
+        icon_tag: it.icon_tag.clone(),
+        icon_style_type: it.icon_style_type,
+        hidden_flag: it.hidden_flag,
+        sort_index: it.sort_index,
+        special_flag: it.special_flag,
+    }
+}
 
 /// `GET /item_doc/list_page_bin_md5`
 ///
@@ -64,12 +85,16 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
                 .push(item);
         }
 
-        // Each group → one page → cached (serialize + compress + MD5)
+        // Each group → one page → cached (serialize + compress + MD5).
+        // The blob is serialized through the camelCase `ItemVO` (the wire
+        // contract of the item_doc pages is the Java `ItemVo` naming —
+        // snake_case models would break the frontend parser).
         let mut entries = Vec::with_capacity(groups.len());
         for (flag, group_items) in &groups {
             let key = format!("item:{flag}");
             let page = get_or_compute(key.clone(), async {
-                let (compressed, md5_hex) = serialize_compress_md5(group_items)?;
+                let vos: Vec<_> = group_items.iter().map(|m| item_to_vo(m)).collect();
+                let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                 Ok(CachedPage {
                     md5: md5_hex,
                     time: chrono::Utc::now().timestamp_millis(),
