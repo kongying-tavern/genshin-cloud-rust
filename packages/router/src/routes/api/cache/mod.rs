@@ -12,9 +12,15 @@ use axum::{Router, routing::delete};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
+        // 前端契约：camelCase（openapi 生成）；保留 snake 别名兼容旧调用。
+        .route("/iconTag", delete(icon_tag::delete_icon_tag_cache))
         .route("/icon_tag", delete(icon_tag::delete_icon_tag_cache))
         .route("/area", delete(area::delete_area_cache))
         .route("/item", delete(item::delete_item_cache))
+        .route(
+            "/commonItem",
+            delete(common_item::delete_common_item_cache),
+        )
         .route(
             "/common_item",
             delete(common_item::delete_common_item_cache),

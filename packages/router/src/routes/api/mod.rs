@@ -1,3 +1,4 @@
+pub mod app;
 pub mod area;
 pub mod cache;
 pub mod history;
@@ -28,6 +29,7 @@ use axum::{Router, middleware::from_extractor};
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
+        .nest("/app", app::router().await?)
         .nest("/area", area::router().await?)
         .nest("/cache", cache::router().await?)
         .nest("/history", history::router().await?)

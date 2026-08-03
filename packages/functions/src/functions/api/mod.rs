@@ -1,3 +1,4 @@
+pub mod app;
 pub mod area;
 pub mod binary_doc;
 pub mod cache;

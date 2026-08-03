@@ -7,14 +7,18 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::{DB_CONN, models::tag::tag as tag_model};
+use _database::{
+    DB_CONN,
+    models::{tag::tag as tag_model, tag::tag_type_link as ttl_model},
+};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
         common::EmptyResponse,
         tag::{
-            TagAddRequest, TagAddResponse, TagListRequest, TagListResponse, TagUpdateRequest, TagVO,
+            TagAddRequest, TagAddResponse, TagListRequest, TagListResponse, TagUpdateRequest,
+            TagUpdateTypeRequest, TagVO,
         },
         wrapper::CommonResponse,
     },
@@ -110,4 +114,51 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
+}
+
+/// 修改标签的分类信息（Java `updateTypeInTag`，仅供后台使用）：
+/// 重建 `tag_type_link`（按 tag_name 全量替换 typeIdList）。
+pub async fn do_update_type(
+    auth: AuthInfo,
+    payload: TagUpdateTypeRequest,
+) -> Result<CommonResponse<bool>> {
+    auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
+    let now = Utc::now().naive_utc();
+
+    let _tag = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(&payload.tag))
+        .one(db)
+        .await?
+        .ok_or_else(|| anyhow!("Tag not found"))?;
+
+    // 删除该 tag 的旧关联
+    let links = ttl_model::Entity::find_safety()
+        .filter(ttl_model::Column::TagName.eq(&payload.tag))
+        .all(db)
+        .await?;
+    for link in links {
+        ttl_model::Entity::delete_safety(link.into())?
+            .exec(db)
+            .await?;
+    }
+
+    // 重建关联
+    for type_id in payload.type_id_list {
+        ttl_model::Entity::insert(ttl_model::ActiveModel {
+            version: Set(0),
+            id: NotSet,
+            create_time: Set(now),
+            update_time: Set(None),
+            creator_id: Set(None),
+            updater_id: Set(None),
+            del_flag: Set(false),
+            type_id: Set(type_id),
+            tag_name: Set(payload.tag.clone()),
+        })
+        .exec(db)
+        .await?;
+    }
+
+    Ok(CommonResponse::new(Ok(true)))
 }

@@ -7,6 +7,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Align every route the frontend actually calls (exhaustive audit of all 79
+  generated API paths against the live backend — all now reachable):
+  - Add the `app` domain: `POST /api/app/trigger/update` flushes the
+    BinaryMD5 caches (Java broadcasts via SocketIO; the cache flush is the
+    equivalent effect here).
+  - `cache` endpoints now match the frontend camelCase contract
+    (`/api/cache/iconTag`, `/api/cache/commonItem`) with snake aliases kept.
+  - Fix the `list_byid` / `list_byinfo` route names (Java/frontend use one
+    word): marker (`list_byid`, `list_byinfo`), item (`list_byid`), route
+    (`list_byid`), punctuate_audit (already correct).
+  - Trailing-slash variants (`/api/punctuate/`, `/api/route`) route to the
+    same handlers via fallback (axum nests match the slash-less form).
+  - Implement `POST /api/tag/updateType` (rebuild `tag_type_link` from the
+    `typeIdList`, Java `updateTypeInTag`).
+
 ### Features
 
 - Add the missing `tag_doc` domain (the frontend's icon-tag sprite store
