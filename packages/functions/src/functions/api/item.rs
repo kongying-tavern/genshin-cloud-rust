@@ -23,6 +23,39 @@ use _utils::{
     },
 };
 
+/// 全部 `item_type_link` 的 item_id → type_id 列表映射。
+/// 前端按 `typeIdList` 过滤/分组物品，`ItemVO` 必须携带该字段。
+pub(crate) async fn type_id_map(
+    db: &sea_orm::DatabaseConnection,
+) -> Result<std::collections::HashMap<i64, Vec<i64>>> {
+    let links = link_model::Entity::find_safety().all(db).await?;
+    let mut map: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
+    for l in links {
+        map.entry(l.item_id).or_default().push(l.type_id);
+    }
+    Ok(map)
+}
+
+pub(crate) fn item_to_vo(
+    it: &item_model::Model,
+    type_map: &std::collections::HashMap<i64, Vec<i64>>,
+) -> ItemVO {
+    ItemVO {
+        id: it.id,
+        name: it.name.clone(),
+        area_id: it.area_id,
+        default_refresh_time: it.default_refresh_time,
+        default_content: it.default_content.clone(),
+        default_count: it.default_count,
+        icon_tag: it.icon_tag.clone(),
+        icon_style_type: it.icon_style_type,
+        hidden_flag: it.hidden_flag,
+        sort_index: it.sort_index,
+        special_flag: it.special_flag,
+        type_id_list: type_map.get(&it.id).cloned().unwrap_or_default(),
+    }
+}
+
 // 批量更新物品（支持单条或多条）
 pub async fn do_update(
     auth: AuthInfo,
@@ -109,21 +142,10 @@ pub async fn do_get_list(
 
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
+    let type_map = type_id_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(ItemVO {
-            id: it.id,
-            name: it.name,
-            area_id: it.area_id,
-            default_refresh_time: it.default_refresh_time,
-            default_content: it.default_content,
-            default_count: it.default_count,
-            icon_tag: it.icon_tag,
-            icon_style_type: it.icon_style_type,
-            hidden_flag: it.hidden_flag,
-            sort_index: it.sort_index,
-            special_flag: it.special_flag,
-        });
+        arr.push(item_to_vo(&it, &type_map));
     }
     let payload = ItemListResponse {
         total: total as i64,
@@ -200,21 +222,10 @@ pub async fn do_get_list_by_id(
         .filter(item_model::Column::Id.is_in(payload))
         .all(db)
         .await?;
+    let type_map = type_id_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(ItemVO {
-            id: it.id,
-            name: it.name,
-            area_id: it.area_id,
-            default_refresh_time: it.default_refresh_time,
-            default_content: it.default_content,
-            default_count: it.default_count,
-            icon_tag: it.icon_tag,
-            icon_style_type: it.icon_style_type,
-            hidden_flag: it.hidden_flag,
-            sort_index: it.sort_index,
-            special_flag: it.special_flag,
-        });
+        arr.push(item_to_vo(&it, &type_map));
     }
     let payload = ItemListResponse {
         total: arr.len() as i64,

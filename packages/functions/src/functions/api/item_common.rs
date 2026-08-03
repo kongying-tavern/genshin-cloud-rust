@@ -11,10 +11,7 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QueryOrder, QuerySelec
 use _utils::{
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse,
-        item::{ItemListResponse, ItemVO},
-        wrapper::CommonResponse,
-        wrapper::Pagination,
+        common::EmptyResponse, item::ItemListResponse, wrapper::CommonResponse, wrapper::Pagination,
     },
 };
 
@@ -25,24 +22,10 @@ use _database::{
     models::{area::item_area_public as iap_model, item::item as item_model},
 };
 
+use super::item::{item_to_vo, type_id_map};
+
 /// 批量添加上限（防恶意大列表）。
 const MAX_BATCH: usize = 1000;
-
-fn to_vo(it: &item_model::Model) -> ItemVO {
-    ItemVO {
-        id: it.id,
-        name: it.name.clone(),
-        area_id: it.area_id,
-        default_refresh_time: it.default_refresh_time,
-        default_content: it.default_content.clone(),
-        default_count: it.default_count,
-        icon_tag: it.icon_tag.clone(),
-        icon_style_type: it.icon_style_type,
-        hidden_flag: it.hidden_flag,
-        sort_index: it.sort_index,
-        special_flag: it.special_flag,
-    }
-}
 
 /// `POST /item_common/get/list`
 ///
@@ -79,9 +62,10 @@ pub async fn do_get_list(
     }
 
     let mut arr = Vec::with_capacity(links.len());
+    let type_map = type_id_map(db).await?;
     for link in links {
         if let Some(it) = by_id.get(&link.item_id) {
-            arr.push(to_vo(it));
+            arr.push(item_to_vo(it, &type_map));
         }
     }
 

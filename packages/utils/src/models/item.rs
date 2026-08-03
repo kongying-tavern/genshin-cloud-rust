@@ -165,6 +165,10 @@ pub struct ItemVO {
     pub hidden_flag: crate::types::HiddenFlag,
     pub sort_index: i32,
     pub special_flag: Option<i32>,
+    /// 所属物品类型（`item_type_link`），Java `ItemVo.typeIdList`
+    /// 前端按类型过滤/分组物品，缺失会导致筛选面板恒空。
+    #[serde(default)]
+    pub type_id_list: Vec<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
