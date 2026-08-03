@@ -13,15 +13,17 @@
 
 use _database::DB_CONN;
 use _database::models::{
-    area::area as area_model, common::history as history_model,
-    common::score_stat as score_stat_model, item::item as item_model,
-    marker::marker as marker_model, marker::marker_item_link as mil_model,
-    marker::marker_punctuate as mp_model, system::sys_action_log as action_log_model,
-    system::sys_user as sys_user_model, system::sys_user_device as device_model,
+    area::area as area_model, area::item_area_public as iap_model,
+    common::history as history_model, common::score_stat as score_stat_model,
+    item::item as item_model, marker::marker as marker_model,
+    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
+    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
+    system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
-    area as area_fns, cache as cache_fns, item_doc, marker as marker_fns,
-    punctuate as punctuate_fns, punctuate_audit as audit_fns, score as score_fns,
+    area as area_fns, cache as cache_fns, item_common as item_common_fns, item_doc,
+    marker as marker_fns, punctuate as punctuate_fns, punctuate_audit as audit_fns,
+    score as score_fns,
 };
 use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
@@ -141,6 +143,37 @@ async fn seed_punctuate(
     Ok(mp_model::Entity::insert(am).exec(db).await?.last_insert_id)
 }
 
+/// Seed an item row (used by the item_common assertions).
+async fn seed_common_item(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    name: &str,
+) -> anyhow::Result<i64> {
+    let am = item_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        name: Set(name.to_string()),
+        area_id: Set(1),
+        default_refresh_time: Set(0),
+        default_content: Set(None),
+        default_count: Set(1),
+        icon_tag: Set("0".into()),
+        icon_style_type: Set(IconStyleType::Default),
+        hidden_flag: Set(HiddenFlag::Visible),
+        sort_index: Set(0),
+        special_flag: Set(None),
+    };
+    Ok(item_model::Entity::insert(am)
+        .exec(db)
+        .await?
+        .last_insert_id)
+}
+
 async fn seed_user(
     db: &sea_orm::DatabaseConnection,
     username: &str,
@@ -237,6 +270,7 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(score_stat_model::Entity),
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
+        ddl_without_foreign_keys(iap_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
         ddl_without_foreign_keys(mp_model::Entity),
@@ -251,6 +285,7 @@ async fn area_and_item_doc_business_assertions() {
             "score_stat",
             "area",
             "item",
+            "item_area_public",
             "marker",
             "marker_item_link",
             "marker_punctuate",
@@ -946,4 +981,88 @@ async fn area_and_item_doc_business_assertions() {
     .expect("get score data ok");
     assert_eq!(data.samples.len(), 1, "one sample returned");
     assert_eq!(data.samples[0].score, 4.0, "score read back from content");
+
+    // ── item_common: the add/delete/list pipeline operates on the
+    //    item_area_public link table (Java parity), NOT on the item table ──
+    // 3 items: a and a' share a name, c is unique.
+    let item_a = seed_common_item(db, now, "紫晶矿").await.expect("seed a");
+    let item_a_dup = seed_common_item(db, now, "紫晶矿").await.expect("seed a'");
+    let item_c = seed_common_item(db, now, "日落果").await.expect("seed c");
+
+    // add([a, c]) → true; list shows exactly those two (link rows, not all items).
+    let added = item_common_fns::do_add(stub_auth(), vec![item_a, item_c])
+        .await
+        .expect("item_common add")
+        .data
+        .expect("add ok");
+    assert!(added, "new names must be marked as common items");
+    let list = item_common_fns::do_get_list(
+        stub_auth(),
+        _utils::models::Pagination {
+            current: Some(1),
+            size: Some(10),
+        },
+    )
+    .await
+    .expect("item_common list")
+    .data
+    .expect("list ok");
+    assert_eq!(list.total, 2, "two common items linked");
+    let names: Vec<&str> = list.items.iter().map(|i| i.name.as_str()).collect();
+    assert!(names.contains(&"紫晶矿") && names.contains(&"日落果"));
+    // The item table itself must be untouched by the add (no new rows created).
+    let item_rows = item_model::Entity::find_safety()
+        .filter(item_model::Column::Id.is_in(vec![item_a, item_a_dup, item_c]))
+        .count(db)
+        .await
+        .expect("count seeded items");
+    assert_eq!(item_rows, 3, "add must not insert item rows");
+
+    // add([a_dup, c]) → a_dup shares a name already common, c already linked → false.
+    let added = item_common_fns::do_add(stub_auth(), vec![item_a_dup, item_c])
+        .await
+        .expect("item_common add dup")
+        .data
+        .expect("add dup ok");
+    assert!(!added, "duplicate names / existing links must be skipped");
+    let list = item_common_fns::do_get_list(
+        stub_auth(),
+        _utils::models::Pagination {
+            current: Some(1),
+            size: Some(10),
+        },
+    )
+    .await
+    .expect("item_common list after dup add")
+    .data
+    .expect("list ok");
+    assert_eq!(list.total, 2, "dup add must not grow the list");
+
+    // delete(a) → the link row is soft-deleted (item rows remain), list drops to 1.
+    item_common_fns::do_delete(stub_auth(), item_a)
+        .await
+        .expect("item_common delete");
+    let list = item_common_fns::do_get_list(
+        stub_auth(),
+        _utils::models::Pagination {
+            current: Some(1),
+            size: Some(10),
+        },
+    )
+    .await
+    .expect("item_common list after delete")
+    .data
+    .expect("list ok");
+    assert_eq!(list.total, 1, "delete must drop the link");
+    assert_eq!(list.items[0].id, item_c, "the surviving item is c");
+    assert_eq!(
+        item_model::Entity::find_safety_by_id(item_a)
+            .one(db)
+            .await
+            .expect("item a still exists")
+            .expect("item a row present")
+            .name,
+        "紫晶矿",
+        "delete must not touch the item row"
+    );
 }

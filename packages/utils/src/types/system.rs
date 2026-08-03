@@ -71,6 +71,26 @@ pub enum AccessPolicyItemEnum {
     DevBlockDisallowDevice,
 }
 
+/// Sort keys for the user list. The serde renames are the **wire contract**
+/// ("createTime+", "createTime-", "id+", "id-", "nickname+", "nickname-") —
+/// the business layer matches the enum variants directly, so renaming a
+/// variant is a compile error instead of a silently-ignored sort key.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum UserSort {
+    #[serde(rename = "createTime+")]
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "nickname+")]
+    Nickname,
+    #[serde(rename = "nickname-")]
+    NicknameReverse,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {

@@ -9,6 +9,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix `item_common` to match the Java contract (it wrote to the wrong
+  table): `add` now batch-links existing items into `item_area_public`
+  (deduped by name, names already common are skipped) instead of inserting
+  new `item` rows from positional `Vec<i64>` magic indices; `delete`
+  soft-deletes the link rows by `item_id` instead of soft-deleting the
+  item itself; `get/list` pages the link table joined to item info instead
+  of listing every item; the unreachable `do_update` and `do_get_single`
+  (no routes, no Java counterpart) are removed; the delete route now
+  returns the standard `CommonResponse` wrapper instead of `{}`. The
+  `api_db` test asserts the whole pipeline (link insert, name dedup,
+  soft-delete, item table untouched).
+
+- Replace the `UserSort` Debug-string handoff (route → business) with the
+  enum itself: `UserSort` moved to `_utils::types` and `do_list` matches
+  the variants directly, so renaming a variant is a compile error instead
+  of a silently-ignored sort key. Wire names (`createTime+`, `id-`, ...)
+  are unchanged.
+
 - Port the score field-level weighting (the last known Java-parity gap from
   the 0.2.0 release): `do_generate_score` now filters history to the
   `Position` (type=4) rows and weights each contribution by the number of

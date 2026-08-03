@@ -12,22 +12,6 @@ use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum UserSort {
-    #[serde(rename = "createTime+")]
-    CreateTime,
-    #[serde(rename = "createTime-")]
-    CreateTimeReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "nickname+")]
-    Nickname,
-    #[serde(rename = "nickname-")]
-    NicknameReverse,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegisterParams {
     /// 权限策略
@@ -122,7 +106,7 @@ pub struct UserListParams {
     /// 角色 ID
     pub role_ids: Option<Vec<SystemUserRole>>,
     /// 排序优先级
-    pub sort: Option<Vec<UserSort>>,
+    pub sort: Option<Vec<_utils::types::UserSort>>,
     /// 用户名
     pub username: String,
 }
@@ -278,9 +262,7 @@ pub async fn list(
             payload.pagination,
             payload.nickname,
             payload.role_ids,
-            payload
-                .sort
-                .map(|sorts| sorts.into_iter().map(|s| format!("{:?}", s)).collect()),
+            payload.sort,
             payload.username,
         )
         .await

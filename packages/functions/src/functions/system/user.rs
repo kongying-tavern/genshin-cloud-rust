@@ -13,7 +13,7 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{Pagination, SysUserVO},
-    types::{AccessPolicyItemEnum, SystemUserRole},
+    types::{AccessPolicyItemEnum, SystemUserRole, UserSort},
 };
 
 // 业务处理函数
@@ -211,7 +211,7 @@ pub async fn do_list(
     pagination: Pagination,
     nickname: String,
     role_ids: Option<Vec<SystemUserRole>>,
-    sort: Option<Vec<String>>,
+    sort: Option<Vec<UserSort>>,
     username: String,
 ) -> Result<serde_json::Value> {
     let db = &DB_CONN.wait().pg_conn;
@@ -227,19 +227,18 @@ pub async fn do_list(
         query = query.filter(sys_user_model::Column::RoleId.is_in(rids));
     }
 
-    // 排序：白名单映射（"CreateTime"/"CreateTimeReverse"/"Id"/"Nickname"...），
-    // 只允许已知列名，杜绝任意 SQL 注入。
+    // 排序：显式枚举映射（用户列表的 wire 契约是 serde rename，业务层按
+    // 枚举变体匹配——变体重命名会变成编译错误，而非静默忽略排序键）。
     if let Some(sorts) = sort {
         use sea_orm::QueryOrder;
         for s in sorts {
-            let (column, desc) = match s.as_str() {
-                "CreateTime" => (sys_user_model::Column::CreateTime, false),
-                "CreateTimeReverse" => (sys_user_model::Column::CreateTime, true),
-                "Id" => (sys_user_model::Column::Id, false),
-                "IdReverse" => (sys_user_model::Column::Id, true),
-                "Nickname" => (sys_user_model::Column::Nickname, false),
-                "NicknameReverse" => (sys_user_model::Column::Nickname, true),
-                _ => continue, // 未知排序键忽略
+            let (column, desc) = match s {
+                UserSort::CreateTime => (sys_user_model::Column::CreateTime, false),
+                UserSort::CreateTimeReverse => (sys_user_model::Column::CreateTime, true),
+                UserSort::Id => (sys_user_model::Column::Id, false),
+                UserSort::IdReverse => (sys_user_model::Column::Id, true),
+                UserSort::Nickname => (sys_user_model::Column::Nickname, false),
+                UserSort::NicknameReverse => (sys_user_model::Column::Nickname, true),
             };
             query = if desc {
                 query.order_by(column, sea_orm::Order::Desc)
