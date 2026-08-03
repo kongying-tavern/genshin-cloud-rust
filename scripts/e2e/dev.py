@@ -31,6 +31,15 @@ def _run(script: Path, *args: str) -> int:
     return subprocess.call([sys.executable, str(script), *args])
 
 
+def _init_schema() -> bool:
+    """On-demand schema init + dev admin seed (idempotent, fast when warm).
+
+    The initial admin credentials are printed to the log by init_db.
+    """
+    rc = _run(SCRIPTS_DIR.parent / "init_db.py")
+    return rc == 0
+
+
 def main() -> int:
     # The Vue frontend path is mandatory (config.py refuses to import without
     # it): surface a friendly error instead of a raw traceback.
@@ -41,6 +50,11 @@ def main() -> int:
         return 1
 
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
+
+    if cmd in ("", "start", "daemon", "mock"):
+        if not _init_schema():
+            error(TARGET, "Schema init failed — refusing to start (check DB_* in .env).")
+            return 1
 
     if cmd == "" or cmd == "start":
         info(TARGET, "Starting dev stack (Rust + Vue), foreground mode...")

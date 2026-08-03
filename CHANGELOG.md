@@ -9,6 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Dev-stack bootstrap: `init_db` now runs **on-demand** (skips the CREATE
+  pass when the schema already exists) and seeds a dev admin account —
+  default `admin` / `admin123`, overridable via `INIT_ADMIN_USERNAME` /
+  `INIT_ADMIN_PASSWORD`, credentials printed to the log when created.
+  `scripts/e2e/dev.py start|daemon|mock` runs the schema init first and
+  refuses to start when it fails, so a fresh machine goes from zero to a
+  logged-in backend in one command (verified end-to-end: seed → password
+  grant login → authorized `/api/area/get/list`).
+
 - Add a local schema initializer for dev/e2e: `cargo run --bin init_db`
   (wrapped by `scripts/init_db.py`) creates the `genshin_map` schema and
   all 24 tables idempotently, with the DDL generated straight from the
