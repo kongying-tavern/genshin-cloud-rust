@@ -12,32 +12,13 @@ use anyhow::{Result, anyhow};
 use std::collections::BTreeMap;
 
 use _database::{DB_CONN, models::item::item as item_model};
-use _utils::{
-    db_operations::SafeEntityTrait,
-    jwt::AuthInfo,
-    models::{item::ItemVO, wrapper::CommonResponse},
-};
+use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
 };
 
-/// camelCase item view for the BinaryMD5 pages (Java `ItemVo` naming).
-fn item_to_vo(it: &item_model::Model) -> ItemVO {
-    ItemVO {
-        id: it.id,
-        name: it.name.clone(),
-        area_id: it.area_id,
-        default_refresh_time: it.default_refresh_time,
-        default_content: it.default_content.clone(),
-        default_count: it.default_count,
-        icon_tag: it.icon_tag.clone(),
-        icon_style_type: it.icon_style_type,
-        hidden_flag: it.hidden_flag,
-        sort_index: it.sort_index,
-        special_flag: it.special_flag,
-    }
-}
+use super::item::{item_to_vo, type_id_map};
 
 /// `GET /item_doc/list_page_bin_md5`
 ///
@@ -75,6 +56,7 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
     get_result_cached("item:result".into(), async {
         // Query all non-deleted items (once per TTL window)
         let items = item_model::Entity::find_safety().all(db).await?;
+        let type_map = type_id_map(db).await?;
 
         // Group by hidden_flag (BTreeMap → sorted by flag value ascending)
         let mut groups: BTreeMap<i32, Vec<&item_model::Model>> = BTreeMap::new();
@@ -93,7 +75,10 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
         for (flag, group_items) in &groups {
             let key = format!("item:{flag}");
             let page = get_or_compute(key.clone(), async {
-                let vos: Vec<_> = group_items.iter().map(|m| item_to_vo(m)).collect();
+                let vos: Vec<_> = group_items
+                    .iter()
+                    .map(|m| item_to_vo(m, &type_map))
+                    .collect();
                 let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                 Ok(CachedPage {
                     md5: md5_hex,

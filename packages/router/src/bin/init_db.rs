@@ -151,7 +151,7 @@ async fn ensure_admin_account(db: &sea_orm::DatabaseConnection) -> Result<()> {
     let now = chrono::Utc::now().naive_utc();
     sys_user_entity::Entity::insert(sys_user_entity::ActiveModel {
         version: Set(0),
-        id: Set(1),
+        id: sea_orm::ActiveValue::NotSet,
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),

@@ -65,6 +65,8 @@ def main() -> int:
         "history",
         "item_area_public",
         "item",
+        "item_type_link",
+        "item_type",
         "icon",
         "area",
     ):
@@ -104,17 +106,34 @@ def main() -> int:
             (name, url),
         )
 
+    # ── Item types (the frontend's left panel groups items by type) ─────────
+    item_types = [
+        (1, "传送锚点", "0", 1),
+        (2, "七天神像", "0", 2),
+        (3, "秘境", "0", 3),
+        (4, "宝箱", "0", 4),
+        (5, "材料", "0", 5),
+    ]
+    for tid, name, icon_tag, sort in item_types:
+        cur.execute(
+            f'INSERT INTO "genshin_map"."item_type" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"icon_tag, name, content, parent_id, is_final, hidden_flag, sort_index) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, {tid}, true, 0, {sort})",
+            (icon_tag, name),
+        )
+
     # ── Items ────────────────────────────────────────────────────────────────
     items = [
-        (1, "传送锚点", 1, "0", 0),
-        (2, "七天神像", 1, "0", 0),
-        (3, "秘境", 2, "0", 0),
-        (4, "珍贵宝箱", 1, "0", 0),
-        (5, "普通宝箱", 1, "0", 0),
-        (6, "松茸", 1, "0", 0),
-        (7, "薄荷", 1, "0", 0),
+        (1, "传送锚点", 1, "0", 0, 1),
+        (2, "七天神像", 1, "0", 0, 2),
+        (3, "秘境", 2, "0", 0, 3),
+        (4, "珍贵宝箱", 1, "0", 0, 4),
+        (5, "普通宝箱", 1, "0", 0, 4),
+        (6, "松茸", 1, "0", 0, 5),
+        (7, "薄荷", 1, "0", 0, 5),
     ]
-    for iid, name, area_id, icon_tag, sort in items:
+    for iid, name, area_id, icon_tag, sort, type_id in items:
         cur.execute(
             f'INSERT INTO "genshin_map"."item" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
@@ -122,6 +141,12 @@ def main() -> int:
             f"icon_tag, icon_style_type, hidden_flag, sort_index, special_flag) "
             f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, {area_id}, 0, NULL, 1, %s, 0, 0, {sort}, NULL)",
             (name, icon_tag),
+        )
+        cur.execute(
+            f'INSERT INTO "genshin_map"."item_type_link" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"type_id, item_id) "
+            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, {type_id}, {iid})"
         )
 
     # ── Markers: ~150 points spread over the Mondstadt region ────────────────
@@ -166,9 +191,14 @@ def main() -> int:
     item_count = cur.fetchone()[0]
     cur.execute('SELECT count(*) FROM "genshin_map"."area"')
     area_count = cur.fetchone()[0]
+    cur.execute('SELECT count(*) FROM "genshin_map"."item_type"')
+    type_count = cur.fetchone()[0]
 
     conn.close()
-    print(f"Demo data seeded: {area_count} areas, {item_count} items, {marker_count} markers")
+    print(
+        f"Demo data seeded: {area_count} areas, {type_count} item types, "
+        f"{item_count} items, {marker_count} markers"
+    )
     return 0
 
 

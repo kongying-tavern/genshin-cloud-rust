@@ -16,9 +16,10 @@ use _database::models::{
     area::area as area_model, area::item_area_public as iap_model,
     common::history as history_model, common::score_stat as score_stat_model,
     icon::icon as icon_model, icon::icon_type_link as itl_model, item::item as item_model,
-    marker::marker as marker_model, marker::marker_item_link as mil_model,
-    marker::marker_punctuate as mp_model, system::sys_action_log as action_log_model,
-    system::sys_user as sys_user_model, system::sys_user_device as device_model,
+    item::item_type_link as item_type_link_model, marker::marker as marker_model,
+    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
+    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
+    system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
     area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
@@ -294,6 +295,7 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(area_model::Entity),
         ddl_without_foreign_keys(item_model::Entity),
         ddl_without_foreign_keys(iap_model::Entity),
+        ddl_without_foreign_keys(item_type_link_model::Entity),
         ddl_without_foreign_keys(icon_model::Entity),
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
@@ -311,6 +313,7 @@ async fn area_and_item_doc_business_assertions() {
             "area",
             "item",
             "item_area_public",
+            "item_type_link",
             "icon",
             "icon_type_link",
             "marker",
@@ -1158,5 +1161,54 @@ async fn area_and_item_doc_business_assertions() {
     assert!(
         with_link.get("type_id_list").is_none(),
         "no snake_case leak in the icon blob"
+    );
+
+    // ── ItemVo.typeIdList (Java parity): items carry their item_type_link
+    //    type ids, and the item_doc blob includes them (the frontend filters
+    //    the item panel by typeIdList). ────────────────────────────────────
+    let itl = item_type_link_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        type_id: Set(9),
+        item_id: Set(item_a),
+    };
+    item_type_link_model::Entity::insert(itl)
+        .exec(db)
+        .await
+        .expect("seed item type link");
+    // The item page cached earlier predates item_a — flush and recompute.
+    cache_fns::do_delete_item_cache(auth.clone())
+        .await
+        .expect("flush item doc cache");
+    let fresh_md5 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+        .await
+        .expect("item_doc md5 (fresh)")
+        .data
+        .expect("item_doc md5 payload (fresh)");
+    let fresh_hash = fresh_md5
+        .iter()
+        .find(|v| !v.md5.is_empty())
+        .map(|v| v.md5.clone())
+        .expect("at least one md5");
+    let item_bin = item_doc::do_list_page_bin(auth.clone(), fresh_hash)
+        .await
+        .expect("fetch item page bin (2)");
+    let mut decoder = flate2::read::GzDecoder::new(item_bin.as_slice());
+    let mut decoded = Vec::new();
+    std::io::Read::read_to_end(&mut decoder, &mut decoded).expect("gunzip item page (2)");
+    let page: Vec<serde_json::Value> =
+        serde_json::from_slice(&decoded).expect("item page json (2)");
+    let item_a_json = page
+        .iter()
+        .find(|i| i["id"] == item_a)
+        .expect("item a in page");
+    assert_eq!(
+        item_a_json["typeIdList"][0], 9,
+        "item carries its typeIdList (Java ItemVo)"
     );
 }
