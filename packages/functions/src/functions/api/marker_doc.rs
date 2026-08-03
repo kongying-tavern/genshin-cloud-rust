@@ -74,7 +74,14 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                 for (page_index, page_markers) in &pages {
                     let key = marker_page_key(*flag, *page_index);
                     let page = get_or_compute(key.clone(), async {
-                        let (compressed, md5_hex) = serialize_compress_md5(&page_markers)?;
+                        // camelCase `MarkerVO` naming (Java `MarkerVo` wire
+                        // contract) — snake_case models would break the
+                        // frontend parser.
+                        let vos: Vec<_> = page_markers
+                            .iter()
+                            .map(|m| super::marker::model_to_vo_doc(m))
+                            .collect();
+                        let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                         Ok(CachedPage {
                             md5: md5_hex,
                             time: chrono::Utc::now().timestamp_millis(),
@@ -95,7 +102,11 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                 // Other flags: single page (index 0)
                 let key = marker_page_key(*flag, 0);
                 let page = get_or_compute(key.clone(), async {
-                    let (compressed, md5_hex) = serialize_compress_md5(&group_markers)?;
+                    let vos: Vec<_> = group_markers
+                        .iter()
+                        .map(|m| super::marker::model_to_vo_doc(m))
+                        .collect();
+                    let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                     Ok(CachedPage {
                         md5: md5_hex,
                         time: chrono::Utc::now().timestamp_millis(),

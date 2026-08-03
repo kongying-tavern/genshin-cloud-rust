@@ -3,6 +3,7 @@ pub mod binary_doc;
 pub mod cache;
 pub mod history;
 pub mod icon;
+pub mod icon_doc;
 pub mod icon_type;
 pub mod item;
 pub mod item_common;

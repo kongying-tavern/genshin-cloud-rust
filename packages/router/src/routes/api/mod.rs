@@ -2,6 +2,7 @@ pub mod area;
 pub mod cache;
 pub mod history;
 pub mod icon;
+pub mod icon_doc;
 pub mod icon_type;
 pub mod item;
 pub mod item_common;
@@ -30,6 +31,7 @@ pub async fn router() -> Result<Router> {
         .nest("/cache", cache::router().await?)
         .nest("/history", history::router().await?)
         .nest("/icon", icon::router().await?)
+        .nest("/icon_doc", icon_doc::router().await?)
         .nest("/icon_type", icon_type::router().await?)
         .nest("/item", item::router().await?)
         .nest("/item_common", item_common::router().await?)

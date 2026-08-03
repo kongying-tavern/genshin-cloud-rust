@@ -53,6 +53,12 @@ fn model_to_vo(it: marker_model::Model) -> MarkerVO {
     }
 }
 
+/// camelCase marker view for the BinaryMD5 pages (the wire contract of the
+/// `marker_doc` blob is the Java `MarkerVo` naming).
+pub(crate) fn model_to_vo_doc(it: &marker_model::Model) -> MarkerVO {
+    model_to_vo(it.clone())
+}
+
 pub async fn do_tweak(
     auth: AuthInfo,
     payload: MarkerTweakRequest,

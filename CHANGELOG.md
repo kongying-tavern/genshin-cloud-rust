@@ -9,6 +9,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Align the BinaryMD5 blob content with the Java wire contract: the
+  `item_doc` / `marker_doc` / `marker_link_doc` pages were serializing the
+  raw sea-orm models (snake_case fields), while the frontend parses the
+  decompressed JSON by the Java `ItemVo` / `MarkerVo` / `MarkerLinkageVo`
+  names (camelCase) — the client would have read empty objects. The blobs
+  now serialize through the camelCase VOs (`ItemVO` / `MarkerVO` / a new
+  `LinkVo`). The `api_db` test decompresses an item page and asserts
+  `areaId` is present and `area_id` is not.
+
+- Add the missing `/api/icon_doc` domain (Java `IconDocController`):
+  `GET /icon_doc/all_bin_md5` and `GET /icon_doc/all_bin` serve the whole
+  icon set as one GZIP-compressed JSON blob (each icon carrying its
+  `typeIdList` from `icon_type_link`), cached at the result level. `api_db`
+  asserts the blob shape and camelCase `typeIdList`.
+
+- Wire the missing `GET /res/get` route (the `do_get` function existed).
+
+- Align the user-list route with the Java contract: `POST
+  /system/user/info/list` → `/system/user/info/userList` (the frontend
+  calls the Java path).
+
 - Fix `item_common` to match the Java contract (it wrote to the wrong
   table): `add` now batch-links existing items into `item_area_public`
   (deduped by name, names already common are skipped) instead of inserting
