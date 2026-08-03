@@ -18,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Return the Java-contract user fields in the OAuth responses: the login /
+  refresh payloads lacked `userId` and `userRoles` (Java
+  `AuthorizationServerConfiguration` additionalInfo), so the frontend's
+  `userStore.auth.userId` was `undefined` — its archive store crashed with
+  an IndexedDB `DataError` on every authenticated save and the left panel
+  never populated. The responses now carry `userId` (camelCase) and
+  `userRoles` (role codes: `ADMIN` / `MAP_MANAGER` / ...).
+
 - Carry the item `typeIdList` in every `ItemVO` (Java `ItemVo` parity): the
   field was missing, so the frontend's item panel (which filters/group by
   type) stayed empty. All producers now fill it from `item_type_link` —
