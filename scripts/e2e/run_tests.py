@@ -97,7 +97,6 @@ def _api_headers() -> dict:
     pass.
     """
     import os
-    import urllib.parse
 
     username = os.environ.get("E2E_USERNAME")
     password = os.environ.get("E2E_PASSWORD")
@@ -106,15 +105,15 @@ def _api_headers() -> dict:
             "no E2E_USERNAME / E2E_PASSWORD configured — set them to run "
             "authenticated API assertions"
         )
-    body = urllib.parse.urlencode({
+    body, content_type = _multipart_form({
         "grant_type": "password",
         "username": username,
         "password": password,
-    }).encode("utf-8")
+    })
     req = urllib.request.Request(
         f"{RUST_URL}/oauth/token",
         data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers={"Content-Type": content_type},
     )
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read().decode("utf-8"))
@@ -122,6 +121,28 @@ def _api_headers() -> dict:
     if not token:
         raise SkipTest(f"login succeeded but no access_token in response: {data}")
     return {"Authorization": f"Bearer {token}"}
+
+
+def _multipart_form(fields: dict) -> tuple[bytes, str]:
+    """Encode plain-text form fields as multipart/form-data.
+
+    The Rust `/oauth/token` endpoint extracts the password grant via axum's
+    `Multipart` (Java-parity), so urlencoded bodies are rejected with a 400 —
+    the client must send multipart with a boundary.
+    """
+    import uuid
+
+    boundary = uuid.uuid4().hex
+    chunks: list[bytes] = []
+    for key, value in fields.items():
+        chunks.append(f"--{boundary}".encode())
+        chunks.append(
+            f'Content-Disposition: form-data; name="{key}"'.encode("utf-8")
+        )
+        chunks.append(b"")
+        chunks.append(str(value).encode("utf-8"))
+    chunks.append(f"--{boundary}--".encode())
+    return b"\r\n".join(chunks), f"multipart/form-data; boundary={boundary}"
 
 
 def test_page_loads():

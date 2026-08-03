@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix the e2e login client to match the backend contract: the Rust
+  `/oauth/token` extracts the password grant via axum `Multipart`
+  (Java-parity), so `run_tests.py`'s urlencoded login was rejected with a
+  400 and every authenticated assertion skipped. The login now sends
+  multipart/form-data with a boundary (verified live against the seeded
+  `admin` account).
+
 - Dev-stack bootstrap: `init_db` now runs **on-demand** (skips the CREATE
   pass when the schema already exists) and seeds a dev admin account —
   default `admin` / `admin123`, overridable via `INIT_ADMIN_USERNAME` /
