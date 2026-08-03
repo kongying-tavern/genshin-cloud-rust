@@ -2,6 +2,7 @@ mod add;
 mod delete;
 mod list;
 mod update;
+mod update_type;
 
 use anyhow::Result;
 
@@ -15,6 +16,7 @@ pub async fn router() -> Result<Router> {
         .route("/get/list", post(list::list))
         .route("/add", put(add::add))
         .route("/update", post(update::update))
+        .route("/updateType", post(update_type::update_type))
         .route("/delete/{tagId}", route_delete(delete::delete));
 
     Ok(ret)

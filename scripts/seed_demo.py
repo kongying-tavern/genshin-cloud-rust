@@ -94,12 +94,15 @@ def main() -> int:
         )
 
     # ── Icons ────────────────────────────────────────────────────────────────
+    # tiles.yuanshen.site serves the real icons (302 → oss.yuanshen.site,
+    # which sends Access-Control-Allow-Origin: *). The tag sprite renderer
+    # fetches these URLs cross-origin, so the v3 domain (no CORS) breaks it.
     icons = [
-        (1, "锚点", "https://v3.yuanshen.site/icon/Anchor.png"),
-        (2, "神像", "https://v3.yuanshen.site/icon/Statue.png"),
-        (3, "秘境", "https://v3.yuanshen.site/icon/Domain.png"),
-        (4, "宝箱", "https://v3.yuanshen.site/icon/Chest.png"),
-        (5, "材料", "https://v3.yuanshen.site/icon/Item.png"),
+        (1, "锚点", "https://tiles.yuanshen.site/icon/Anchor.png"),
+        (2, "神像", "https://tiles.yuanshen.site/icon/Statue.png"),
+        (3, "秘境", "https://tiles.yuanshen.site/icon/Domain.png"),
+        (4, "宝箱", "https://tiles.yuanshen.site/icon/Chest.png"),
+        (5, "材料", "https://tiles.yuanshen.site/icon/Item.png"),
     ]
     for iid, name, url in icons:
         cur.execute(
