@@ -11,12 +11,24 @@ pub struct OauthLoginResponse {
     pub refresh_token: String,
     /// 令牌类型
     pub token_type: OauthTokenType,
-    /// 令牌寿命
+    /// 有效期（秒）
     pub expires_in: i64,
-    /// 生效范围
+    /// 有效范围
     pub scope: OauthScopeType,
     /// 唯一标识
     pub jti: Uuid,
+    /// 用户 ID（Java 契约：OAuth 额外信息，camelCase）
+    #[serde(rename = "userId")]
+    pub user_id: i64,
+    /// 角色 code 列表（Java 契约，camelCase）
+    #[serde(rename = "userRoles")]
+    pub user_roles: Vec<String>,
+    /// 环境标识（Java 契约，camelCase）
+    #[serde(rename = "env")]
+    pub env: Option<String>,
+    /// 登录提示消息（如设备/IP 波动警告，Java 契约，camelCase）
+    #[serde(rename = "message")]
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

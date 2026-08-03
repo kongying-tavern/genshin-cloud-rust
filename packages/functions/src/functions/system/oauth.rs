@@ -182,7 +182,26 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
         expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
         scope: OauthScopeType::All,
         jti,
+        // Java 契约（AuthorizationServerConfiguration additionalInfo）：
+        // 前端 `SysToken` 依赖 userId / userRoles 恢复用户态与权限掩码。
+        user_id: id,
+        user_roles: vec![role_code(item.role_id)],
+        env: None,
+        message: None,
     })
+}
+
+/// SystemUserRole → Java `RoleEnum` code（前端 `RoleTypeEnum` 契约）。
+fn role_code(role: _utils::types::SystemUserRole) -> String {
+    match role {
+        _utils::types::SystemUserRole::Admin => "ADMIN",
+        _utils::types::SystemUserRole::MapManager => "MAP_MANAGER",
+        _utils::types::SystemUserRole::MapNeigui => "MAP_NEIGUI",
+        _utils::types::SystemUserRole::MapPunctuate => "MAP_PUNCTUATE",
+        _utils::types::SystemUserRole::MapUser => "MAP_USER",
+        _utils::types::SystemUserRole::Visitor => "VISITOR",
+    }
+    .to_string()
 }
 
 async fn oauth_password_login_inner(
@@ -433,6 +452,11 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;
 
+    let user = models::system::sys_user::Entity::find_safety_by_id(claims.sub)
+        .one(&DB_CONN.wait().pg_conn)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+
     let mut redis_conn = DB_CONN
         .wait()
         .redis_conn
@@ -499,5 +523,9 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
         expires_in: EXPIRED_APPEND_DURATION.as_seconds_f32() as i64,
         scope: OauthScopeType::All,
         jti: new_jti,
+        user_id: claims.sub,
+        user_roles: vec![role_code(user.role_id)],
+        env: None,
+        message: None,
     })
 }
