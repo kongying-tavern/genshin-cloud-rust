@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   against the repo root, not the CWD), and `scripts/e2e/dev.py` prints a
   friendly error and exits 1 instead of a raw traceback.
 
+- Serve the domain endpoints under the Java `/api/*` prefix: the router
+  merged the `area`/`icon`/`item`/`marker`/... routes at the root
+  (`/area/get/list`), while the frontend and the Vite proxy
+  (`VITE_API_BASE=/api`) call `/api/area/get/list` — every domain request
+  fell through to 501. `.merge(api::router())` is now `.nest("/api", ...)`
+  (verified against a locally running backend with a signed token).
+
 - Align the BinaryMD5 blob content with the Java wire contract: the
   `item_doc` / `marker_doc` / `marker_link_doc` pages were serializing the
   raw sea-orm models (snake_case fields), while the frontend parses the

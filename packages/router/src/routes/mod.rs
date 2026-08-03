@@ -18,7 +18,9 @@ pub async fn router() -> Result<Router> {
         .route("/oauth/qq", post(system::oauth::qq_login))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
-        .merge(api::router().await?)
+        // Java contract: every domain endpoint lives under /api/* — the
+        // frontend and the Vite proxy (VITE_API_BASE=/api) call these paths.
+        .nest("/api", api::router().await?)
         .nest_service("/cdn", cdn_proxy())
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(cors_layer())
