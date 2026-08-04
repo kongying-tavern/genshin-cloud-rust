@@ -3,7 +3,7 @@ use chrono::Utc;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QuerySelect,
+    QueryOrder,
     prelude::*,
 };
 
@@ -47,17 +47,46 @@ pub async fn do_get_notice_list(
 ) -> Result<CommonResponse<NoticeListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let size = payload.page.size.unwrap_or(10) as u64;
-    let current = payload.page.current.unwrap_or(1);
-    let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
-
     let mut query = notice_model::Entity::find_safety();
     if let Some(title) = payload.title {
         query = query.filter(notice_model::Column::Title.like(format!("%{}%", title)));
     }
+    // 公告量小：全量取回后在内存做 channel/有效期过滤（对齐前端参数，
+    // jsonb 数组的 SQL 过滤跨方言繁琐且不值得）。
+    let mut rows = query
+        .order_by_desc(notice_model::Column::SortIndex)
+        .all(db)
+        .await?;
 
-    let total = query.clone().count(db).await?;
-    let items = query.limit(size).offset(offset).all(db).await?;
+    if let Some(channels) = payload.channels {
+        let wanted: Vec<String> = channels
+            .iter()
+            .map(|c| {
+                serde_json::to_string(c)
+                    .unwrap_or_default()
+                    .trim_matches('"')
+                    .to_string()
+            })
+            .collect();
+        rows.retain(|n| {
+            let chans: Vec<String> =
+                serde_json::from_value(serde_json::to_value(&n.channel).unwrap_or_default())
+                    .unwrap_or_default();
+            chans.iter().any(|c| wanted.contains(c))
+        });
+    }
+    if payload.get_valid.unwrap_or(false) {
+        let now = Utc::now().naive_utc();
+        rows.retain(|n| {
+            n.valid_time_start.is_none_or(|s| s <= now) && n.valid_time_end.is_none_or(|e| e >= now)
+        });
+    }
+
+    let total = rows.len();
+    let size = payload.page.size.unwrap_or(10) as usize;
+    let current = payload.page.current.unwrap_or(1) as usize;
+    let offset = (current.saturating_sub(1)) * size;
+    let items = rows.into_iter().skip(offset).take(size);
 
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
