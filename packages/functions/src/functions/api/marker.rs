@@ -10,14 +10,15 @@ use sea_orm::{
 use std::collections::HashSet;
 
 use _database::{
-    DB_CONN, models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
+    DB_CONN, models::item::item as item_model, models::marker::marker as marker_model,
+    models::marker::marker_item_link as mil_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
         marker::MarkerFilterRequest,
-        marker::{MarkerAddRequest, MarkerTweakRequest, MarkerUpdateData},
+        marker::{MarkerAddRequest, MarkerItemLinkVo, MarkerTweakRequest, MarkerUpdateData},
         marker::{
             MarkerAddResponse, MarkerEmptyResponse, MarkerIdListResponse, MarkerItemsResponse,
             MarkerListResponse, MarkerVO,
@@ -26,9 +27,48 @@ use _utils::{
     },
 };
 
+/// 批量读取点位物品关联（`marker_item_link` + item 的 `icon_tag`），
+/// 返回 marker_id → itemList。避免逐点查询的 N+1。
+pub(crate) async fn marker_item_map(
+    db: &sea_orm::DatabaseConnection,
+    marker_ids: &[i64],
+) -> Result<std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>> {
+    let mut map: std::collections::HashMap<i64, Vec<MarkerItemLinkVo>> =
+        std::collections::HashMap::new();
+    if marker_ids.is_empty() {
+        return Ok(map);
+    }
+    let links = mil_model::Entity::find_safety()
+        .filter(mil_model::Column::MarkerId.is_in(marker_ids))
+        .all(db)
+        .await?;
+    let item_ids: Vec<i64> = links.iter().map(|l| l.item_id).collect();
+    let mut icon_tags: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
+    if !item_ids.is_empty() {
+        for it in item_model::Entity::find_safety()
+            .filter(item_model::Column::Id.is_in(item_ids))
+            .all(db)
+            .await?
+        {
+            icon_tags.insert(it.id, it.icon_tag);
+        }
+    }
+    for l in links {
+        map.entry(l.marker_id).or_default().push(MarkerItemLinkVo {
+            item_id: l.item_id,
+            count: l.count,
+            icon_tag: icon_tags.get(&l.item_id).cloned().unwrap_or_default(),
+        });
+    }
+    Ok(map)
+}
+
 /// 批量调整点位数据，目前实现常用字段的替换/更新逻辑：
 /// 对于复杂的 item_list 调整暂时跳过（可在后续增强）。
-fn model_to_vo(it: marker_model::Model) -> MarkerVO {
+fn model_to_vo(
+    it: marker_model::Model,
+    item_map: &std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>,
+) -> MarkerVO {
     MarkerVO {
         version: it.version,
         id: it.id,
@@ -50,13 +90,17 @@ fn model_to_vo(it: marker_model::Model) -> MarkerVO {
         refresh_time: it.refresh_time,
         hidden_flag: it.hidden_flag,
         extra: it.extra,
+        item_list: item_map.get(&it.id).cloned().unwrap_or_default(),
     }
 }
 
 /// camelCase marker view for the BinaryMD5 pages (the wire contract of the
 /// `marker_doc` blob is the Java `MarkerVo` naming).
-pub(crate) fn model_to_vo_doc(it: &marker_model::Model) -> MarkerVO {
-    model_to_vo(it.clone())
+pub(crate) fn model_to_vo_doc(
+    it: &marker_model::Model,
+    item_map: &std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>,
+) -> MarkerVO {
+    model_to_vo(it.clone(), item_map)
 }
 
 pub async fn do_tweak(
@@ -412,6 +456,7 @@ pub async fn do_get_list_by_info(
 
     // Chunk the IDs to avoid exceeding sqlx's 65535 parameter limit
     // (104K markers would create 104K bind params).
+    let item_map = marker_item_map(db, &ids).await?;
     let mut arr = Vec::new();
     for chunk in ids.chunks(10000) {
         let items = marker_model::Entity::find_safety()
@@ -419,7 +464,7 @@ pub async fn do_get_list_by_info(
             .all(db)
             .await?;
         for it in items {
-            arr.push(model_to_vo(it));
+            arr.push(model_to_vo(it, &item_map));
         }
     }
     Ok(CommonResponse::new(Ok(MarkerListResponse {
@@ -453,9 +498,11 @@ pub async fn do_get_list_by_id(
         .filter(marker_model::Column::Id.is_in(payload))
         .all(db)
         .await?;
+    let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
+    let item_map = marker_item_map(db, &ids).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(model_to_vo(it));
+        arr.push(model_to_vo(it, &item_map));
     }
     Ok(CommonResponse::new(Ok(MarkerItemsResponse { items: arr })))
 }
@@ -474,9 +521,11 @@ pub async fn do_get_page(
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
+    let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
+    let item_map = marker_item_map(db, &ids).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(model_to_vo(it));
+        arr.push(model_to_vo(it, &item_map));
     }
     Ok(CommonResponse::new(Ok(MarkerListResponse {
         total: total as usize,

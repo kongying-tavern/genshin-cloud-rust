@@ -4,6 +4,16 @@ use std::collections::HashMap;
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
 use serde_json::Value;
 
+/// 点位物品关联（Java `MarkerItemLinkVo`；前端按 `itemList` 过滤/渲染点位，
+/// 缺失会导致任何点位都无法显示）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerItemLinkVo {
+    pub item_id: i64,
+    pub count: i32,
+    pub icon_tag: String,
+}
+
 /// 点位对外返回 VO
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +39,9 @@ pub struct MarkerVO {
     pub hidden_flag: HiddenFlag,
     /// 直接保留原始 extra JSON
     pub extra: Option<Value>,
+    /// 点位物品关联（`marker_item_link`），前端过滤/图标依赖
+    #[serde(default)]
+    pub item_list: Vec<MarkerItemLinkVo>,
 }
 
 /// 空响应（会序列化为 {}）
