@@ -167,7 +167,7 @@ def main() -> int:
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"channel, title, content, valid_time_start, valid_time_end, sort_index) "
             f"VALUES (0, {nid}, {now}, NULL, 1, NULL, false, %s, %s, %s, {now}, NULL, {nid})",
-            ('["WEB"]', title, content),
+            ('["COMMON"]', title, content),
         )
 
     # ── Tags (icon-tag sprite; tag_type_link keyed by tag name) ──────────────
