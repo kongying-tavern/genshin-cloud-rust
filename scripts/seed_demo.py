@@ -64,8 +64,8 @@ def main() -> int:
         "marker",
         "history",
         "item_area_public",
-        "item",
         "item_type_link",
+        "item",
         "item_type",
         "tag_type_link",
         "tag_type",
@@ -76,7 +76,7 @@ def main() -> int:
     ):
         cur.execute(f'DELETE FROM "genshin_map"."{table}"')
 
-    now = "now()"
+    now = "(now() AT TIME ZONE 'UTC')"
 
     # ── Areas (root area self-references its parent_id; codes match the
     #    frontend's AREA_ADDITIONAL_CONFIG_MAP / dadian tiles) ───────────────
