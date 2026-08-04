@@ -191,6 +191,9 @@ fn cdn_proxy() -> axum::Router {
                                 }
                             }
                             builder = builder.header("Access-Control-Allow-Origin", "*");
+                            // 上游响应无缓存头：浏览器可能启发式缓存到之前
+                            // 网络抖动期的坏响应（502/空 body），禁止缓存。
+                            builder = builder.header("Cache-Control", "no-store");
                             builder
                                 .body(axum::body::Body::from(body))
                                 .unwrap_or_else(|_| {
@@ -204,6 +207,7 @@ fn cdn_proxy() -> axum::Router {
                         Err(e) => Response::builder()
                             .status(502)
                             .header("Access-Control-Allow-Origin", "*")
+                            .header("Cache-Control", "no-store")
                             .body(axum::body::Body::from(format!("CDN proxy error: {e}")))
                             .unwrap()
                             .into_response(),

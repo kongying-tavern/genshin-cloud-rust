@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Serve map assets straight from the CDN (the production contract):
+  `VITE_ASSETS_BASE` was pointed at the local backend's `/cdn` proxy, which
+  re-fetched every tile/icon upstream — hundreds of concurrent GB-scale
+  tile requests stalled through the dev proxy and the map rendered black
+  with no console errors. The e2e env override now keeps the CDN direct
+  (`https://assets.yuanshen.site`, which sends `Access-Control-Allow-Origin:
+  *`); only the small dadian config stays on the local backend
+  (`CDN_DADIAN_CONFIG`). The CDN proxy also gained `Cache-Control:
+  no-store` so transient upstream failures can't be heuristically cached by
+  browsers.
+
+### Fixed
+
 - Align every route the frontend actually calls (exhaustive audit of all 79
   generated API paths against the live backend — all now reachable):
   - Add the `app` domain: `POST /api/app/trigger/update` flushes the

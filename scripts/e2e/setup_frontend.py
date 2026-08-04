@@ -25,12 +25,15 @@ def ensure_env_override() -> None:
 VITE_API_BASE=/api
 VITE_API_PROXY_TARGET=http://127.0.0.1:{RUST_PORT}
 VITE_WS_BASE=ws://127.0.0.1:{RUST_PORT}/ws
-# CDN overrides: assets.yuanshen.site has CORS (*) but dadian-preview is 404.
-# v3.yuanshen.site has dadian-preview + tiles but NO CORS headers.
-# Solution: proxy v3 through Vite dev server (which adds CORS via changeOrigin).
-# Vite proxy strips /cdn prefix → fetches from v3.yuanshen.site
+# Map tiles/icons are GB-scale: they must come straight from the CDN (the
+# production contract), NOT through the local backend proxy — proxying
+# hundreds of concurrent tile requests through the dev backend stalls the
+# map. assets.yuanshen.site sends Access-Control-Allow-Origin: *.
+VITE_ASSETS_BASE=https://assets.yuanshen.site
+# The dadian config is small (tens of KB); serve it from the local backend
+# (CDN_DADIAN_CONFIG) so the tiles/area definitions are pinned to the
+# version this backend was tested with.
 VITE_CONFIG_ARCHIVE=http://127.0.0.1:{RUST_PORT}/cdn/dadian-preview.json.bz2
-VITE_ASSETS_BASE=http://127.0.0.1:{RUST_PORT}/cdn
 """
     env_local.write_text(content, encoding="utf-8")
     info(TARGET, f"Wrote {env_local}")
