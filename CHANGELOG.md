@@ -9,6 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Carry the marker `itemList` (Java `MarkerVo.itemList` / `MarkerItemLinkVo`
+  with `itemId`/`count`/`iconTag`): the field was missing, so the frontend
+  could not match any marker to a selected item and **no markers rendered**.
+  All `MarkerVO` producers fill it from `marker_item_link` (+ item
+  `icon_tag`) in one batch query — the `marker_doc` BinaryMD5 pages (the
+  frontend's primary source), `get/page`, `get/list_byid`, `get/list_byinfo`
+  and `get/id`. Verified: 150/150 seeded markers carry their `itemList`.
+
+### Fixed
+
 - Serve map assets straight from the CDN (the production contract):
   `VITE_ASSETS_BASE` was pointed at the local backend's `/cdn` proxy, which
   re-fetched every tile/icon upstream — hundreds of concurrent GB-scale
