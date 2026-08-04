@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix the role contract that gates the whole frontend data pipeline:
+  `GET /system/role/list` was a stub returning `null` (the frontend builds
+  its role table from it), and `SysUserVO.roleId` serialized as the enum
+  name string (`"Admin"`) instead of the numeric id the frontend/Java use
+  (`roleMap.get(roleId)`). With the role table empty and `roleId` a string,
+  `userStore.info.roleId` stayed `undefined` and **every data store's
+  update condition** (`userStore.info?.roleId !== undefined`) never fired —
+  areas, item types, items, notices and markers all stayed empty. The
+  endpoint now returns the 6 roles (id/code/name/sort) and `roleId`
+  serializes as a number.
+
+### Fixed
+
 - Carry the marker `itemList` (Java `MarkerVo.itemList` / `MarkerItemLinkVo`
   with `itemId`/`count`/`iconTag`): the field was missing, so the frontend
   could not match any marker to a selected item and **no markers rendered**.
