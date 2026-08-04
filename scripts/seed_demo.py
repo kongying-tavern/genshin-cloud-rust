@@ -70,6 +70,7 @@ def main() -> int:
         "tag_type_link",
         "tag_type",
         "tag",
+        "notice",
         "icon",
         "area",
     ):
@@ -153,6 +154,20 @@ def main() -> int:
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"type_id, item_id) "
             f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, {type_id}, {iid})"
+        )
+
+    # ── Notices (公告面板) ───────────────────────────────────────────────────
+    notices = [
+        (1, "欢迎使用本地开发环境", "这是空荧酒馆地图的本地演示环境。底图与点位均为演示数据，登录账号 admin/admin123。"),
+        (2, "功能提示", "在左侧选择地区（蒙德）→ 物品类型 → 勾选物品，对应点位会显示在地图上。"),
+    ]
+    for nid, title, content in notices:
+        cur.execute(
+            f'INSERT INTO "genshin_map"."notice" '
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"channel, title, content, valid_time_start, valid_time_end, sort_index) "
+            f"VALUES (0, {nid}, {now}, NULL, 1, NULL, false, %s, %s, %s, {now}, NULL, {nid})",
+            ('["WEB"]', title, content),
         )
 
     # ── Tags (icon-tag sprite; tag_type_link keyed by tag name) ──────────────
