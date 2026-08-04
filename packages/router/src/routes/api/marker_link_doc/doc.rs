@@ -33,7 +33,10 @@ pub async fn all_bin(
     match _functions::functions::api::marker_link_doc::do_all_list_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/octet-stream")],
+            [
+                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
             Bytes::from(bytes),
         )
             .into_response()),
@@ -67,7 +70,10 @@ pub async fn all_graph_bin(
     match _functions::functions::api::marker_link_doc::do_all_graph_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/octet-stream")],
+            [
+                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
             Bytes::from(bytes),
         )
             .into_response()),
