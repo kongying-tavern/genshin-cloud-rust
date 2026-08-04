@@ -20,7 +20,10 @@ pub async fn list_page_bin(
     match _functions::functions::api::item_doc::do_list_page_bin(auth, md5).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/octet-stream")],
+            [
+                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
             Bytes::from(bytes),
         )
             .into_response()),
