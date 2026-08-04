@@ -82,7 +82,9 @@ pub async fn do_list(
     payload: AreaListRequest,
 ) -> Result<CommonResponse<AreaListResponse>> {
     let mut query = area_model::Entity::find_safety();
-    if let Some(parent) = payload.parent_id {
+    // Java 契约：parentId <= 0（如 -1）表示“不按父级过滤、查全部”，
+    // 前端 area store 固定传 { parentId: -1, isTraverse: true }。
+    if let Some(parent) = payload.parent_id.filter(|p| *p > 0) {
         query = query.filter(area_model::Column::ParentId.eq(parent));
     }
     if let Some(hidden_flag) = payload.hidden_flag {
