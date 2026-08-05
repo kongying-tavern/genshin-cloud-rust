@@ -38,19 +38,26 @@ pub(crate) async fn marker_item_map(
     if marker_ids.is_empty() {
         return Ok(map);
     }
-    let links = mil_model::Entity::find_safety()
-        .filter(mil_model::Column::MarkerId.is_in(marker_ids))
-        .all(db)
-        .await?;
+    let mut links: Vec<mil_model::Model> = Vec::new();
+    for chunk in marker_ids.chunks(1000) {
+        links.extend(
+            mil_model::Entity::find_safety()
+                .filter(mil_model::Column::MarkerId.is_in(chunk))
+                .all(db)
+                .await?,
+        );
+    }
     let item_ids: Vec<i64> = links.iter().map(|l| l.item_id).collect();
     let mut icon_tags: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
     if !item_ids.is_empty() {
-        for it in item_model::Entity::find_safety()
-            .filter(item_model::Column::Id.is_in(item_ids))
-            .all(db)
-            .await?
-        {
-            icon_tags.insert(it.id, it.icon_tag);
+        for chunk in item_ids.chunks(1000) {
+            for it in item_model::Entity::find_safety()
+                .filter(item_model::Column::Id.is_in(chunk))
+                .all(db)
+                .await?
+            {
+                icon_tags.insert(it.id, it.icon_tag);
+            }
         }
     }
     for l in links {
@@ -401,10 +408,15 @@ pub async fn do_get_id(
 
     // 如果提供了 item_id_list，则从 marker_item_link 收集 marker id
     if let Some(item_ids) = payload.item_id_list {
-        let links = mil_model::Entity::find_safety()
-            .filter(mil_model::Column::ItemId.is_in(item_ids))
-            .all(db)
-            .await?;
+        let mut links: Vec<mil_model::Model> = Vec::new();
+        for chunk in item_ids.chunks(1000) {
+            links.extend(
+                mil_model::Entity::find_safety()
+                    .filter(mil_model::Column::ItemId.is_in(chunk))
+                    .all(db)
+                    .await?,
+            );
+        }
         let ids: HashSet<i64> = links.into_iter().map(|l| l.marker_id).collect();
         let mut v: Vec<i64> = ids.into_iter().collect();
         v.sort_unstable();
@@ -430,10 +442,15 @@ pub async fn do_get_list_by_info(
 
     // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
     let ids = if let Some(item_ids) = payload.item_id_list {
-        let links = mil_model::Entity::find_safety()
-            .filter(mil_model::Column::ItemId.is_in(item_ids))
-            .all(db)
-            .await?;
+        let mut links: Vec<mil_model::Model> = Vec::new();
+        for chunk in item_ids.chunks(1000) {
+            links.extend(
+                mil_model::Entity::find_safety()
+                    .filter(mil_model::Column::ItemId.is_in(chunk))
+                    .all(db)
+                    .await?,
+            );
+        }
         let ids: HashSet<i64> = links.into_iter().map(|l| l.marker_id).collect();
         let mut v: Vec<i64> = ids.into_iter().collect();
         v.sort_unstable();
