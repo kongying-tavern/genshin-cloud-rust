@@ -23,7 +23,8 @@ pub struct ItemRequest {
     /// 默认数量
     pub default_count: i32,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 图标样式类型
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
@@ -52,7 +53,8 @@ pub struct ItemAddRequest {
     /// 物品显示类型
     pub icon_style_type: IconStyleType,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 物品名称
     pub name: String,
     /// 排序
@@ -80,7 +82,8 @@ pub struct ItemUpdateData {
     /// 物品显示类型
     pub icon_style_type: IconStyleType,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 物品 ID
     pub id: i64,
     /// 物品名称
@@ -160,7 +163,9 @@ pub struct ItemVO {
     pub default_refresh_time: i64,
     pub default_content: Option<String>,
     pub default_count: i32,
-    pub icon_tag: String,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
     pub icon_style_type: crate::types::IconStyleType,
     pub hidden_flag: crate::types::HiddenFlag,
     pub sort_index: i32,

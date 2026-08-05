@@ -39,6 +39,7 @@ pub(crate) async fn type_id_map(
 pub(crate) fn item_to_vo(
     it: &item_model::Model,
     type_map: &std::collections::HashMap<i64, Vec<i64>>,
+    icon_tag_map: &std::collections::HashMap<i64, String>,
 ) -> ItemVO {
     ItemVO {
         id: it.id,
@@ -47,7 +48,8 @@ pub(crate) fn item_to_vo(
         default_refresh_time: it.default_refresh_time,
         default_content: it.default_content.clone(),
         default_count: it.default_count,
-        icon_tag: it.icon_tag.clone(),
+        icon_tag: Some(icon_tag_map.get(&it.icon_id).cloned().unwrap_or_default()),
+        icon_id: it.icon_id,
         icon_style_type: it.icon_style_type,
         hidden_flag: it.hidden_flag,
         sort_index: it.sort_index,
@@ -84,7 +86,7 @@ pub async fn do_update(
         am.default_content = Set(Some(p.default_content));
         am.default_count = Set(p.default_count as i32);
         am.default_refresh_time = Set(p.default_refresh_time.unwrap_or(0));
-        am.icon_tag = Set(p.icon_tag);
+        am.icon_id = Set(p.icon_id);
         am.icon_style_type = Set(p.icon_style_type);
         am.hidden_flag = Set(p.hidden_flag);
         if let Some(si) = p.sort_index {
@@ -141,11 +143,12 @@ pub async fn do_get_list(
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
     let total = query.clone().count(db).await?;
+    let icon_tag_map = super::icon::icon_tag_map(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
     let type_map = type_id_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(item_to_vo(&it, &type_map));
+        arr.push(item_to_vo(&it, &type_map, &icon_tag_map));
     }
     let payload = ItemListResponse {
         total: total as i64,
@@ -218,6 +221,7 @@ pub async fn do_get_list_by_id(
         }
     }
     let db = &DB_CONN.wait().pg_conn;
+    let icon_tag_map = super::icon::icon_tag_map(db).await?;
     let items = item_model::Entity::find_safety()
         .filter(item_model::Column::Id.is_in(payload))
         .all(db)
@@ -225,7 +229,7 @@ pub async fn do_get_list_by_id(
     let type_map = type_id_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
-        arr.push(item_to_vo(&it, &type_map));
+        arr.push(item_to_vo(&it, &type_map, &icon_tag_map));
     }
     let payload = ItemListResponse {
         total: arr.len() as i64,
@@ -327,7 +331,7 @@ pub async fn do_add(
         default_refresh_time: Set(payload.default_refresh_time.unwrap_or(0)),
         default_content: Set(Some(payload.default_content)),
         default_count: Set(payload.default_count as i32),
-        icon_tag: Set(payload.icon_tag),
+        icon_id: Set(payload.icon_id),
         icon_style_type: Set(payload.icon_style_type),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(payload.sort_index.unwrap_or(0) as i32),

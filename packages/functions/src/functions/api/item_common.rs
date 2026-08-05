@@ -63,9 +63,10 @@ pub async fn do_get_list(
 
     let mut arr = Vec::with_capacity(links.len());
     let type_map = type_id_map(db).await?;
+    let icon_tag_map = super::icon::icon_tag_map(db).await?;
     for link in links {
         if let Some(it) = by_id.get(&link.item_id) {
-            arr.push(item_to_vo(it, &type_map));
+            arr.push(item_to_vo(it, &type_map, &icon_tag_map));
         }
     }
 

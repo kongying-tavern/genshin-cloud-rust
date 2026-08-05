@@ -42,8 +42,8 @@ pub struct Model {
     /// 默认数量
     #[sea_orm(default_value = 1)]
     pub default_count: i32,
-    /// 图标 ID
-    pub icon_tag: String,
+    /// 图标 ID（0 = 无图标，远程 schema 无 icon_tag 列）
+    pub icon_id: i64,
     /// 图标样式类型
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记

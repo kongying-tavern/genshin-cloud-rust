@@ -13,7 +13,8 @@ pub struct AreaRequest {
     /// 地区说明
     pub content: Option<String>,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,
@@ -66,7 +67,9 @@ pub struct AreaVO {
     pub name: String,
     pub code: Option<String>,
     pub content: Option<String>,
-    pub icon_tag: String,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
     pub parent_id: i64,
     pub is_final: bool,
     pub hidden_flag: crate::types::HiddenFlag,

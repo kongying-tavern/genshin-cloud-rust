@@ -28,8 +28,8 @@ pub struct Model {
     pub code: Option<String>,
     /// 地区说明
     pub content: Option<String>,
-    /// 图标 ID
-    pub icon_tag: String,
+    /// 图标 ID（0 = 无图标，远程 schema 无 icon_tag 列）
+    pub icon_id: i64,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,

@@ -38,6 +38,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagTy
         name: Set(payload.name),
         parent_id: Set(payload.parent_id),
         is_final: Set(payload.is_final),
+        sort_index: Set(Some(0)),
     };
 
     let res = tag_type_model::Entity::insert(am).exec(db).await?;

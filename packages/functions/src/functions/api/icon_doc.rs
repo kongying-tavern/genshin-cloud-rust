@@ -69,7 +69,7 @@ async fn icon_result() -> Result<ResultEntry> {
             .into_iter()
             .map(|i| IconDocVo {
                 id: i.id,
-                name: i.name,
+                name: i.tag,
                 url: i.url,
                 type_id_list: type_map.remove(&i.id).unwrap_or_default(),
             })

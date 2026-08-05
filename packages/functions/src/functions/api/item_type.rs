@@ -36,7 +36,7 @@ pub async fn do_update(
     let mut am: item_type_model::ActiveModel = item.into();
     // icon_tag -> icon_id
 
-    am.icon_tag = Set(payload.icon_tag);
+    am.icon_id = Set(payload.icon_id);
 
     if let Some(name) = payload.name {
         am.name = Set(name);
@@ -108,6 +108,7 @@ pub async fn do_get_list(
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
     let total = query.clone().count(db).await?;
+    let icon_tag_map = super::icon::icon_tag_map(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 
     let items_val: Vec<ItemTypeVO> = items
@@ -115,7 +116,8 @@ pub async fn do_get_list(
         .map(|i| ItemTypeVO {
             id: i.id,
             name: i.name,
-            icon_tag: i.icon_tag,
+            icon_tag: Some(icon_tag_map.get(&i.icon_id).cloned().unwrap_or_default()),
+            icon_id: i.icon_id,
             content: i.content,
             parent_id: i.parent_id,
             is_final: i.is_final,
@@ -131,6 +133,7 @@ pub async fn do_get_list(
 }
 
 pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeAllResponse>> {
+    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
     let items = item_type_model::Entity::find_safety()
         .all(&DB_CONN.wait().pg_conn)
         .await?;
@@ -139,7 +142,8 @@ pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeA
         .map(|i| ItemTypeVO {
             id: i.id,
             name: i.name,
-            icon_tag: i.icon_tag,
+            icon_tag: Some(icon_tag_map.get(&i.icon_id).cloned().unwrap_or_default()),
+            icon_id: i.icon_id,
             content: i.content,
             parent_id: i.parent_id,
             is_final: i.is_final,
@@ -183,7 +187,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<i64> 
         updater_id: Set(None),
         del_flag: Set(false),
 
-        icon_tag: Set(payload.icon_tag),
+        icon_id: Set(payload.icon_id),
         name: Set(name),
         content: Set(payload.content),
         parent_id: Set(payload.parent_id),

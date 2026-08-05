@@ -8,7 +8,9 @@ use crate::{models::wrapper::Pagination, types::HiddenFlag};
 pub struct ItemTypeVO {
     pub id: i64,
     pub name: String,
-    pub icon_tag: String,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
     pub content: Option<String>,
     pub parent_id: i64,
     pub is_final: bool,
@@ -31,7 +33,8 @@ pub struct ItemTypeAllResponse(pub Vec<ItemTypeVO>);
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeRequest {
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 类型名
     pub name: String,
     /// 类型补充说明
@@ -56,7 +59,8 @@ pub struct ItemTypeAddRequest {
     /// 权限屏蔽标记
     pub hidden_flag: HiddenFlag,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 是否为末端地区
     pub is_final: bool,
     /// 类型名
@@ -76,7 +80,8 @@ pub struct ItemTypeUpdateData {
     /// 权限屏蔽标记
     pub hidden_flag: HiddenFlag,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 物品类型 ID
     pub id: i64,
     /// 是否为末端地区

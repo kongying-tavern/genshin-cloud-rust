@@ -11,7 +11,9 @@ use serde_json::Value;
 pub struct MarkerItemLinkVo {
     pub item_id: i64,
     pub count: i32,
-    pub icon_tag: String,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
 }
 
 /// 点位对外返回 VO

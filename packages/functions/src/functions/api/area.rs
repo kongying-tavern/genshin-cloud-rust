@@ -36,7 +36,7 @@ pub async fn do_add(
         name: Set(payload.name),
         code: Set(payload.code),
         content: Set(payload.content),
-        icon_tag: Set(payload.icon_tag),
+        icon_id: Set(payload.icon_id),
         parent_id: Set(payload.parent_id),
         is_final: Set(payload.is_final),
         hidden_flag: Set(payload.hidden_flag),
@@ -63,7 +63,7 @@ pub async fn do_update(
     am.name = Set(payload.area.name);
     am.code = Set(payload.area.code);
     am.content = Set(payload.area.content);
-    am.icon_tag = Set(payload.area.icon_tag);
+    am.icon_id = Set(payload.area.icon_id);
     am.parent_id = Set(payload.area.parent_id);
     am.is_final = Set(payload.area.is_final);
     am.hidden_flag = Set(payload.area.hidden_flag);
@@ -93,6 +93,7 @@ pub async fn do_list(
         query = query.filter(area_model::Column::HiddenFlag.eq(hidden_flag));
     }
 
+    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
     let items = query.all(&DB_CONN.wait().pg_conn).await?;
     let mut ret = Vec::with_capacity(items.len());
     for it in items {
@@ -101,7 +102,8 @@ pub async fn do_list(
             name: it.name,
             code: it.code,
             content: it.content,
-            icon_tag: it.icon_tag,
+            icon_tag: Some(icon_tag_map.get(&it.icon_id).cloned().unwrap_or_default()),
+            icon_id: it.icon_id,
             parent_id: it.parent_id,
             is_final: it.is_final,
             hidden_flag: it.hidden_flag,
@@ -114,6 +116,7 @@ pub async fn do_list(
 
 // 获取单个
 pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaSingleResponse>> {
+    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
@@ -124,7 +127,8 @@ pub async fn do_get(_auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Area
             name: item.name,
             code: item.code,
             content: item.content,
-            icon_tag: item.icon_tag,
+            icon_tag: Some(icon_tag_map.get(&item.icon_id).cloned().unwrap_or_default()),
+            icon_id: item.icon_id,
             parent_id: item.parent_id,
             is_final: item.is_final,
             hidden_flag: item.hidden_flag,

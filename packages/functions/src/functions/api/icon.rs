@@ -37,8 +37,10 @@ pub async fn do_add(
         updater_id: Set(None),
         del_flag: Set(false),
 
-        name: Set(payload.name),
+        tag: Set(payload.name),
+        description: Set("".into()),
         url: Set(payload.url),
+        url_variants: Set(None),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
@@ -60,7 +62,7 @@ pub async fn do_list(
         query = query.filter(icon_model::Column::Id.is_in(ids));
     }
     if let Some(name) = payload.name {
-        query = query.filter(icon_model::Column::Name.contains(name));
+        query = query.filter(icon_model::Column::Tag.contains(name));
     }
 
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
@@ -78,7 +80,7 @@ pub async fn do_list(
     for it in items {
         arr.push(IconVO {
             id: it.id,
-            name: it.name,
+            name: it.tag,
             url: it.url,
         });
     }
@@ -98,7 +100,7 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
     let payload = IconSingleResponse {
         item: IconVO {
             id: item.id,
-            name: item.name,
+            name: item.tag,
             url: item.url,
         },
     };
@@ -128,10 +130,21 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
         .await?;
     let item = item.ok_or(anyhow!("Icon not found"))?;
     let mut am: icon_model::ActiveModel = item.into();
-    am.name = Set(payload.base.name);
+    am.tag = Set(payload.base.name);
     am.url = Set(payload.base.url);
     icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     Ok(CommonResponse::new(Ok(())))
+}
+
+/// icon_id -> icon.tag 映射（tag 名，前端 iconTag 契约的取值来源）。
+pub(crate) async fn icon_tag_map(
+    db: &sea_orm::DatabaseConnection,
+) -> Result<std::collections::HashMap<i64, String>> {
+    let mut map = std::collections::HashMap::new();
+    for icon in icon_model::Entity::find_safety().all(db).await? {
+        map.insert(icon.id, icon.tag);
+    }
+    Ok(map)
 }
