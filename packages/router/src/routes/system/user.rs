@@ -7,7 +7,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAdmin;
+use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
 use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
@@ -122,7 +122,7 @@ pub struct UserKickOutParams {
 /// POST /user/register
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(do_register(
@@ -143,7 +143,7 @@ pub async fn register(
 /// POST /user/register/qq
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register_qq(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(do_register_qq(
@@ -165,7 +165,7 @@ pub async fn register_qq(
 /// GET /user/info/{userId}
 #[tracing::instrument(skip(auth))]
 pub async fn get_info(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(user_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(Json(
@@ -180,7 +180,7 @@ pub async fn get_info(
 /// POST /user/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(do_update(
@@ -203,7 +203,7 @@ pub async fn update(
 /// POST /user/update_password
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     Ok(do_update_password(

@@ -8,13 +8,13 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAdmin;
+use crate::middlewares::ExtractAuthInfo;
 
 /// 获取指定槽位的最新存档
 /// GET /archive/last/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn get_last(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
@@ -30,7 +30,7 @@ pub async fn get_last(
 /// GET /archive/history/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn get_history(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
@@ -46,7 +46,7 @@ pub async fn get_history(
 /// GET /archive/all_history
 #[tracing::instrument(skip(auth))]
 pub async fn get_all_history(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
@@ -67,7 +67,7 @@ pub struct ArchiveSaveParams {
 /// PUT /archive/{slot_index}/{name}
 #[tracing::instrument(skip(auth))]
 pub async fn put(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, name)): Path<(i64, String)>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -90,7 +90,7 @@ pub async fn put(
 /// POST /archive/save/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn save(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
     Json(payload): Json<ArchiveSaveParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -113,7 +113,7 @@ pub async fn save(
 /// POST /archive/rename/{slot_index}/{new_name}
 #[tracing::instrument(skip(auth))]
 pub async fn rename(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, new_name)): Path<(i64, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
@@ -133,7 +133,7 @@ pub async fn rename(
 /// DELETE /archive/restore/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
@@ -149,7 +149,7 @@ pub async fn restore(
 /// DELETE /archive/slot/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn delete_slot(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
