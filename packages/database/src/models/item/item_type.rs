@@ -22,8 +22,8 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 图标 ID
-    pub icon_tag: String,
+    /// 图标 ID（0 = 无图标，远程 schema 无 icon_tag 列）
+    pub icon_id: i64,
     /// 类型名
     pub name: String,
     /// 类型补充说明

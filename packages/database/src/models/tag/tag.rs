@@ -26,6 +26,10 @@ pub struct Model {
     pub tag: String,
     /// 图标 ID
     pub icon_id: i64,
+    /// 权限屏蔽标记（远程 schema 列）
+    pub hidden_flag: Option<i32>,
+    /// 排序（远程 schema 列）
+    pub sort_index: Option<i32>,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

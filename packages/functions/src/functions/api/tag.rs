@@ -40,6 +40,8 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
         del_flag: Set(false),
         tag: Set(payload.tag),
         icon_id: Set(payload.icon_id),
+        hidden_flag: Set(Some(0)),
+        sort_index: Set(Some(0)),
     };
 
     let res = tag_model::Entity::insert(am).exec(db).await?;

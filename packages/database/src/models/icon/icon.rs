@@ -22,10 +22,14 @@ pub struct Model {
     /// 逻辑删除
     pub del_flag: bool,
 
-    /// 图标名称（旧库列名 `name`，与 Java 侧一致）
-    pub name: String,
+    /// 图标标签（远程 schema：无 name 列，有 tag/description/url_variants）
+    pub tag: String,
+    /// 图标描述
+    pub description: String,
     /// 图标 URL
     pub url: String,
+    /// 多分辨率 URL 变体（json，可空）
+    pub url_variants: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]

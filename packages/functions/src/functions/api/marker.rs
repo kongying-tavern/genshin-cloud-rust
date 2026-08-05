@@ -48,7 +48,7 @@ pub(crate) async fn marker_item_map(
         );
     }
     let item_ids: Vec<i64> = links.iter().map(|l| l.item_id).collect();
-    let mut icon_tags: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
+    let mut item_icon_ids: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
     if !item_ids.is_empty() {
         for chunk in item_ids.chunks(1000) {
             for it in item_model::Entity::find_safety()
@@ -56,15 +56,18 @@ pub(crate) async fn marker_item_map(
                 .all(db)
                 .await?
             {
-                icon_tags.insert(it.id, it.icon_tag);
+                item_icon_ids.insert(it.id, it.icon_id);
             }
         }
     }
+    let icon_tag_map = super::icon::icon_tag_map(db).await?;
     for l in links {
+        let icon_id = item_icon_ids.get(&l.item_id).copied().unwrap_or(0);
         map.entry(l.marker_id).or_default().push(MarkerItemLinkVo {
             item_id: l.item_id,
             count: l.count,
-            icon_tag: icon_tags.get(&l.item_id).cloned().unwrap_or_default(),
+            icon_id,
+            icon_tag: Some(icon_tag_map.get(&icon_id).cloned().unwrap_or_default()),
         });
     }
     Ok(map)
