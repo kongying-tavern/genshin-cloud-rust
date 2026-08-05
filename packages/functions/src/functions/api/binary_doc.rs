@@ -67,7 +67,7 @@ pub struct CachedPage {
 static BIN_CACHE: Lazy<moka::future::Cache<String, CachedPage>> = Lazy::new(|| {
     moka::future::Cache::builder()
         .max_capacity(10_000)
-        .time_to_live(Duration::from_secs(300))
+        .time_to_live(Duration::from_secs(3600))
         .build()
 });
 
@@ -100,7 +100,7 @@ const REDIS_RESULT_PREFIX: &str = "binmd5:result:";
 /// so no SCAN/DEL pass is needed.
 const REDIS_EPOCH_KEY: &str = "binmd5:epoch";
 /// Redis entry TTL (matches the in-process moka TTL).
-const REDIS_RESULT_TTL_SECS: u64 = 300;
+const REDIS_RESULT_TTL_SECS: u64 = 3600;
 
 /// A `ResultEntry` serialized for Redis: bytes travel as base64 (JSON
 /// carries `Vec<u8>` as a number array otherwise — 4-5x bigger).
@@ -236,7 +236,7 @@ pub struct ResultEntry {
 static RESULT_CACHE: Lazy<moka::future::Cache<String, Vec<ResultEntry>>> = Lazy::new(|| {
     moka::future::Cache::builder()
         .max_capacity(64)
-        .time_to_live(Duration::from_secs(300))
+        .time_to_live(Duration::from_secs(3600))
         .build()
 });
 
