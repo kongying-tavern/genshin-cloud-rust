@@ -11,7 +11,8 @@ use anyhow::{Result, anyhow};
 use std::collections::BTreeMap;
 
 use _database::{DB_CONN, models::marker::marker as marker_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{jwt::AuthInfo, models::wrapper::CommonResponse};
+use sea_orm::{ColumnTrait, QueryFilter, QuerySelect, prelude::*};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -54,7 +55,29 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
     let db = &DB_CONN.wait().pg_conn;
 
     get_result_cached("marker:result".into(), async {
-        let markers = marker_model::Entity::find_safety().all(db).await?;
+        // Select only the columns the map actually renders: the full-width
+        // text columns (content/picture) make the remote transfer take
+        // tens of minutes for 100k rows. The doc VOs leave them None.
+        let markers = marker_model::Entity::find()
+            .select_only()
+            .column(marker_model::Column::Version)
+            .column(marker_model::Column::Id)
+            .column(marker_model::Column::CreateTime)
+            .column(marker_model::Column::UpdateTime)
+            .column(marker_model::Column::CreatorId)
+            .column(marker_model::Column::UpdaterId)
+            .column(marker_model::Column::DelFlag)
+            .column(marker_model::Column::MarkerStamp)
+            .column(marker_model::Column::MarkerTitle)
+            .column(marker_model::Column::Position)
+            .column(marker_model::Column::MarkerCreatorId)
+            .column(marker_model::Column::PictureCreatorId)
+            .column(marker_model::Column::RefreshTime)
+            .column(marker_model::Column::HiddenFlag)
+            .column(marker_model::Column::Extra)
+            .filter(marker_model::Column::DelFlag.eq(false))
+            .all(db)
+            .await?;
         let ids: Vec<i64> = markers.iter().map(|m| m.id).collect();
         let item_map = super::marker::marker_item_map(db, &ids).await?;
 
