@@ -78,19 +78,24 @@ def main() -> int:
 
     now = "(now() AT TIME ZONE 'UTC')"
 
-    # ── Areas (root area self-references its parent_id; codes match the
-    #    frontend's AREA_ADDITIONAL_CONFIG_MAP / dadian tiles) ───────────────
+    # ── Areas (parents are is_final=false / parent_id=0; children are
+    #    is_final=true under their parent. The frontend left panel shows
+    #    parents in the first column and children in the second, so both
+    #    kinds must exist. Codes match AREA_ADDITIONAL_CONFIG_MAP keys.) ────
     areas = [
-        (1, "蒙德", 1, "A:MD:MENGDE"),
-        (2, "璃月", 1, "A:LY:LIYUE"),
-        (3, "稻妻", 1, "A:DQ:1"),
+        (1, "蒙德", 1, "A:MD:MENGDE", False),
+        (11, "蒙德城", 1, "A:MD:1", True),
+        (2, "璃月", 2, "A:LY:LIYUE", False),
+        (12, "璃月港", 2, "A:LY:1", True),
+        (3, "稻妻", 3, "A:DQ:1", False),
+        (13, "稻妻城", 3, "A:DQ:2", True),
     ]
-    for aid, name, parent, code in areas:
+    for aid, name, parent, code, final in areas:
         cur.execute(
             f'INSERT INTO "genshin_map"."area" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, code, content, icon_tag, parent_id, is_final, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, true, 0, {aid}, 0)",
+            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, {str(final).lower()}, 0, {aid}, 0)",
             (name, code),
         )
 
@@ -130,15 +135,15 @@ def main() -> int:
             (icon_tag, name),
         )
 
-    # ── Items ────────────────────────────────────────────────────────────────
+    # ── Items (area_id points at a child area, e.g. 蒙德城) ────────────────
     items = [
-        (1, "传送锚点", 1, "0", 0, 1),
-        (2, "七天神像", 1, "0", 0, 2),
-        (3, "秘境", 2, "0", 0, 3),
-        (4, "珍贵宝箱", 1, "0", 0, 4),
-        (5, "普通宝箱", 1, "0", 0, 4),
-        (6, "松茸", 1, "0", 0, 5),
-        (7, "薄荷", 1, "0", 0, 5),
+        (1, "传送锚点", 11, "0", 0, 1),
+        (2, "七天神像", 11, "0", 0, 2),
+        (3, "秘境", 11, "0", 0, 3),
+        (4, "珍贵宝箱", 12, "0", 0, 4),
+        (5, "普通宝箱", 12, "0", 0, 4),
+        (6, "松茸", 13, "0", 0, 5),
+        (7, "薄荷", 13, "0", 0, 5),
     ]
     for iid, name, area_id, icon_tag, sort, type_id in items:
         cur.execute(
