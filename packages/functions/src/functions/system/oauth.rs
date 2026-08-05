@@ -36,6 +36,10 @@ async fn check_access_policy(
     ip: SocketAddr,
     user_agent: &str,
 ) -> Result<()> {
+    // 本地/测试环境可跳过全部登录环境策略（IP/设备绑定等）。
+    if std::env::var("SKIP_ACCESS_POLICY").as_deref() == Ok("true") {
+        return Ok(());
+    }
     let db = &DB_CONN.wait().pg_conn;
     let last = models::system::sys_user_device::Entity::find_safety()
         .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
