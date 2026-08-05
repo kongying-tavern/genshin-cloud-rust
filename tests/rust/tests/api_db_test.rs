@@ -19,6 +19,7 @@ use _database::models::{
     item::item_type_link as item_type_link_model, marker::marker as marker_model,
     marker::marker_item_link as mil_model, system::sys_action_log as action_log_model,
     system::sys_user as sys_user_model, system::sys_user_device as device_model,
+    tag::tag as tag_model, tag::tag_type as tag_type_model,
 };
 use _functions::functions::api::{
     area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
@@ -264,6 +265,8 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
+        ddl_without_foreign_keys(tag_model::Entity),
+        ddl_without_foreign_keys(tag_type_model::Entity),
     ];
     recreate_tables_fklless(
         db,
@@ -282,6 +285,8 @@ async fn area_and_item_doc_business_assertions() {
             "marker",
             "marker_item_link",
             "marker_punctuate",
+            "tag",
+            "tag_type",
         ],
         &ddls,
     )

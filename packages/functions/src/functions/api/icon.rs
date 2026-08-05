@@ -138,13 +138,15 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
     Ok(CommonResponse::new(Ok(())))
 }
 
-/// icon_id -> icon.tag 映射（tag 名，前端 iconTag 契约的取值来源）。
+/// icon_id -> tag.tag 映射（前端 sprite 的 tagCoordMap key 是 tag 表的
+/// `tag` 字段（如 "陨石碎片"），不是 icon 表的 tag 描述）。
 pub(crate) async fn icon_tag_map(
     db: &sea_orm::DatabaseConnection,
 ) -> Result<std::collections::HashMap<i64, String>> {
+    use _database::models::tag::tag as tag_model;
     let mut map = std::collections::HashMap::new();
-    for icon in icon_model::Entity::find_safety().all(db).await? {
-        map.insert(icon.id, icon.tag);
+    for t in tag_model::Entity::find_safety().all(db).await? {
+        map.entry(t.icon_id).or_insert(t.tag);
     }
     Ok(map)
 }
