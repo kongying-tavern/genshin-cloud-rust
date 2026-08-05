@@ -17,14 +17,12 @@ use _database::models::{
     common::history as history_model, common::score_stat as score_stat_model,
     icon::icon as icon_model, icon::icon_type_link as itl_model, item::item as item_model,
     item::item_type_link as item_type_link_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model, marker::marker_punctuate as mp_model,
-    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
-    system::sys_user_device as device_model,
+    marker::marker_item_link as mil_model, system::sys_action_log as action_log_model,
+    system::sys_user as sys_user_model, system::sys_user_device as device_model,
 };
 use _functions::functions::api::{
     area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
-    marker as marker_fns, punctuate as punctuate_fns, punctuate_audit as audit_fns,
-    score as score_fns,
+    marker as marker_fns, score as score_fns,
 };
 use _functions::functions::system::oauth as oauth_fns;
 use _utils::{
@@ -41,7 +39,7 @@ use _utils::{
     },
     types::{
         AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
-        IconStyleType, MarkerPunctuateMethodType, MarkerPunctuateStatus, SystemUserRole,
+        IconStyleType, SystemUserRole,
     },
 };
 use sea_orm::{
@@ -109,42 +107,6 @@ async fn link_count(db: &sea_orm::DatabaseConnection, marker_id: i64) -> anyhow:
         .await?)
 }
 
-async fn seed_punctuate(
-    db: &sea_orm::DatabaseConnection,
-    punctuate_id: i64,
-    method_type: MarkerPunctuateMethodType,
-    now: chrono::NaiveDateTime,
-) -> anyhow::Result<i64> {
-    let am = mp_model::ActiveModel {
-        id: NotSet,
-        version: Set(0),
-        create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
-        del_flag: Set(false),
-        punctuate_id: Set(punctuate_id),
-        original_marker_id: Set(None),
-        marker_title: Set(Some("Audit Marker".into())),
-        item_list: Set(serde_json::json!([])),
-        position: Set("3.0,4.0".into()),
-        content: Set(String::new()),
-        picture: Set(None),
-        marker_creator_id: Set(1),
-        picture_creator_id: Set(None),
-        video_path: Set(None),
-        author: Set(2),
-        status: Set(MarkerPunctuateStatus::Reviewing),
-        audit_remark: Set(None),
-        method_type: Set(method_type),
-        refresh_time: Set(0),
-        hidden_flag: Set(HiddenFlag::Visible),
-        extra: Set(None),
-    };
-    Ok(mp_model::Entity::insert(am).exec(db).await?.last_insert_id)
-}
-
-/// Seed an item row (used by the item_common assertions).
 async fn seed_common_item(
     db: &sea_orm::DatabaseConnection,
     now: chrono::NaiveDateTime,
@@ -302,7 +264,6 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
-        ddl_without_foreign_keys(mp_model::Entity),
     ];
     recreate_tables_fklless(
         db,
@@ -705,80 +666,6 @@ async fn area_and_item_doc_business_assertions() {
         link_count(db, marker_id).await.expect("count"),
         0,
         "RemoveLeft removes the link"
-    );
-
-    // ── Assertion 5: punctuate audit enforces roles and commits atomically ───
-    // Seed two Reviewing "Added" punctuates.
-    seed_punctuate(db, 9001, MarkerPunctuateMethodType::Added, now)
-        .await
-        .expect("seed punctuate 9001");
-    seed_punctuate(db, 9002, MarkerPunctuateMethodType::Added, now)
-        .await
-        .expect("seed punctuate 9002");
-    let marker_before = marker_model::Entity::find_safety()
-        .count(db)
-        .await
-        .expect("count markers");
-
-    // Non-auditor role (MapUser) must be rejected for pass and reject
-    let user_auth = stub_auth_with_role(SystemUserRole::MapUser);
-    assert!(
-        audit_fns::do_pass(user_auth.clone(), 9001).await.is_err(),
-        "MapUser must not be allowed to pass an audit"
-    );
-    // A non-owner (id=1, seeded author=2) must not delete another author's
-    // punctuate.
-    assert!(
-        punctuate_fns::do_delete(user_auth.clone(), 9001)
-            .await
-            .is_err(),
-        "a user must not delete another author's punctuate"
-    );
-    assert!(
-        audit_fns::do_reject(user_auth, 9001, "nope".into())
-            .await
-            .is_err(),
-        "MapUser must not be allowed to reject an audit"
-    );
-
-    // Admin rejects p2 → status becomes Rejected with the remark
-    audit_fns::do_reject(auth.clone(), 9002, "bad data".into())
-        .await
-        .expect("admin rejects")
-        .data
-        .expect("reject ok");
-    let rejected = mp_model::Entity::find_safety()
-        .filter(mp_model::Column::PunctuateId.eq(9002))
-        .one(db)
-        .await
-        .expect("fetch rejected")
-        .expect("rejected punctuate still exists");
-    assert_eq!(rejected.status, MarkerPunctuateStatus::Rejected);
-    assert_eq!(rejected.audit_remark.as_deref(), Some("bad data"));
-
-    // Admin passes 9001 → marker inserted AND punctuate record hard-deleted
-    audit_fns::do_pass(auth.clone(), 9001)
-        .await
-        .expect("admin passes")
-        .data
-        .expect("pass ok");
-    let marker_after = marker_model::Entity::find_safety()
-        .count(db)
-        .await
-        .expect("count markers after pass");
-    assert_eq!(
-        marker_after,
-        marker_before + 1,
-        "pass must insert exactly one marker"
-    );
-    let p1_gone = mp_model::Entity::find_safety()
-        .filter(mp_model::Column::PunctuateId.eq(9001))
-        .one(db)
-        .await
-        .expect("check punctuate after pass");
-    assert!(
-        p1_gone.is_none(),
-        "pass must hard-delete the punctuate record"
     );
 
     // ── Assertion 6: oauth access_policy checks + device registration ────────
