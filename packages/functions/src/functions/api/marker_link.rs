@@ -12,42 +12,58 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         marker_link::{
-            MarkerLinkDeleteRequest, MarkerLinkGraphRequest, MarkerLinkGraphResponse,
-            MarkerLinkListRequest, MarkerLinkListResponse, MarkerLinkUpsertResult, MarkerLinkVO,
+            MarkerLinkDeleteRequest, MarkerLinkGraphRequest, MarkerLinkListRequest, MarkerLinkVO,
             MarkerLinkage,
         },
         wrapper::CommonResponse,
     },
 };
 
-// Upsert 标记连接：如果传入 id > 0 -> 更新该记录；否则插入新记录
+/// 将数据库模型转换为前端 VO（字段与前端 `MarkerLinkageVo` 对齐）
+pub(super) fn model_to_vo(it: linkage_model::Model) -> MarkerLinkVO {
+    MarkerLinkVO {
+        id: it.id,
+        version: it.version,
+        group_id: Some(it.group_id),
+        from_id: it.from_id,
+        to_id: it.to_id,
+        link_action: Some(it.link_action),
+        link_reverse: Some(it.link_reverse),
+        path: it.path.and_then(|j| serde_json::from_value(j).ok()),
+        creator_id: it.creator_id,
+        updater_id: it.updater_id,
+        // DB 更新时间为空时回退创建时间，保证前端增量判断（updateTime）可用
+        update_time: it
+            .update_time
+            .or(Some(it.create_time))
+            .map(|t| t.and_utc().timestamp_millis() as f64),
+    }
+}
+
+// Upsert 标记连接：一次请求生成一个新的关联组 ID（与 Java 实现一致），
+// 传入 id > 0 -> 更新该记录并划入新组；否则插入新记录。返回新关联组 ID。
 pub async fn do_link(
     auth: AuthInfo,
     payload: Vec<MarkerLinkage>,
-) -> Result<CommonResponse<Vec<MarkerLinkUpsertResult>>> {
+) -> Result<CommonResponse<String>> {
     auth.require_non_anonymous()?;
-    let mut ret = Vec::with_capacity(payload.len());
+    let db = &DB_CONN.wait().pg_conn;
+    let group_id = uuid::Uuid::new_v4().simple().to_string();
     for p in payload {
-        if p.id > 0 {
+        if let Some(id) = p.id
+            && id > 0
+        {
             // 尝试更新
-            if let Some(existing) = linkage_model::Entity::find_safety_by_id(p.id)
-                .one(&DB_CONN.wait().pg_conn)
-                .await?
-            {
+            if let Some(existing) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
                 let mut am: linkage_model::ActiveModel = existing.into();
+                am.group_id = Set(group_id.clone());
                 am.from_id = Set(p.from_id);
                 am.to_id = Set(p.to_id);
                 if let Some(action) = p.link_action {
                     am.link_action = Set(action);
                 }
                 am.path = Set(p.path.and_then(|v| serde_json::to_value(v).ok()));
-                linkage_model::Entity::update_safety(am)?
-                    .exec(&DB_CONN.wait().pg_conn)
-                    .await?;
-                ret.push(MarkerLinkUpsertResult {
-                    id: p.id,
-                    status: "updated".to_string(),
-                });
+                linkage_model::Entity::update_safety(am)?.exec(db).await?;
                 continue;
             }
         }
@@ -63,7 +79,7 @@ pub async fn do_link(
             updater_id: Set(None),
             del_flag: Set(false),
 
-            group_id: Set(String::new()),
+            group_id: Set(group_id.clone()),
             from_id: Set(p.from_id),
             to_id: Set(p.to_id),
             link_action: Set(p
@@ -73,99 +89,97 @@ pub async fn do_link(
             path: Set(p.path.and_then(|v| serde_json::to_value(v).ok())),
             extra: Set(None),
         };
-        let res = active.insert(&DB_CONN.wait().pg_conn).await?;
-        ret.push(MarkerLinkUpsertResult {
-            id: res.id,
-            status: "inserted".to_string(),
-        });
+        active.insert(db).await?;
     }
-    Ok(CommonResponse::new(Ok(ret)))
+    super::binary_doc::invalidate_doc_cache().await;
+    Ok(CommonResponse::new(Ok(group_id)))
 }
 
 pub async fn do_get_list(
     _auth: AuthInfo,
     payload: MarkerLinkListRequest,
-) -> Result<CommonResponse<MarkerLinkListResponse>> {
+) -> Result<CommonResponse<serde_json::Value>> {
+    // 与 Java 实现一致：未指定组 ID 时返回空 map
+    if payload.group_ids.is_empty() {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    }
     let db = &DB_CONN.wait().pg_conn;
-    let mut out = Vec::new();
-    let mut query = linkage_model::Entity::find_safety();
-    if !payload.group_ids.is_empty() {
-        query = query.filter(linkage_model::Column::GroupId.is_in(payload.group_ids));
-    }
-    let items = query.all(db).await?;
+    let items = linkage_model::Entity::find_safety()
+        .filter(linkage_model::Column::GroupId.is_in(payload.group_ids))
+        .all(db)
+        .await?;
+    // 按 group_id 分组返回，前端期望 `Record<string, MarkerLinkageVo[]>`
+    let mut map: std::collections::HashMap<String, Vec<MarkerLinkVO>> =
+        std::collections::HashMap::new();
     for it in items {
-        out.push(MarkerLinkVO {
-            id: it.id,
-            from_id: it.from_id,
-            to_id: it.to_id,
-            link_action: Some(it.link_action),
-            path: it.path.and_then(|j| serde_json::from_value(j).ok()),
-        });
+        let vo = model_to_vo(it);
+        let group_id = vo.group_id.clone().unwrap_or_default();
+        map.entry(group_id).or_default().push(vo);
     }
-    Ok(CommonResponse::new(Ok(MarkerLinkListResponse(out))))
+    Ok(CommonResponse::new(Ok(serde_json::to_value(map)?)))
 }
 
 pub async fn do_get_graph(
     _auth: AuthInfo,
     payload: MarkerLinkGraphRequest,
-) -> Result<CommonResponse<MarkerLinkGraphResponse>> {
-    // 目前按 group_id 返回分组的连接列表
-    let db = &DB_CONN.wait().pg_conn;
-    let groups = payload.group_ids;
-    let mut map: std::collections::HashMap<String, Vec<MarkerLinkVO>> =
-        std::collections::HashMap::new();
-    if groups.is_empty() {
-        let all = linkage_model::Entity::find_safety().all(db).await?;
-        let mut vec = Vec::with_capacity(all.len());
-        for it in all {
-            vec.push(MarkerLinkVO {
-                id: it.id,
-                from_id: it.from_id,
-                to_id: it.to_id,
-                // DB model has a non-optional `link_action`, API VO expects `Option`.
-                link_action: Some(it.link_action),
-                // `path` is stored as JSON in DB; try to deserialize into expected VO type.
-                path: it.path.and_then(|j| serde_json::from_value(j).ok()),
-            });
-        }
-        map.insert("all".to_string(), vec);
-    } else {
-        for g in groups {
-            let items = linkage_model::Entity::find_safety()
-                .filter(linkage_model::Column::GroupId.eq(g.clone()))
-                .all(db)
-                .await?;
-            let mut vec = Vec::with_capacity(items.len());
-            for it in items {
-                vec.push(MarkerLinkVO {
-                    id: it.id,
-                    from_id: it.from_id,
-                    to_id: it.to_id,
-                    link_action: Some(it.link_action),
-                    path: it.path.and_then(|j| serde_json::from_value(j).ok()),
-                });
-            }
-            map.insert(g, vec);
-        }
+) -> Result<CommonResponse<serde_json::Value>> {
+    // 与 Java 实现一致：未指定组 ID 时返回空 map
+    if payload.group_ids.is_empty() {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
     }
-    Ok(CommonResponse::new(Ok(MarkerLinkGraphResponse(map))))
+    let db = &DB_CONN.wait().pg_conn;
+    // 每个 groupId 返回一个 GraphVo 结构。前端类型（markerLink.ts GraphVo）声明
+    // relations 为 `Record<string, string[]>`，但该接口前端无调用方；做最小对齐：
+    // relations 改为该组 link 的 id 字符串列表，relRefs/pathRefs 无更丰富的图数据，置空数组。
+    let mut map: std::collections::HashMap<String, serde_json::Value> =
+        std::collections::HashMap::new();
+    for g in payload.group_ids {
+        let items = linkage_model::Entity::find_safety()
+            .filter(linkage_model::Column::GroupId.eq(g.clone()))
+            .all(db)
+            .await?;
+        let relations: Vec<String> = items.into_iter().map(|it| it.id.to_string()).collect();
+        map.insert(
+            g,
+            serde_json::json!({
+                "relations": relations,
+                "relRefs": [],
+                "pathRefs": []
+            }),
+        );
+    }
+    Ok(CommonResponse::new(Ok(serde_json::to_value(map)?)))
 }
 
 pub async fn do_delete(
     auth: AuthInfo,
     payload: MarkerLinkDeleteRequest,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
+    // 收集被删除关联涉及的组 ID 与点位 ID，返回给前端刷新本地数据
+    let mut groups: Vec<String> = Vec::new();
+    let mut markers: Vec<i64> = Vec::new();
+    let mut collect_affected = |it: &linkage_model::Model| {
+        if !it.group_id.is_empty() && !groups.contains(&it.group_id) {
+            groups.push(it.group_id.clone());
+        }
+        if it.from_id > 0 && !markers.contains(&it.from_id) {
+            markers.push(it.from_id);
+        }
+        if it.to_id > 0 && !markers.contains(&it.to_id) {
+            markers.push(it.to_id);
+        }
+    };
     if let Some(ids) = payload.ids {
         for id in ids {
             if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
+                collect_affected(&item);
                 let mut am: linkage_model::ActiveModel = item.into();
                 am.del_flag = Set(true);
                 linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
-        return Ok(CommonResponse::new(Ok(())));
     }
 
     if let Some(group_ids) = payload.group_ids {
@@ -175,11 +189,16 @@ pub async fn do_delete(
                 .all(db)
                 .await?;
             for it in items {
+                collect_affected(&it);
                 let mut am: linkage_model::ActiveModel = it.into();
                 am.del_flag = Set(true);
                 linkage_model::Entity::delete_safety(am)?.exec(db).await?;
             }
         }
     }
-    Ok(CommonResponse::new(Ok(())))
+    super::binary_doc::invalidate_doc_cache().await;
+    Ok(CommonResponse::new(Ok(serde_json::json!({
+        "groups": groups,
+        "markers": markers
+    }))))
 }

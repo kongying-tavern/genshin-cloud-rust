@@ -5,11 +5,12 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QuerySelect, prelude::
 use _database::{
     DB_CONN,
     models::common::{history as history_model, score_stat as score_stat_model},
+    models::system::sys_user as sys_user_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::score::{ScoreDataRequest, ScoreGenerateRequest, ScoreResponse, ScoreSample},
+    models::score::{ScoreDataRequest, ScoreGenerateRequest},
     models::wrapper::CommonResponse,
     types::{HistoryEditType, HistoryOperationType},
 };
@@ -29,7 +30,7 @@ use _utils::{
 pub async fn do_generate_score(
     _auth: AuthInfo,
     payload: ScoreGenerateRequest,
-) -> Result<CommonResponse<ScoreResponse>> {
+) -> Result<CommonResponse<String>> {
     let db = &DB_CONN.wait().pg_conn;
 
     // 解析时间范围
@@ -84,9 +85,6 @@ pub async fn do_generate_score(
     }
 
     // 4. 写入 score_stat 表（每个贡献者一行）
-    let mut samples = Vec::new();
-    let mut total_score = 0.0f64;
-
     for (&user_id, &(count, field_weight)) in &contributions {
         let score = field_weight;
 
@@ -110,21 +108,9 @@ pub async fn do_generate_score(
             }))),
         };
         score_stat_model::Entity::insert(am).exec(db).await?;
-
-        samples.push(ScoreSample {
-            time: span_end.and_utc().timestamp_millis() as f64,
-            score,
-        });
-        total_score += score;
     }
 
-    let average = if samples.is_empty() {
-        0.0
-    } else {
-        total_score / samples.len() as f64
-    };
-
-    Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
+    Ok(CommonResponse::new(Ok("ok".to_string())))
 }
 
 /// 单条打点记录的字段级权重（Java `ScoreDataPunctuateVo` 语义的近似）。
@@ -145,59 +131,121 @@ fn entry_weight(h: &history_model::Model) -> f64 {
     }
 }
 
-/// 读取评分统计数据——从 score_stat 表查询真实聚合记录。
-/// score 从每行的 content JSON 中读取（`fieldWeight`，旧数据回退到 `count`），
-/// 不再固定为 1.0。
+/// 读取评分统计数据——从 score_stat 表查询真实聚合记录，并按用户聚合为
+/// 前端 `ScoreVo[]`（`{userId, user, data{chars,fields}, scope, span}`）结构。
+///
+/// content JSON 兼容两种来源：
+/// - Java 形态：`{fields: {字段: 次数}, chars: {字段: 字数}}`，直接合并；
+/// - 本服务 `do_generate_score` 写入的简化形态 `{type, count, fieldWeight}`：
+///   编辑次数归入 `fields.content`，加权得分（取整）归入 `chars.content`。
 pub async fn do_get_score_data(
     _auth: AuthInfo,
     payload: ScoreDataRequest,
-) -> Result<CommonResponse<ScoreResponse>> {
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let start = timestamp_to_naive(payload.start_time);
     let end = timestamp_to_naive(payload.end_time);
 
-    let query = score_stat_model::Entity::find_safety()
+    let stats = score_stat_model::Entity::find_safety()
         .filter(score_stat_model::Column::Scope.eq(&payload.scope))
         .filter(score_stat_model::Column::Span.eq(&payload.span))
         .filter(score_stat_model::Column::SpanStartTime.gte(start))
         .filter(score_stat_model::Column::SpanEndTime.lte(end))
-        .limit(10_000);
+        .limit(10_000)
+        .all(db)
+        .await?;
 
-    let stats = query.all(db).await?;
+    // 按用户聚合（同一用户跨多个时间桶的行合并，对齐 Java `scoreDataMap.merge`）
+    type ScoreAgg = (
+        serde_json::Map<String, serde_json::Value>,
+        serde_json::Map<String, serde_json::Value>,
+    );
+    let mut groups: std::collections::BTreeMap<i64, ScoreAgg> = std::collections::BTreeMap::new();
+    for s in &stats {
+        let uid = s.user_id.unwrap_or(0);
+        let (fields, chars) = groups
+            .entry(uid)
+            .or_insert_with(|| (serde_json::Map::new(), serde_json::Map::new()));
+        match s.content.as_ref().and_then(|c| c.get("fields")) {
+            Some(serde_json::Value::Object(m)) => merge_int_map(fields, m),
+            _ => {
+                if let Some(v) = s
+                    .content
+                    .as_ref()
+                    .and_then(|c| c.get("count"))
+                    .and_then(|v| v.as_i64())
+                {
+                    let e = fields.entry("content".to_string()).or_insert(0.into());
+                    *e = serde_json::Value::from(e.as_i64().unwrap_or(0) + v);
+                }
+            },
+        }
+        match s.content.as_ref().and_then(|c| c.get("chars")) {
+            Some(serde_json::Value::Object(m)) => merge_int_map(chars, m),
+            _ => {
+                if let Some(v) = s
+                    .content
+                    .as_ref()
+                    .and_then(|c| c.get("fieldWeight"))
+                    .and_then(|v| v.as_f64())
+                {
+                    let e = chars.entry("content".to_string()).or_insert(0.into());
+                    *e = serde_json::Value::from(e.as_i64().unwrap_or(0) + v as i64);
+                }
+            },
+        }
+    }
 
-    let samples: Vec<ScoreSample> = stats
-        .iter()
-        .map(|s| {
-            let score = score_from_content(s.content.as_ref());
-            ScoreSample {
-                time: s.span_end_time.and_utc().timestamp_millis() as f64,
-                score,
-            }
+    // 批量查询用户基础信息（前端按 user.nickname/username 展示）
+    let user_ids: Vec<i64> = groups.keys().copied().collect();
+    let mut user_infos: std::collections::HashMap<i64, serde_json::Value> =
+        std::collections::HashMap::new();
+    if !user_ids.is_empty() {
+        use sea_orm::{ColumnTrait, QueryFilter};
+        let users = sys_user_model::Entity::find_safety()
+            .filter(sys_user_model::Column::Id.is_in(&user_ids))
+            .all(db)
+            .await?;
+        for u in users {
+            user_infos.insert(
+                u.id,
+                serde_json::json!({
+                    "username": u.username,
+                    "nickname": u.nickname,
+                }),
+            );
+        }
+    }
+
+    let list: Vec<serde_json::Value> = groups
+        .into_iter()
+        .map(|(uid, (fields, chars))| {
+            serde_json::json!({
+                "userId": uid,
+                // 必须为对象：前端解构 `user.nickname` 时 null/undefined 会抛 TypeError
+                "user": user_infos.get(&uid).cloned().unwrap_or_else(|| serde_json::json!({})),
+                "scope": payload.scope,
+                "span": payload.span,
+                "data": { "chars": chars, "fields": fields },
+            })
         })
         .collect();
 
-    let average = if samples.is_empty() {
-        0.0
-    } else {
-        samples.iter().map(|s| s.score).sum::<f64>() / samples.len() as f64
-    };
-
-    Ok(CommonResponse::new(Ok(ScoreResponse { samples, average })))
+    Ok(CommonResponse::new(Ok(serde_json::Value::Array(list))))
 }
 
-/// 从 score_stat.content JSON 提取分数：优先 `fieldWeight`（字段级加权），
-/// 旧数据回退到 `count`（编辑次数），都缺失时按 0。
-fn score_from_content(content: Option<&serde_json::Value>) -> f64 {
-    content
-        .and_then(|c| c.get("fieldWeight"))
-        .and_then(|v| v.as_f64())
-        .or_else(|| {
-            content
-                .and_then(|c| c.get("count"))
-                .and_then(|v| v.as_f64())
-        })
-        .unwrap_or(0.0)
+/// 将 src 中的整数条目累加合并进 target（跨时间桶同一用户的字段计数相加）。
+fn merge_int_map(
+    target: &mut serde_json::Map<String, serde_json::Value>,
+    src: &serde_json::Map<String, serde_json::Value>,
+) {
+    for (k, v) in src {
+        if let Some(n) = v.as_i64() {
+            let e = target.entry(k.clone()).or_insert(0.into());
+            *e = serde_json::Value::from(e.as_i64().unwrap_or(0) + n);
+        }
+    }
 }
 
 /// 将毫秒时间戳转换为 NaiveDateTime。

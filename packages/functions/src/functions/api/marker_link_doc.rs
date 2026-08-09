@@ -2,11 +2,11 @@
 //!
 //! Mirrors Java `MarkerLinkageDocController`. Single-blob shape (no per-flag
 //! paging): the entire dataset is one GZIP-compressed JSON blob.
-//! Two views: `list` (flat array) and `graph` (adjacency map). Both are cached
-//! at the result level, so warm requests perform no database scan.
+//! Two views: `list` (grouped map `groupId -> [MarkerLinkageVo]`) and `graph`
+//! (adjacency map). Both are cached at the result level, so warm requests
+//! perform no database scan.
 
 use anyhow::{Result, anyhow};
-use serde::Serialize;
 
 use _database::{DB_CONN, models::marker::marker_linkage as ml_model};
 use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
@@ -14,26 +14,8 @@ use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::Com
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
 };
-
-/// camelCase linkage view for the BinaryMD5 `list` blob (Java
-/// `MarkerLinkageVo` naming).
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LinkVo {
-    id: i64,
-    from_id: i64,
-    to_id: i64,
-    path: Option<serde_json::Value>,
-}
-
-fn link_to_vo(l: &ml_model::Model) -> LinkVo {
-    LinkVo {
-        id: l.id,
-        from_id: l.from_id,
-        to_id: l.to_id,
-        path: l.path.clone(),
-    }
-}
+use super::marker_link::model_to_vo;
+use _utils::models::marker_link::MarkerLinkVO;
 
 /// `GET /marker_link_doc/all_list_bin_md5` — MD5 of the flat linkage list blob.
 pub async fn do_all_list_bin_md5(
@@ -74,10 +56,16 @@ async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
         let data: serde_json::Value = if graph {
             serde_json::to_value(build_graph(&linkages))?
         } else {
-            // camelCase `MarkerLinkageVo` naming (Java wire contract) —
-            // snake_case models would break the frontend parser.
-            let vos: Vec<_> = linkages.iter().map(link_to_vo).collect();
-            serde_json::to_value(&vos)?
+            // 按 group_id 分组（camelCase `MarkerLinkageVo` 命名，Java wire contract），
+            // 前端解压后期望 `Record<string, MarkerLinkageVo[]>` 的 map
+            let mut map: std::collections::HashMap<String, Vec<MarkerLinkVO>> =
+                std::collections::HashMap::new();
+            for l in linkages {
+                let vo = model_to_vo(l);
+                let group_id = vo.group_id.clone().unwrap_or_default();
+                map.entry(group_id).or_default().push(vo);
+            }
+            serde_json::to_value(&map)?
         };
         let (compressed, md5_hex) = serialize_compress_md5(&data)?;
         let page = get_or_compute(key.to_string(), async {

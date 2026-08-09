@@ -1,11 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{
-    extract::{Json, Query},
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
 use _utils::{models::Pagination, types::ActionLogAction};
@@ -63,7 +59,7 @@ pub struct ActionLogParams {
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
-    Query(query): Query<ActionLogParams>,
+    Json(query): Json<ActionLogParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let size = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10) as u64;
     let current = query
@@ -72,10 +68,23 @@ pub async fn list(
         .and_then(|p| p.current)
         .unwrap_or(1);
 
+    // 排序参数以 wire 字符串（"createTime+" 等）下发，由业务层映射到列
+    let sort = query.sort.map(|sorts| {
+        sorts
+            .iter()
+            .map(|s| serde_json::to_value(s).unwrap_or_default())
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect()
+    });
+
     match _functions::functions::system::action_log::do_list(
         auth,
         query.user_id,
         query.action.map(|a| a as i64),
+        query.device_id,
+        query.ipv4,
+        query.is_error,
+        sort,
         size,
         current as u64,
     )

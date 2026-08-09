@@ -13,7 +13,7 @@ pub async fn delete(
     Json(payload): Json<MarkerLinkDeleteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::marker_link::do_delete(auth, payload).await {
-        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

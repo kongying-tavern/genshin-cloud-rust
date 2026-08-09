@@ -14,15 +14,15 @@ use _utils::{
     models::{
         common::EmptyResponse,
         tag_type::{
-            TagTypeAddResponse, TagTypeBaseRequest, TagTypeListRequest, TagTypeListResponse,
-            TagTypeUpdateRequest, TagTypeVO,
+            TagTypeBaseRequest, TagTypeListRequest, TagTypeListResponse, TagTypeUpdateRequest,
+            TagTypeVO,
         },
         wrapper::CommonResponse,
     },
 };
 
 /// 新增标签类型
-pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagTypeAddResponse> {
+pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let now = Utc::now().naive_utc();
@@ -42,9 +42,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<TagTy
     };
 
     let res = tag_type_model::Entity::insert(am).exec(db).await?;
-    Ok(TagTypeAddResponse {
-        id: res.last_insert_id,
-    })
+    Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
 /// 更新标签类型
@@ -83,6 +81,16 @@ pub async fn do_list(
     if let Some(parent_id) = payload.parent_id {
         query = query.filter(tag_type_model::Column::ParentId.eq(parent_id));
     }
+    // typeIdList 语义：[-1] 返回根类型（parent_id=-1），[nodeId] 返回其子级（parent_id IN）
+    if let Some(type_list) = payload.type_id_list
+        && !type_list.is_empty()
+    {
+        if type_list.contains(&-1) {
+            query = query.filter(tag_type_model::Column::ParentId.eq(-1));
+        } else {
+            query = query.filter(tag_type_model::Column::ParentId.is_in(type_list));
+        }
+    }
 
     let size = payload.page.size.unwrap_or(10) as u64;
     let current = payload.page.current.unwrap_or(1);
@@ -94,7 +102,14 @@ pub async fn do_list(
     let list: Vec<TagTypeVO> = items
         .into_iter()
         .map(|t| TagTypeVO {
+            version: t.version,
             id: t.id,
+            create_time: t.create_time.and_utc().timestamp_millis() as f64,
+            update_time: t
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: t.creator_id,
+            updater_id: t.updater_id,
             name: t.name,
             parent_id: t.parent_id,
             is_final: t.is_final,

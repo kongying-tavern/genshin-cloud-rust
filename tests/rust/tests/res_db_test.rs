@@ -76,31 +76,29 @@ async fn res_upload_stores_image_in_minio() {
         bytes: bytes.clone(),
     }];
 
-    let resp = do_upload_image(stub_auth(), payload)
+    let resp = do_upload_image(stub_auth(), payload, None)
         .await
         .expect("upload should succeed");
     assert!(!resp.error, "response flagged an error: {}", resp.message);
-    let vo = resp
-        .data
-        .as_ref()
-        .expect("upload response carries data")
-        .first()
-        .expect("one uploaded file");
+    let data = resp.data.as_ref().expect("upload response carries data");
+    let file_url = data
+        .get("fileUrl")
+        .and_then(|v| v.as_str())
+        .expect("fileUrl field present");
+    let file_path = data
+        .get("filePath")
+        .and_then(|v| v.as_str())
+        .expect("filePath field present");
 
     // URL shape: {base}/images/uploads/{uuid}.png — extension derived from the
     // content type, never from the client file name.
     let base = std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into());
-    assert!(
-        vo.url
-            .starts_with(&format!("{}/images/uploads/", base.trim_end_matches('/')))
-    );
-    assert!(vo.url.ends_with(".png"));
-    assert_eq!(vo.md5, md5_hex);
-    assert_eq!(vo.size, bytes.len());
+    assert!(file_url.starts_with(&format!("{}/images/uploads/", base.trim_end_matches('/'))));
+    assert!(file_url.ends_with(".png"));
+    assert_eq!(file_path, file_url, "filePath falls back to fileUrl");
 
     // Round-trip: the object must exist in MinIO with the original bytes.
-    let key = vo
-        .url
+    let key = file_url
         .rsplit_once("/images/")
         .expect("url contains bucket segment")
         .1;

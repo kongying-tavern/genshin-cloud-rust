@@ -6,7 +6,12 @@ use crate::{models::wrapper::Pagination, types::HiddenFlag};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub icon_tag: Option<String>,
     /// 图标 ID（远程 schema 列）
@@ -22,6 +27,7 @@ pub struct ItemTypeVO {
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<ItemTypeVO>,
 }
 
@@ -57,11 +63,16 @@ pub struct ItemTypeAddRequest {
     /// 类型补充说明
     pub content: Option<String>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 是否为末端地区
+    #[serde(default)]
     pub is_final: bool,
     /// 类型名
     pub name: Option<String>,
@@ -82,6 +93,9 @@ pub struct ItemTypeUpdateData {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品类型 ID
     pub id: i64,
     /// 是否为末端地区

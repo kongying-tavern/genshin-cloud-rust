@@ -8,27 +8,35 @@ use sea_orm::prelude::*;
 pub enum MarkerLinkageLinkAction {
     /// 触发
     #[sea_orm(string_value = "TRIGGER")]
+    #[serde(rename = "TRIGGER")]
     Trigger,
     /// 全部触发
     #[sea_orm(string_value = "TRIGGER_ALL")]
+    #[serde(rename = "TRIGGER_ALL")]
     TriggerAll,
     /// 任意触发
     #[sea_orm(string_value = "TRIGGER_ANY")]
+    #[serde(rename = "TRIGGER_ANY")]
     TriggerAny,
     /// 相关
     #[sea_orm(string_value = "RELATED")]
+    #[serde(rename = "RELATED")]
     Related,
     /// 有向
     #[sea_orm(string_value = "DIRECTED")]
+    #[serde(rename = "DIRECTED")]
     Directed,
     /// 单向路径
     #[sea_orm(string_value = "PATH_UNI_DIR")]
+    #[serde(rename = "PATH_UNI_DIR")]
     PathUniDir,
     /// 双向路径
     #[sea_orm(string_value = "PATH_BI_DIR")]
+    #[serde(rename = "PATH_BI_DIR")]
     PathBiDir,
     /// 等价
     #[sea_orm(string_value = "EQUIVALENT")]
+    #[serde(rename = "EQUIVALENT")]
     Equivalent,
 }
 

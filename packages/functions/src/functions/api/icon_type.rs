@@ -2,6 +2,7 @@ use anyhow::{Result, anyhow};
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
+    QueryFilter, QuerySelect,
     prelude::*,
 };
 
@@ -13,7 +14,7 @@ use _utils::{
     jwt::AuthInfo,
     models::{
         IconTypeAddRequest, IconTypeUpdateRequest,
-        icon_type::{IconTypeListResponse, IconTypeVO},
+        icon_type::{IconTypeListRequest, IconTypeListResponse, IconTypeVO},
         wrapper::CommonResponse,
     },
 };
@@ -43,11 +44,28 @@ pub async fn do_update(
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-// 列表（返回 JSON）
-pub async fn do_list(_auth: AuthInfo) -> Result<CommonResponse<IconTypeListResponse>> {
-    let items = icon_type_model::Entity::find_safety()
-        .all(&DB_CONN.wait().pg_conn)
-        .await?;
+// 列表（分页 + 父级过滤，typeIdList 含 -1 时查根分类）
+pub async fn do_list(
+    _auth: AuthInfo,
+    payload: IconTypeListRequest,
+) -> Result<CommonResponse<IconTypeListResponse>> {
+    let db = &DB_CONN.wait().pg_conn;
+    let mut query = icon_type_model::Entity::find_safety();
+    if let Some(ids) = payload.type_id_list {
+        let parents: Vec<i64> = ids.into_iter().filter(|&t| t > 0).collect();
+        if parents.is_empty() {
+            query = query.filter(icon_type_model::Column::ParentId.eq(-1));
+        } else {
+            query = query.filter(icon_type_model::Column::ParentId.is_in(parents));
+        }
+    }
+
+    let total = query.clone().count(db).await? as i64;
+    let size = payload.page.size.unwrap_or(10) as u64;
+    let current = payload.page.current.unwrap_or(1);
+    let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
+
+    let items = query.limit(size).offset(offset).all(db).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
         arr.push(IconTypeVO {
@@ -66,7 +84,10 @@ pub async fn do_list(_auth: AuthInfo) -> Result<CommonResponse<IconTypeListRespo
             is_final: it.is_final,
         });
     }
-    Ok(CommonResponse::new(Ok(IconTypeListResponse { items: arr })))
+    Ok(CommonResponse::new(Ok(IconTypeListResponse {
+        total,
+        items: arr,
+    })))
 }
 
 // 删除（软删除）

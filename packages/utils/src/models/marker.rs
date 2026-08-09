@@ -32,7 +32,7 @@ pub struct MarkerVO {
     pub marker_stamp: Option<String>,
     pub marker_title: Option<String>,
     pub position: String,
-    pub content: String,
+    pub content: Option<String>,
     pub picture: Option<String>,
     pub marker_creator_id: i64,
     pub picture_creator_id: Option<i64>,
@@ -44,6 +44,10 @@ pub struct MarkerVO {
     /// 点位物品关联（`marker_item_link`），前端过滤/图标依赖
     #[serde(default)]
     pub item_list: Vec<MarkerItemLinkVo>,
+    /// 关联（marker_linkage）ID，前端按 linkageId 关联展示；
+    /// 当前 marker 域接口未查询 marker_linkage，恒为 None
+    #[serde(default)]
+    pub linkage_id: Option<String>,
 }
 
 /// 空响应（会序列化为 {}）
@@ -70,6 +74,10 @@ pub struct MarkerIdListResponse {
 #[serde(rename_all = "camelCase")]
 pub struct MarkerListResponse {
     pub total: usize,
+    /// 分页大小（前端 PageListVoMarkerVo 的 size）
+    #[serde(default)]
+    pub size: Option<i64>,
+    #[serde(rename = "record")]
     pub items: Vec<MarkerVO>,
 }
 
@@ -77,6 +85,7 @@ pub struct MarkerListResponse {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerItemsResponse {
+    #[serde(rename = "record")]
     pub items: Vec<MarkerVO>,
 }
 
@@ -96,7 +105,7 @@ pub struct MarkerRequest {
     /// 形如 "{x},{y}" 的格式，其中 x 与 y 均为浮点数文本
     pub position: String,
     /// 点位说明
-    pub content: String,
+    pub content: Option<String>,
     /// 点位图片
     pub picture: Option<String>,
     /// 点位初始标记者
@@ -240,8 +249,10 @@ pub enum TweakValue {
     AnythingArray(Vec<Option<serde_json::Value>>),
     AnythingMap(HashMap<String, Option<serde_json::Value>>),
     Bool(bool),
-    Double(f64),
+    // Integer 须在 Double 前：untagged 下 JSON 数字先按 i64 解析，
+    // 否则前端发送的整数值（refreshTime/hiddenFlag）全被解析为 Double 而静默失效
     Integer(i64),
+    Double(f64),
     String(String),
 }
 

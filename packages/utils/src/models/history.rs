@@ -23,7 +23,7 @@ pub struct HistoryListRequest {
     /// 创建时间开始时间
     pub create_time_start: Option<f64>,
     /// 创建人 ID
-    pub creator_id: Option<String>,
+    pub creator_id: Option<i64>,
     /// 编辑类型
     pub edit_type: Option<HistoryEditType>,
     /// 类型下的 ID (配合记录类型使用)
@@ -50,7 +50,14 @@ pub struct HistoryItemVO {
     pub updater_id: Option<i64>,
     pub del_flag: bool,
 
+    /// MD5
+    pub md5: Option<String>,
+    /// IPv4
+    pub ipv4: Option<String>,
+
+    #[serde(rename = "tid")]
     pub t_id: i64,
+    #[serde(rename = "type")]
     pub history_type: Option<HistoryOperationType>,
     pub edit_type: HistoryEditType,
     pub content: String,
@@ -61,5 +68,6 @@ pub struct HistoryItemVO {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListResponse {
     pub total: usize,
+    #[serde(rename = "record")]
     pub items: Vec<HistoryItemVO>,
 }

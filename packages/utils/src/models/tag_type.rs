@@ -11,6 +11,7 @@ pub struct TagTypeBaseRequest {
     /// 父级分类 ID（-1 为根分类）
     pub parent_id: i64,
     /// 是否为末端类型
+    #[serde(default)]
     pub is_final: bool,
 }
 
@@ -38,6 +39,8 @@ pub struct TagTypeListRequest {
     pub name: Option<String>,
     /// 父级分类 ID
     pub parent_id: Option<i64>,
+    /// 分类 ID 列表（前端契约 typeIdList；-1 表示根/全部，仅对正数 ID 过滤）
+    pub type_id_list: Option<Vec<i64>>,
     /// 是否遍历子类型
     pub is_traverse: Option<bool>,
 
@@ -49,7 +52,13 @@ pub struct TagTypeListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeVO {
+    /// 乐观锁版本号（前端编辑时随行提交，用于乐观锁校验）
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub parent_id: i64,
     pub is_final: bool,
@@ -60,6 +69,7 @@ pub struct TagTypeVO {
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeListResponse {
     pub total: i64,
+    #[serde(rename = "record")]
     pub list: Vec<TagTypeVO>,
 }
 

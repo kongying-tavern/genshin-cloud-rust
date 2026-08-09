@@ -13,7 +13,7 @@ pub async fn add(
     Json(payload): Json<TagTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag_type::do_add(auth, payload).await {
-        Ok(resp) => Ok((StatusCode::OK, Json(serde_json::json!({"id": resp.id})))),
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
     }
 }

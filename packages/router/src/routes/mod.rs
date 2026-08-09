@@ -163,6 +163,35 @@ fn cdn_proxy() -> axum::Router {
                             .into_response();
                     }
 
+                    // Image proxy: forward to the icon host with wildcard CORS
+                    // (the dev MinIO on ddns.minemc.top sends no CORS headers,
+                    // which breaks the frontend sprite renderer).
+                    if let Some(query) = req.uri().query()
+                        && let Some(u) = query.split('&').find_map(|kv| kv.strip_prefix("u="))
+                    {
+                        let decoded = urlencoding::decode(u).unwrap_or_default().into_owned();
+                        match client.get(&decoded).send().await {
+                            Ok(resp) => {
+                                let body = resp.bytes().await.unwrap_or_default();
+                                return Response::builder()
+                                    .status(200)
+                                    .header("Content-Type", "image/png")
+                                    .header("Access-Control-Allow-Origin", "*")
+                                    .header("Cache-Control", "no-store")
+                                    .body(axum::body::Body::from(body))
+                                    .unwrap()
+                                    .into_response();
+                            },
+                            Err(_) => {
+                                return Response::builder()
+                                    .status(502)
+                                    .header("Access-Control-Allow-Origin", "*")
+                                    .body(axum::body::Body::from("img proxy error"))
+                                    .unwrap()
+                                    .into_response();
+                            },
+                        }
+                    }
                     // All other CDN paths: proxy to the configured upstream
                     let url = format!("{upstream}{path}");
 

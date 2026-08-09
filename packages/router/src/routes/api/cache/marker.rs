@@ -10,7 +10,7 @@ pub async fn delete_marker_cache(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::cache::do_delete_marker_cache(auth).await {
-        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

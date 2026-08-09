@@ -8,10 +8,13 @@ use _utils::models::icon::IconUpdateRequest;
 /// 修改图标信息
 /// 由icon_id定位修改一个icon
 /// POST /icon/update
-#[tracing::instrument(skip(_auth))]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(_auth): ExtractAuthInfo,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<IconUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::icon::do_update(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

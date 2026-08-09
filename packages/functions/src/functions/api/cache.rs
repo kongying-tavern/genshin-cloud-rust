@@ -36,7 +36,11 @@ pub async fn do_delete_common_item_cache(auth: AuthInfo) -> Result<CommonRespons
 }
 
 /// 清除图标标签缓存。当前无对应缓存层，为 no-op。
-pub async fn do_delete_icon_tag_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+/// 清除标签缓存。当前无对应缓存层，为 no-op（已读取请求体 tag 列表）。
+pub async fn do_delete_icon_tag_cache(
+    auth: AuthInfo,
+    _tags: Vec<String>,
+) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }

@@ -11,7 +11,10 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QueryOrder, QuerySelec
 use _utils::{
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse, item::ItemListResponse, wrapper::CommonResponse, wrapper::Pagination,
+        common::EmptyResponse,
+        item::{ItemAreaPublicListResponse, ItemAreaPublicVo},
+        wrapper::CommonResponse,
+        wrapper::Pagination,
     },
 };
 
@@ -22,7 +25,7 @@ use _database::{
     models::{area::item_area_public as iap_model, item::item as item_model},
 };
 
-use super::item::{item_to_vo, type_id_map};
+use super::item::{item_to_vo, marker_count_map, type_id_map};
 
 /// 批量添加上限（防恶意大列表）。
 const MAX_BATCH: usize = 1000;
@@ -30,11 +33,11 @@ const MAX_BATCH: usize = 1000;
 /// `POST /item_common/get/list`
 ///
 /// 列出公用物品：分页查询 `item_area_public` 关联表，组合 item 信息。
-/// 响应形状与原来一致（`ItemListResponse`，纯 item 视图）。
+/// 响应为 `ItemAreaPublicVo`（ItemVO + itemId），与前端 ItemAreaPublicVo 契约一致。
 pub async fn do_get_list(
     _auth: AuthInfo,
     payload: Pagination,
-) -> Result<CommonResponse<ItemListResponse>> {
+) -> Result<CommonResponse<ItemAreaPublicListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let size = payload.size.unwrap_or(10) as u64;
@@ -64,13 +67,17 @@ pub async fn do_get_list(
     let mut arr = Vec::with_capacity(links.len());
     let type_map = type_id_map(db).await?;
     let icon_tag_map = super::icon::icon_tag_map(db).await?;
+    let count_map = marker_count_map(db).await?;
     for link in links {
         if let Some(it) = by_id.get(&link.item_id) {
-            arr.push(item_to_vo(it, &type_map, &icon_tag_map));
+            arr.push(ItemAreaPublicVo {
+                item_id: it.id,
+                item: item_to_vo(it, &type_map, &icon_tag_map, &count_map),
+            });
         }
     }
 
-    let payload = ItemListResponse {
+    let payload = ItemAreaPublicListResponse {
         total: total as i64,
         items: arr,
     };
@@ -140,6 +147,7 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
         });
     }
     iap_model::Entity::insert_many(models).exec(db).await?;
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -157,5 +165,6 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         .filter(iap_model::Column::ItemId.eq(id))
         .exec(db)
         .await?;
+    super::binary_doc::invalidate_item_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }

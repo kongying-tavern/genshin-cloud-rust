@@ -59,11 +59,14 @@ pub async fn oauth(
     ExtractIP(ip): ExtractIP,
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
-    mut form: Multipart,
+    form: Option<Multipart>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let ip = ip.unwrap_or(native_ip);
 
-    let mut form_fields = {
+    // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
+    // 此时 Multipart extractor 会因 Content-Type 不匹配而 415 —— 用 Option 兜底，
+    // 仅 password 模式（multipart/form-data）才消费 form 字段。
+    let mut form_fields = if let Some(mut form) = form {
         let mut ret = HashMap::new();
         while let Some(field) = form.next_field().await.map_err(|err| {
             (
@@ -84,6 +87,8 @@ pub async fn oauth(
             ret.insert(name, value);
         }
         ret
+    } else {
+        HashMap::new()
     };
     if !form_fields.is_empty() {
         let grant_type = form_fields

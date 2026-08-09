@@ -14,7 +14,7 @@ pub async fn add(
     Json(payload): Json<ItemAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::item::do_add(auth, payload).await {
-        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

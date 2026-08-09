@@ -141,17 +141,8 @@ async fn user_db_round_trip() {
     assert_eq!(vo.role_id, SystemUserRole::MapUser);
 
     // ── do_update_password: wrong old password must fail ──────────────────────
-    let wrong_pw = user_fns::do_update_password(
-        stub_auth(),
-        vec![],
-        id,
-        String::new(),
-        "wrong_old_pw".into(),
-        String::new(),
-        SystemUserRole::MapUser,
-        "new_pw".into(),
-    )
-    .await;
+    let wrong_pw =
+        user_fns::do_update_password(stub_auth(), id, "wrong_old_pw".into(), "new_pw".into()).await;
     assert!(
         wrong_pw.is_err(),
         "updating the password with a wrong old password must fail"
@@ -159,18 +150,9 @@ async fn user_db_round_trip() {
 
     // ── do_update_password: correct old password succeeds and the new
     //    password verifies ────────────────────────────────────────────────────
-    user_fns::do_update_password(
-        stub_auth(),
-        vec![],
-        id,
-        String::new(),
-        "init_pw".into(),
-        String::new(),
-        SystemUserRole::MapUser,
-        "new_pw".into(),
-    )
-    .await
-    .expect("update password with correct old password");
+    user_fns::do_update_password(stub_auth(), id, "init_pw".into(), "new_pw".into())
+        .await
+        .expect("update password with correct old password");
 
     let updated = sys_user::Entity::find_safety_by_id(id)
         .one(db)

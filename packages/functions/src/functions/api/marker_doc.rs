@@ -55,9 +55,6 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
     let db = &DB_CONN.wait().pg_conn;
 
     get_result_cached("marker:result".into(), async {
-        // Select only the columns the map actually renders: the full-width
-        // text columns (content/picture) make the remote transfer take
-        // tens of minutes for 100k rows. The doc VOs leave them None.
         let markers = marker_model::Entity::find()
             .select_only()
             .column(marker_model::Column::Version)
@@ -70,8 +67,11 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
             .column(marker_model::Column::MarkerStamp)
             .column(marker_model::Column::MarkerTitle)
             .column(marker_model::Column::Position)
+            .column(marker_model::Column::Content)
+            .column(marker_model::Column::Picture)
             .column(marker_model::Column::MarkerCreatorId)
             .column(marker_model::Column::PictureCreatorId)
+            .column(marker_model::Column::VideoPath)
             .column(marker_model::Column::RefreshTime)
             .column(marker_model::Column::HiddenFlag)
             .column(marker_model::Column::Extra)
@@ -80,6 +80,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
             .await?;
         let ids: Vec<i64> = markers.iter().map(|m| m.id).collect();
         let item_map = super::marker::marker_item_map(db, &ids).await?;
+        let linkage_map = super::marker::marker_linkage_map(db, &ids).await?;
 
         // Group by hidden_flag (BTreeMap → sorted ascending)
         let mut groups: BTreeMap<i32, Vec<&marker_model::Model>> = BTreeMap::new();
@@ -104,7 +105,9 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                         // frontend parser.
                         let vos: Vec<_> = page_markers
                             .iter()
-                            .map(|m| super::marker::model_to_vo_doc(m, &item_map))
+                            .map(|m| {
+                                super::marker::model_to_vo_doc(m, &item_map, Some(&linkage_map))
+                            })
                             .collect();
                         let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                         Ok(CachedPage {
@@ -129,7 +132,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                 let page = get_or_compute(key.clone(), async {
                     let vos: Vec<_> = group_markers
                         .iter()
-                        .map(|m| super::marker::model_to_vo_doc(m, &item_map))
+                        .map(|m| super::marker::model_to_vo_doc(m, &item_map, Some(&linkage_map)))
                         .collect();
                     let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                     Ok(CachedPage {
