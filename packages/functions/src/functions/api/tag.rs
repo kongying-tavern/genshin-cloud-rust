@@ -9,7 +9,7 @@ use sea_orm::{
 
 use _database::{
     DB_CONN,
-    models::{tag::tag as tag_model, tag::tag_type_link as ttl_model},
+    models::{icon::icon as icon_model, tag::tag as tag_model, tag::tag_type_link as ttl_model},
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -85,6 +85,25 @@ pub async fn do_list(
     if let Some(icon_id) = payload.icon_id {
         query = query.filter(tag_model::Column::IconId.eq(icon_id));
     }
+    if let Some(tag_list) = payload.tag_list
+        && !tag_list.is_empty()
+    {
+        query = query.filter(tag_model::Column::Tag.is_in(tag_list));
+    }
+    if let Some(type_id_list) = payload.type_id_list
+        && !type_id_list.is_empty()
+    {
+        let tag_names: Vec<String> = ttl_model::Entity::find_safety()
+            .filter(ttl_model::Column::TypeId.is_in(type_id_list))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|l| l.tag_name)
+            .collect();
+        if !tag_names.is_empty() {
+            query = query.filter(tag_model::Column::Tag.is_in(tag_names));
+        }
+    }
 
     let size = payload.page.size.unwrap_or(10) as u64;
     let current = payload.page.current.unwrap_or(1);
@@ -96,9 +115,18 @@ pub async fn do_list(
     let list: Vec<TagVO> = items
         .into_iter()
         .map(|t| TagVO {
+            version: t.version,
             id: t.id,
+            create_time: Some(t.create_time.and_utc().timestamp_millis() as f64),
+            update_time: t
+                .update_time
+                .map(|dt| dt.and_utc().timestamp_millis() as f64),
+            creator_id: t.creator_id,
+            updater_id: t.updater_id,
             tag: t.tag,
+            type_id_list: Vec::new(),
             icon_id: t.icon_id,
+            url: String::new(),
         })
         .collect();
 
@@ -163,4 +191,114 @@ pub async fn do_update_type(
     }
 
     Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 按标签名新增标签（前端 `createTag` 兼容路由，仅传标签名）：
+/// 已存在同名标签时返回 `false`（对齐 Java 语义，前端据此回退为查询）。
+pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<bool>> {
+    auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
+
+    let exists = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(&tag_name))
+        .count(db)
+        .await?;
+    if exists > 0 {
+        return Ok(CommonResponse::new(Ok(false)));
+    }
+
+    let now = Utc::now().naive_utc();
+    tag_model::Entity::insert(tag_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        tag: Set(tag_name),
+        icon_id: Set(0),
+        hidden_flag: Set(Some(0)),
+        sort_index: Set(Some(0)),
+    })
+    .exec(db)
+    .await?;
+    Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 按标签名软删除标签（前端 `deleteTag` 兼容路由）。
+pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<bool>> {
+    auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
+
+    let t = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(&tag_name))
+        .one(db)
+        .await?
+        .ok_or(anyhow!("Tag not found"))?;
+    let mut am: tag_model::ActiveModel = t.into();
+    am.del_flag = Set(true);
+    tag_model::Entity::delete_safety(am)?.exec(db).await?;
+    Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 按标签名更新图标绑定（前端 `updateTag` 兼容路由）。
+pub async fn do_update_by_name(
+    auth: AuthInfo,
+    tag_name: String,
+    icon_id: i64,
+) -> Result<CommonResponse<bool>> {
+    auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
+
+    let t = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(&tag_name))
+        .one(db)
+        .await?
+        .ok_or(anyhow!("Tag not found"))?;
+    let mut am: tag_model::ActiveModel = t.into();
+    am.icon_id = Set(icon_id);
+    tag_model::Entity::update_safety(am)?.exec(db).await?;
+    Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 按标签名查询单个标签（前端 `getTag` 兼容路由），返回完整 TagVO。
+pub async fn do_get_single(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<TagVO>> {
+    auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
+
+    let t = tag_model::Entity::find_safety()
+        .filter(tag_model::Column::Tag.eq(&tag_name))
+        .one(db)
+        .await?
+        .ok_or(anyhow!("Tag not found"))?;
+
+    let type_id_list: Vec<i64> = ttl_model::Entity::find_safety()
+        .filter(ttl_model::Column::TagName.eq(&tag_name))
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|l| l.type_id)
+        .collect();
+
+    let url = icon_model::Entity::find_safety_by_id(t.icon_id)
+        .one(db)
+        .await?
+        .map(|i| i.url)
+        .unwrap_or_default();
+
+    Ok(CommonResponse::new(Ok(TagVO {
+        version: t.version,
+        id: t.id,
+        create_time: Some(t.create_time.and_utc().timestamp_millis() as f64),
+        update_time: t
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
+        creator_id: t.creator_id,
+        updater_id: t.updater_id,
+        tag: t.tag,
+        type_id_list,
+        icon_id: t.icon_id,
+        url,
+    })))
 }

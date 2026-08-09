@@ -49,5 +49,5 @@ pub async fn list(
             sort: 100,
         },
     ];
-    Ok(Json(roles).into_response())
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(roles))).into_response())
 }

@@ -15,10 +15,10 @@ use _utils::models::item_type::ItemTypeListRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(self_flag): Path<bool>,
+    Path(self_flag): Path<i64>,
     Json(payload): Json<ItemTypeListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match crate::functions::api::item_type::do_get_list(auth, self_flag, payload).await {
+    match crate::functions::api::item_type::do_get_list(auth, self_flag != 0, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

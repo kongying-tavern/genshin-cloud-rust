@@ -92,5 +92,6 @@ pub struct RoutePageResponse {
     /// 总条数
     pub total: i64,
     /// 当前页数据
+    #[serde(rename = "record")]
     pub items: Vec<RouteVO>,
 }

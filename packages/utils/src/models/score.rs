@@ -4,19 +4,29 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoreGenerateRequest {
+    #[serde(default)]
     pub end_time: f64,
+    #[serde(default)]
     pub scope: String,
+    #[serde(default)]
     pub span: String,
+    #[serde(default)]
     pub start_time: f64,
+    /// 生成人 ID（前端可选字段）
+    pub generator_id: Option<i64>,
 }
 
 /// 评分数据获取请求
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoreDataRequest {
+    #[serde(default)]
     pub end_time: f64,
+    #[serde(default)]
     pub scope: String,
+    #[serde(default)]
     pub span: String,
+    #[serde(default)]
     pub start_time: f64,
 }
 

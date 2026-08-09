@@ -4,6 +4,8 @@ use chrono::{TimeZone, Utc};
 
 use sea_orm::{QueryOrder, QuerySelect, prelude::*};
 
+use std::collections::HashSet;
+
 use _database::DB_CONN;
 use _database::models::common::history as history_model;
 use _utils::db_operations::SafeEntityTrait;
@@ -39,23 +41,17 @@ pub async fn do_get_list(
         query = query.filter(history_model::Column::CreateTime.lte(ndt));
     }
 
-    if let Some(creator_s) = payload.creator_id {
-        // 支持逗号分隔的多 id 或单个 id 字符串
-        let ids: Vec<i64> = creator_s
-            .split(',')
-            .filter_map(|s| s.trim().parse::<i64>().ok())
-            .collect();
-        if !ids.is_empty() {
-            if ids.len() == 1 {
-                query = query.filter(history_model::Column::CreatorId.eq(ids[0]));
-            } else {
-                query = query.filter(history_model::Column::CreatorId.is_in(ids));
-            }
-        }
+    if let Some(creator_id) = payload.creator_id {
+        query = query.filter(history_model::Column::CreatorId.eq(creator_id));
     }
 
     if let Some(edit_type) = payload.edit_type {
         query = query.filter(history_model::Column::EditType.eq(edit_type));
+    }
+
+    // 请求体 `type`（HistoryListRequest.request_type，数字 1..=4）按 history 表的 type 列过滤
+    if let Some(ty) = payload.request_type {
+        query = query.filter(history_model::Column::HistoryType.eq(ty));
     }
 
     if let Some(ids) = payload.id
@@ -92,6 +88,7 @@ pub async fn do_get_list(
     select = select.limit(size as u64).offset(offset);
 
     let items = select.all(&DB_CONN.wait().pg_conn).await?;
+    let creator_ids: HashSet<i64> = items.iter().filter_map(|it| it.creator_id).collect();
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
         arr.push(HistoryItemVO {
@@ -104,6 +101,8 @@ pub async fn do_get_list(
             creator_id: it.creator_id,
             updater_id: it.updater_id,
             del_flag: it.del_flag,
+            md5: it.md5,
+            ipv4: it.ipv4,
             t_id: it.t_id,
             history_type: it.history_type,
             edit_type: it.edit_type,
@@ -111,8 +110,10 @@ pub async fn do_get_list(
         });
     }
 
+    let users = super::sys_user_map(&DB_CONN.wait().pg_conn, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(HistoryListResponse {
         total: total as usize,
         items: arr,
-    })))
+    }))
+    .with_users(users))
 }

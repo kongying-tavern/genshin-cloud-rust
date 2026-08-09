@@ -215,6 +215,26 @@ pub async fn invalidate_all() {
     let _: Result<i64, redis::RedisError> = c.incr(REDIS_EPOCH_KEY, 1).await;
 }
 
+/// Invalidate the item binary-doc caches (in-process moka + Redis across
+/// replicas). Item writes change what `item_doc` serves, so call this after
+/// any item / item_type / item_common write; otherwise other clients keep
+/// seeing stale `item:result` / `item:{flag}` pages until the TTL expires.
+///
+/// This is the domain-wide invalidation: moka's `invalidate_all` drops the
+/// in-process pages, and bumping the Redis epoch makes every replica's cached
+/// copies unreachable (old keys expire on their own TTL).
+pub async fn invalidate_item_doc_cache() {
+    invalidate_all().await;
+}
+
+/// Invalidate the binary-doc caches for any domain (in-process moka + Redis
+/// across replicas). Marker / marker_link / item writes all change what the
+/// `*_doc` pages serve, so call this after any such write; otherwise other
+/// clients keep seeing stale pages until the TTL expires.
+pub async fn invalidate_doc_cache() {
+    invalidate_all().await;
+}
+
 /// Result-level cache entry: one page's md5 metadata plus its compressed
 /// bytes, so both the md5-list and the bin-fetch endpoints can be served
 /// without any database scan on a warm hit.

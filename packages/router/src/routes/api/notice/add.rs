@@ -12,7 +12,7 @@ pub async fn add_notice(
     Json(request): Json<NoticeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::notice::do_add_notice(auth, request).await {
-        Ok(id) => Ok((StatusCode::OK, Json(serde_json::json!({"id": id})))),
+        Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

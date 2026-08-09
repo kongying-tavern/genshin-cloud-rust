@@ -91,7 +91,57 @@ pub enum UserSort {
     NicknameReverse,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+/// Sort keys for the user device list（wire 契约与 UserSort 一致：字段+ 升序 / 字段- 降序）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum DeviceSort {
+    #[serde(rename = "deviceId+")]
+    DeviceId,
+    #[serde(rename = "deviceId-")]
+    DeviceIdReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "ipv4+")]
+    Ipv4,
+    #[serde(rename = "ipv4-")]
+    Ipv4Reverse,
+    #[serde(rename = "lastLoginTime+")]
+    LastLoginTime,
+    #[serde(rename = "lastLoginTime-")]
+    LastLoginTimeReverse,
+    #[serde(rename = "status+")]
+    Status,
+    #[serde(rename = "status-")]
+    StatusReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+}
+
+/// Sort keys for the user invitation list（wire 契约：createTime± / id± / updateTime± / username±）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum InvitationSort {
+    #[serde(rename = "createTime+")]
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+    #[serde(rename = "username+")]
+    Username,
+    #[serde(rename = "username-")]
+    UsernameReverse,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {
     /// 系统管理员
@@ -106,6 +156,49 @@ pub enum SystemUserRole {
     MapUser = 4,
     /// 匿名用户
     Visitor = 5,
+}
+
+/// 序列化为**数字**（Java 契约；前端 `roleId` 为数字枚举值）。
+impl Serialize for SystemUserRole {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i32(*self as i32)
+    }
+}
+
+/// 反序列化同时接受数字（新契约/前端）与枚举名（旧数据）。
+impl<'de> Deserialize<'de> for SystemUserRole {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        match v {
+            serde_json::Value::Number(n) => match n.as_i64() {
+                Some(0) => Ok(SystemUserRole::Admin),
+                Some(1) => Ok(SystemUserRole::MapManager),
+                Some(2) => Ok(SystemUserRole::MapNeigui),
+                Some(3) => Ok(SystemUserRole::MapPunctuate),
+                Some(4) => Ok(SystemUserRole::MapUser),
+                Some(5) => Ok(SystemUserRole::Visitor),
+                _ => Err(serde::de::Error::custom(format!("unknown roleId {n}"))),
+            },
+            serde_json::Value::String(s) => match s.as_str() {
+                "Admin" => Ok(SystemUserRole::Admin),
+                "MapManager" => Ok(SystemUserRole::MapManager),
+                "MapNeigui" => Ok(SystemUserRole::MapNeigui),
+                "MapPunctuate" => Ok(SystemUserRole::MapPunctuate),
+                "MapUser" => Ok(SystemUserRole::MapUser),
+                "Visitor" => Ok(SystemUserRole::Visitor),
+                _ => Err(serde::de::Error::custom(format!("unknown roleId {s}"))),
+            },
+            _ => Err(serde::de::Error::custom(
+                "roleId must be an integer or enum name",
+            )),
+        }
+    }
 }
 
 impl SystemUserRole {

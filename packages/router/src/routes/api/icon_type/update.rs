@@ -8,10 +8,13 @@ use _utils::models::icon_type::IconTypeUpdateRequest;
 /// 修改分类
 /// 由类型ID来定位修改一个分类
 /// POST /icon_type/update
-#[tracing::instrument(skip(_auth))]
+#[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(_auth): ExtractAuthInfo,
+    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<IconTypeUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::icon_type::do_update(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+    }
 }

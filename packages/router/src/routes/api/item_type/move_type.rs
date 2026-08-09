@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
+use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 批量移动类型为目标类型的子类型
 /// 将类型批量移动到某个类型下作为其子类型
@@ -20,7 +21,7 @@ pub async fn move_to_target(
     match _functions::functions::api::item_type::do_move_to_target(auth, target_type_id, payload)
         .await
     {
-        Ok(_) => Ok((StatusCode::OK, Json(serde_json::json!({})))),
+        Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

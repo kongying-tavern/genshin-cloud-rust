@@ -21,6 +21,7 @@ pub async fn upload_image(
     // 注意：这里不写临时文件——无主临时文件会泄漏磁盘，且字节最终
     // 需要原样上传。
     let mut files: Vec<UploadedFile> = Vec::new();
+    let mut file_path: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         (
@@ -35,7 +36,21 @@ pub async fn upload_image(
             .map(|ct| ct.to_string())
             .unwrap_or_default();
 
-        // 内容类型白名单：拒绝非图片（防任意文件上传）。
+        // 无文件名的字段视为文本字段（如 filePath），直接读取并跳过白名单校验。
+        if file_name.is_empty() {
+            let text = field.text().await.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("multipart read text error: {}", e),
+                )
+            })?;
+            if name == "filePath" && file_path.is_none() {
+                file_path = Some(text);
+            }
+            continue;
+        }
+
+        // 文件字段：内容类型白名单（防任意文件上传）+ 大小上限。
         if !ALLOWED_IMAGE_TYPES.contains(&content_type.as_str()) {
             return Err((
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -74,7 +89,7 @@ pub async fn upload_image(
     }
 
     // 交给 functions 层（MinIO 未配置时明确报错，而非静默丢弃）。
-    match _functions::functions::api::res::do_upload_image(auth, files).await {
+    match _functions::functions::api::res::do_upload_image(auth, files, file_path).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }

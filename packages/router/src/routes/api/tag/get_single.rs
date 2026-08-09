@@ -1,18 +1,18 @@
 use anyhow::Result;
 
-use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 
-/// 删除公告
+/// 按标签名查询单个标签（前端兼容路由）
+/// POST /tag/get/single/{name}
 #[tracing::instrument(skip(auth))]
-pub async fn delete_notice(
+pub async fn get_single(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(notice_id): Path<i64>,
+    Path(tag_name): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::notice::do_delete_notice(auth, notice_id).await {
-        Ok(v) => Ok(Json(v).into_response()),
+    match _functions::functions::api::tag::do_get_single(auth, tag_name).await {
+        Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

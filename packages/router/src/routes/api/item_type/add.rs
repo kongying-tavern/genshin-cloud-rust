@@ -14,7 +14,7 @@ pub async fn add(
     Json(payload): Json<ItemTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::item_type::do_add(auth, payload).await {
-        Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

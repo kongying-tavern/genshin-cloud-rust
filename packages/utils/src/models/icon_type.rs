@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::wrapper::Pagination;
+
 /// 图标类型基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,6 +11,7 @@ pub struct IconTypeBaseRequest {
     /// 父级分类 ID（-1 为根分类）
     pub parent_id: i64,
     /// 是否为末端类型
+    #[serde(default)]
     pub is_final: bool,
 }
 
@@ -45,9 +48,22 @@ pub struct IconTypeVO {
     pub is_final: bool,
 }
 
+/// 图标类型列表查询请求模型
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconTypeListRequest {
+    /// 父级类型 ID 列表（-1 为根分类）
+    pub type_id_list: Option<Vec<i64>>,
+    /// 分页参数
+    #[serde(flatten)]
+    pub page: Pagination,
+}
+
 /// 图标类型列表响应
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeListResponse {
+    pub total: i64,
+    #[serde(rename = "record")]
     pub items: Vec<IconTypeVO>,
 }

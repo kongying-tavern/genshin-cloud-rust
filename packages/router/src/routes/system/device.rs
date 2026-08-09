@@ -5,35 +5,7 @@ use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
 use _utils::models::wrapper::Pagination;
-
-/// 格式：字段+ 字段-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum DeviceSort {
-    #[serde(rename = "deviceId+")]
-    DeviceId,
-    #[serde(rename = "deviceId-")]
-    DeviceIdReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "ipv4+")]
-    Ipv4,
-    #[serde(rename = "ipv4-")]
-    Ipv4Reverse,
-    #[serde(rename = "lastLoginTime+")]
-    LastLoginTime,
-    #[serde(rename = "lastLoginTime-")]
-    LastLoginTimeReverse,
-    #[serde(rename = "status+")]
-    Status,
-    #[serde(rename = "status-")]
-    StatusReverse,
-    #[serde(rename = "updateTime+")]
-    UpdateTime,
-    #[serde(rename = "updateTime-")]
-    UpdateTimeReverse,
-}
+use _utils::types::DeviceSort;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,6 +47,7 @@ pub async fn list(
         payload.user_id,
         payload.device_id,
         payload.status.map(|s| s as i32),
+        payload.sort,
         size,
         current as u64,
     )

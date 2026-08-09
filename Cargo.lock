@@ -52,6 +52,7 @@ dependencies = [
  "strum",
  "tokio",
  "tracing",
+ "urlencoding",
  "uuid",
 ]
 
@@ -84,6 +85,7 @@ dependencies = [
  "tokio",
  "tower-http 0.7.0",
  "tracing",
+ "urlencoding",
  "uuid",
 ]
 

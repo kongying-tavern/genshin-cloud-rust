@@ -35,6 +35,7 @@ axum = { workspace = true }
 axum-extra = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
+urlencoding = "2"
 tower-http = { workspace = true }
 md5 = { workspace = true }
 bzip2 = { workspace = true }

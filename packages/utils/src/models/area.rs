@@ -15,17 +15,23 @@ pub struct AreaRequest {
     /// 图标标签
     #[serde(default)]
     pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,
     /// 是否为末端地区
     pub is_final: bool,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 排序
+    #[serde(default)]
     pub sort_index: i32,
     /// 额外标记
     /// 低位第一位：前台是否显示
+    #[serde(default)]
     pub special_flag: i32,
 }
 
@@ -63,7 +69,12 @@ pub struct AreaListRequest {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaVO {
+    pub version: i64,
     pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
     pub name: String,
     pub code: Option<String>,
     pub content: Option<String>,

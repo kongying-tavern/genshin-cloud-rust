@@ -1,18 +1,18 @@
 use anyhow::Result;
 
-use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 
-/// 删除公告
+/// 按标签名更新图标绑定（前端兼容路由）
+/// POST /tag/{tagName}/{iconId}
 #[tracing::instrument(skip(auth))]
-pub async fn delete_notice(
+pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(notice_id): Path<i64>,
+    Path((tag_name, icon_id)): Path<(String, i64)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::api::notice::do_delete_notice(auth, notice_id).await {
-        Ok(v) => Ok(Json(v).into_response()),
+    match _functions::functions::api::tag::do_update_by_name(auth, tag_name, icon_id).await {
+        Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
     }
 }

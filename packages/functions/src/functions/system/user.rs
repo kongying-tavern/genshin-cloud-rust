@@ -12,21 +12,20 @@ use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::{Pagination, SysUserVO},
+    models::{CommonResponse, Pagination, SysUserVO},
     types::{AccessPolicyItemEnum, SystemUserRole, UserSort},
 };
 
 // 业务处理函数
 pub async fn do_register(
     _auth: AuthInfo,
-    access_policy: Vec<AccessPolicyItemEnum>,
-    logo: String,
-    remark: String,
-    role_id: SystemUserRole,
+    access_policy: Option<Vec<AccessPolicyItemEnum>>,
+    logo: Option<String>,
+    remark: Option<String>,
+    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
-) -> Result<()> {
-    let _ = (&access_policy, &logo, &remark, &role_id, &username);
+) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();
@@ -44,29 +43,46 @@ pub async fn do_register(
         nickname: Set(None),
         qq: Set(None),
         phone: Set(None),
-        logo: Set(Some(logo)),
-        role_id: Set(role_id),
-        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
-        remark: Set(Some(remark)),
+        logo: Set(logo),
+        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
+        remark: Set(remark),
     };
 
-    sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(())
+    let res = sys_user_model::Entity::insert(am).exec(db).await?;
+    Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn do_register_qq(
-    _auth: AuthInfo,
-    access_policy: Vec<AccessPolicyItemEnum>,
-    logo: String,
-    remark: String,
-    role_id: SystemUserRole,
+    access_policy: Option<Vec<AccessPolicyItemEnum>>,
+    logo: Option<String>,
+    remark: Option<String>,
     username: String,
     password: String,
+    // 公开接口不信任客户端自报的 qq 绑定：真实场景应由 QQ OAuth 回调传入
+    // openid 并落库，此处仅做必填校验（缺省则 serde 反序列化直接失败）。
     qq: String,
-) -> Result<()> {
-    let _ = (&access_policy, &logo, &remark, &role_id, &username);
+) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
+
+    // 注册前查重（应用层）：username / qq 任一已被占用（未软删）则拒绝，
+    // 防公开接口批量注册重复账号；数据库唯一索引作为最终兜底。
+    let username_taken = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Username.eq(&username))
+        .count(db)
+        .await?
+        > 0;
+    if username_taken {
+        return Err(anyhow!("username exists"));
+    }
+    let qq_taken = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Qq.eq(&qq))
+        .count(db)
+        .await?
+        > 0;
+    if qq_taken {
+        return Err(anyhow!("qq exists"));
+    }
 
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
@@ -83,28 +99,50 @@ pub async fn do_register_qq(
         nickname: Set(None),
         qq: Set(Some(qq)),
         phone: Set(None),
-        logo: Set(Some(logo)),
-        role_id: Set(role_id),
-        access_policy: Set(Some(_utils::types::AccessPolicyList(access_policy))),
-        remark: Set(Some(remark)),
+        logo: Set(logo),
+        // 公开接口：不信任客户端传入的角色，固定注册为地图用户
+        role_id: Set(SystemUserRole::MapUser),
+        access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
+        remark: Set(remark),
     };
 
-    sys_user_model::Entity::insert(am).exec(db).await?;
-    Ok(())
+    let res = sys_user_model::Entity::insert(am).exec(db).await?;
+    Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-pub async fn do_get_info(_auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
+pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
+
+    // 字段权限：
+    // - Admin：放行全部字段（qq/phone/accessPolicy）；
+    // - 本人：可见自己的 qq/phone，但 accessPolicy 仅 Admin 可见；
+    // - 其他用户（含 MapManager）：只下发公开字段 + 基本字段（nickname/logo/roleId/remark）。
+    let is_self = auth.info.id == user_id;
+    if auth.info.role_id != SystemUserRole::Admin {
+        return Ok(SysUserVO {
+            id: m.id,
+            username: m.username,
+            nickname: m.nickname,
+            qq: if is_self { m.qq } else { None },
+            phone: if is_self { m.phone } else { None },
+            logo: m.logo,
+            role_id: m.role_id,
+            access_policy: Default::default(),
+            remark: m.remark,
+        });
+    }
     Ok(m.into())
 }
 
 #[allow(clippy::too_many_arguments)]
+// 错误类型 (u16, String)：HTTP 状态码 + 消息。functions 包不依赖 axum，用
+// u16 而非 StatusCode，由 router 层透传转换（权限类错误 403，其余保持 500）。
 pub async fn do_update(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     id: i64,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
@@ -112,26 +150,30 @@ pub async fn do_update(
     phone: Option<String>,
     qq: Option<String>,
     remark: Option<String>,
-    role_id: SystemUserRole,
-) -> Result<()> {
-    let _ = (
-        &access_policy,
-        &logo,
-        &nickname,
-        &phone,
-        &qq,
-        &remark,
-        &role_id,
-    );
+    role_id: Option<SystemUserRole>,
+) -> Result<CommonResponse<()>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
+    // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
+    let is_admin = auth.info.role_id == SystemUserRole::Admin;
+    if !is_admin && auth.info.id != id {
+        return Err((
+            403,
+            "Forbidden: only admins can update other users".to_string(),
+        ));
+    }
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
-        .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
     let mut am: sys_user_model::ActiveModel = m.into();
 
     if let Some(ap) = access_policy {
-        am.access_policy = Set(Some(_utils::types::AccessPolicyList(ap)));
+        // access_policy 是风控/运营管控字段：仅 Admin 可修改。非 Admin（含本人
+        // 整包提交 InfoEditor）一律忽略该字段，防止普通用户自行解除风控封锁。
+        if is_admin {
+            am.access_policy = Set(Some(_utils::types::AccessPolicyList(ap)));
+        }
     }
     if let Some(l) = logo {
         am.logo = Set(Some(l));
@@ -143,50 +185,81 @@ pub async fn do_update(
         am.phone = Set(Some(p));
     }
     if let Some(q) = qq {
+        // qq 唯一性（应用层）：改绑前查重，其他未软删用户已占用则拒绝。
+        let qq_taken = sys_user_model::Entity::find_safety()
+            .filter(sys_user_model::Column::Qq.eq(&q))
+            .filter(sys_user_model::Column::Id.ne(id))
+            .count(db)
+            .await
+            .map_err(|e| (500, e.to_string()))?
+            > 0;
+        if qq_taken {
+            return Err((409, "qq already exists".to_string()));
+        }
         am.qq = Set(Some(q));
     }
     if let Some(r) = remark {
         am.remark = Set(Some(r));
     }
-    am.role_id = Set(role_id);
+    if let Some(rid) = role_id {
+        // 角色变更仅 Admin 可操作；普通用户改自己时忽略传入的 role_id（防自提权限）
+        if is_admin {
+            am.role_id = Set(rid);
+        }
+    }
 
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    sys_user_model::Entity::update_safety(am)
+        .map_err(|e| (500, e.to_string()))?
+        .exec(db)
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    Ok(CommonResponse::new(Ok(())))
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn do_update_password(
-    _auth: AuthInfo,
-    _access_policy: Vec<AccessPolicyItemEnum>,
-    id: i64,
-    _logo: String,
+    auth: AuthInfo,
+    user_id: i64,
     old_password: String,
-    _remark: String,
-    _role_id: SystemUserRole,
     new_password: String,
-) -> Result<()> {
+) -> Result<CommonResponse<()>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
-    let m = sys_user_model::Entity::find_safety_by_id(id)
+    // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
+    let is_admin = auth.info.role_id == SystemUserRole::Admin;
+    if !is_admin && auth.info.id != user_id {
+        return Err((
+            403,
+            "Forbidden: only the account owner can update password".to_string(),
+        ));
+    }
+    let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
-        .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
 
     // 校验旧密码，拒绝错误凭据
-    if !_utils::bcrypt::verify_password(old_password, m.password.clone())? {
-        return Err(anyhow!("Invalid old password"));
+    if !_utils::bcrypt::verify_password(old_password, m.password.clone())
+        .map_err(|e| (500, e.to_string()))?
+    {
+        return Err((500, "Invalid old password".to_string()));
     }
 
     let mut am: sys_user_model::ActiveModel = m.into();
-    am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)?);
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
+        .map_err(|e| (500, e.to_string()))?);
+    sys_user_model::Entity::update_safety(am)
+        .map_err(|e| (500, e.to_string()))?
+        .exec(db)
+        .await
+        .map_err(|e| (500, e.to_string()))?;
+    Ok(CommonResponse::new(Ok(())))
 }
 
 pub async fn do_update_password_by_admin(
     _auth: AuthInfo,
     password: String,
     user_id: i64,
-) -> Result<()> {
+) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
@@ -195,7 +268,7 @@ pub async fn do_update_password_by_admin(
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(())
+    Ok(CommonResponse::new(Ok(())))
 }
 
 pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
@@ -209,18 +282,22 @@ pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
 pub async fn do_list(
     _auth: AuthInfo,
     pagination: Pagination,
-    nickname: String,
+    nickname: Option<String>,
     role_ids: Option<Vec<SystemUserRole>>,
     sort: Option<Vec<UserSort>>,
-    username: String,
-) -> Result<serde_json::Value> {
+    username: Option<String>,
+) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
-    if !nickname.is_empty() {
+    if let Some(nickname) = nickname
+        && !nickname.is_empty()
+    {
         query = query.filter(sys_user_model::Column::Nickname.like(nickname));
     }
-    if !username.is_empty() {
+    if let Some(username) = username
+        && !username.is_empty()
+    {
         query = query.filter(sys_user_model::Column::Username.eq(username));
     }
     if let Some(rids) = role_ids {
@@ -256,7 +333,9 @@ pub async fn do_list(
     let items = query.limit(size).offset(offset).all(db).await?;
 
     let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
-    Ok(serde_json::json!({"total": total, "items": vos}))
+    Ok(CommonResponse::new(Ok(
+        serde_json::json!({"total": total, "record": vos}),
+    )))
 }
 
 pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {

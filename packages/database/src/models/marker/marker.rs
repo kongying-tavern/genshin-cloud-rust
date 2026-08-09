@@ -32,7 +32,7 @@ pub struct Model {
     pub position: String,
     /// 点位说明
     #[sea_orm(column_type = "Text")]
-    pub content: String,
+    pub content: Option<String>,
     /// 点位图片
     #[sea_orm(column_type = "Text")]
     pub picture: Option<String>,

@@ -1,6 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Local};
-use serde::{Deserialize, Serialize};
 
 use axum::{
     extract::{Json, Path},
@@ -55,21 +53,14 @@ pub async fn get_all_history(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArchiveSaveParams {
-    pub time: DateTime<Local>,
-    pub archive: String,
-    pub history_index: u32,
-}
-
 /// 新建存档槽位并将存档存入
 /// PUT /archive/{slot_index}/{name}
+/// 请求体为任意 JSON（前端直接上传存档 JSON 文本；兼容 `{time, archive, historyIndex}` 包装体）
 #[tracing::instrument(skip(auth))]
 pub async fn put(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, name)): Path<(i64, String)>,
-    Json(payload): Json<ArchiveSaveParams>,
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
@@ -77,7 +68,7 @@ pub async fn put(
         user_id,
         slot_index as i32,
         Some(name),
-        serde_json::json!(payload),
+        payload,
     )
     .await
     {
@@ -92,7 +83,7 @@ pub async fn put(
 pub async fn save(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-    Json(payload): Json<ArchiveSaveParams>,
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
@@ -100,7 +91,7 @@ pub async fn save(
         user_id,
         slot_index as i32,
         None,
-        serde_json::json!(payload),
+        payload,
     )
     .await
     {
@@ -129,7 +120,7 @@ pub async fn rename(
     }
 }
 
-/// 恢复为上次存档（返回存档数据）
+/// 恢复为上次存档（删除最新一条，返回剩余最新一条存档）
 /// DELETE /archive/restore/{slot_index}
 #[tracing::instrument(skip(auth))]
 pub async fn restore(
@@ -137,8 +128,7 @@ pub async fn restore(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
-        .await
+    match _functions::functions::system::archive::do_restore_slot(user_id, slot_index as i32).await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),

@@ -18,7 +18,7 @@ use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
 };
 
-use super::item::{item_to_vo, type_id_map};
+use super::item::{item_to_vo, marker_count_map, type_id_map};
 
 /// `GET /item_doc/list_page_bin_md5`
 ///
@@ -58,6 +58,7 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
         let items = item_model::Entity::find_safety().all(db).await?;
         let type_map = type_id_map(db).await?;
         let icon_map = super::icon::icon_tag_map(db).await?;
+        let count_map = marker_count_map(db).await?;
 
         // Group by hidden_flag (BTreeMap → sorted by flag value ascending)
         let mut groups: BTreeMap<i32, Vec<&item_model::Model>> = BTreeMap::new();
@@ -78,7 +79,7 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
             let page = get_or_compute(key.clone(), async {
                 let vos: Vec<_> = group_items
                     .iter()
-                    .map(|m| item_to_vo(m, &type_map, &icon_map))
+                    .map(|m| item_to_vo(m, &type_map, &icon_map, &count_map))
                     .collect();
                 let (compressed, md5_hex) = serialize_compress_md5(&vos)?;
                 Ok(CachedPage {
