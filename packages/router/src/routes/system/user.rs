@@ -37,12 +37,13 @@ pub struct UserRegisterQQParams {
     pub logo: Option<String>,
     /// 备注
     pub remark: Option<String>,
-    /// 用户名
+    /// 用户名（QQ 号）
     pub username: String,
     /// 初始密码
     pub password: String,
-    /// QQ openid（必填；公开接口不信任客户端自报，应由 QQ OAuth 回调传入）
-    pub qq: String,
+    /// QQ 号（与 Java 契约一致：注册时 username 即 QQ 号，缺省时与
+    /// username 相同；不做腾讯 OAuth 的 openid 语义）
+    pub qq: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

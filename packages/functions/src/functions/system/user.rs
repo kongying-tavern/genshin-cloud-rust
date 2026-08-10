@@ -77,11 +77,12 @@ pub async fn do_register_qq(
     remark: Option<String>,
     username: String,
     password: String,
-    // 公开接口不信任客户端自报的 qq 绑定：真实场景应由 QQ OAuth 回调传入
-    // openid 并落库，此处仅做必填校验（缺省则 serde 反序列化直接失败）。
-    qq: String,
+    // 与 Java 契约一致：username 即 QQ 号；qq 字段缺省时取 username。
+    // 不做腾讯 OAuth openid 语义（openid 需服务端授权码换取，客户端自报不可信）。
+    qq: Option<String>,
 ) -> Result<CommonResponse<i64>> {
     let db = &DB_CONN.wait().pg_conn;
+    let qq = qq.unwrap_or_else(|| username.clone());
 
     // 注册前查重（应用层）：username / qq 任一已被占用（未软删）则拒绝，
     // 防公开接口批量注册重复账号；数据库唯一索引作为最终兜底。

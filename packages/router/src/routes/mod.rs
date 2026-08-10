@@ -51,7 +51,6 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
-        .route("/oauth/qq", post(system::oauth::qq_login))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .route("/ws/{user_id}", get(ws::ws_handler))
