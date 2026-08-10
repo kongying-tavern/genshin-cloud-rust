@@ -564,46 +564,6 @@ pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
     }
 }
 
-/// QQ 第三方登录：客户端完成 QQ 授权后，用拿到的 openid 换取本站 token。
-///
-/// 按 `sys_user.qq` 匹配用户；未注册的 openid 返回明确错误（注册走
-/// `/user/register/qq`，把 openid 写入 `qq` 字段）。与密码登录一致地执行
-/// access_policy 检查、设备登记与登录日志。
-pub async fn oauth_qq_login(
-    qq_openid: String,
-    ip: SocketAddr,
-    user_agent: String,
-) -> Result<OauthLoginResponse> {
-    let db = &DB_CONN.wait().pg_conn;
-    let item = match models::system::sys_user::Entity::find()
-        .filter(models::system::sys_user::Column::DelFlag.eq(false))
-        .filter(models::system::sys_user::Column::Qq.eq(Some(qq_openid)))
-        .one(db)
-        .await
-        .map_err(internal_error)?
-    {
-        Some(item) => item,
-        // QQ 未注册：写失败审计日志（user_id 未知，记 None）后拒绝
-        None => {
-            let _ = record_login_log(None, ip, &user_agent, true).await;
-            return Err(anyhow!("QQ account not registered"));
-        },
-    };
-    let user_id = item.id;
-
-    // 身份由 openid 提供；同样校验登录环境
-    let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(item.id, &policy, ip, &user_agent).await?;
-    let ret = issue_token(&item).await;
-
-    if ret.is_ok() {
-        let _ = record_device(user_id, ip, &user_agent).await;
-    }
-    record_login_log(Some(user_id), ip, &user_agent, ret.is_err()).await?;
-
-    ret
-}
-
 pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
     // 使用系统匿名用户 id = 0 表示客户端凭据/匿名访问
     let id: i64 = 0;

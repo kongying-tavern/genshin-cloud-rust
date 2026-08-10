@@ -826,25 +826,33 @@ async fn area_and_item_doc_business_assertions() {
     // The RSA round-trip is proven by every login above (password + QQ):
     // tokens were RS256-signed and verified through the same key material.
 
-    // ── Assertion 8: QQ login resolves the bound openid ──────────────────────
-    seed_user(db, "qq_user", vec![], Some("OPENID_123".into()), now)
+    // ==== Assertion 8: QQ registration stores the QQ number ====
+    // Java 契约：`/user/register/qq` 的 username 即 QQ 号，qq 字段缺省时
+    // 取 username（不做 openid 语义；openid 需服务端授权码换取）。
+    let qq_id = user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
         .await
-        .expect("seed qq user");
-
-    // Registered openid → token issued
-    let resp = oauth_fns::oauth_qq_login("OPENID_123".into(), ip_a, ua.into())
+        .expect("qq register succeeds")
+        .data
+        .expect("qq register returns id");
+    let qq_row = sys_user_model::Entity::find_by_id(qq_id)
+        .one(db)
         .await
-        .expect("qq login succeeds for a bound openid");
-    assert!(!resp.access_token.is_empty());
-
-    // Unregistered openid → error
-    assert!(
-        oauth_fns::oauth_qq_login("OPENID_UNKNOWN".into(), ip_a, ua.into())
-            .await
-            .is_err(),
-        "unregistered openid must fail"
+        .expect("find qq user");
+    let qq_row = qq_row.expect("qq user exists");
+    assert_eq!(qq_row.username, "10001");
+    assert_eq!(
+        qq_row.qq.as_deref(),
+        Some("10001"),
+        "qq field defaults to username"
     );
 
+    // 重复注册同 QQ 号：username 占用被拒
+    assert!(
+        user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
+            .await
+            .is_err(),
+        "duplicate qq register must fail"
+    );
     // ── Assertion 9: score generation weights by field count ────────────────
     // Seed three history rows: two Position (打点) rows with 3-field and
     // 1-field content, and one Area row that must be filtered out.
