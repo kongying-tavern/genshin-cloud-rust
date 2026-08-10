@@ -1,5 +1,6 @@
 mod api;
 mod system;
+mod ws;
 
 use anyhow::Result;
 
@@ -53,6 +54,7 @@ pub async fn router() -> Result<Router> {
         .route("/oauth/qq", post(system::oauth::qq_login))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
+        .route("/ws/{user_id}", get(ws::ws_handler))
         // The domain endpoints live under /api/* (Java contract — the
         // frontend's production build and direct clients call these paths).
         // They are ALSO merged at the root: the Vite dev proxy rewrites
