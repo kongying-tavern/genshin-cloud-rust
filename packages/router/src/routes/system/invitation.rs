@@ -94,7 +94,7 @@ pub async fn list(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -116,7 +116,7 @@ pub async fn update(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -129,7 +129,7 @@ pub async fn info(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::system::invitation::do_info(auth, payload.code).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -148,7 +148,7 @@ pub async fn consume(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -161,6 +161,6 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::system::invitation::do_delete(auth, invitation_id).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

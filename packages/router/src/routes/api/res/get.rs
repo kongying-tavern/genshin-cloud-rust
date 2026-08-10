@@ -8,6 +8,6 @@ use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 pub async fn get() -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::res::do_get().await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

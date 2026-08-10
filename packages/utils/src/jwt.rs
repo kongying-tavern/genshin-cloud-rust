@@ -274,16 +274,26 @@ pub struct Claims {
     pub iat: DateTime<Utc>,
     #[serde(with = "jwt_numeric_date")]
     pub exp: DateTime<Utc>,
+    /// 令牌用途：`access` | `refresh`。旧版本签发的令牌无此声明
+    /// （`None`），按原有 Redis key 校验路径兼容处理。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_type: Option<String>,
 }
 
 pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
 
-pub async fn generate_token(now: DateTime<Utc>, user_id: i64, jti: Uuid) -> Result<String> {
+pub async fn generate_token(
+    now: DateTime<Utc>,
+    user_id: i64,
+    jti: Uuid,
+    token_type: &str,
+) -> Result<String> {
     let claims = Claims {
         sub: user_id,
         jti,
         iat: now,
         exp: now + EXPIRED_APPEND_DURATION,
+        token_type: Some(token_type.to_string()),
     };
 
     encode(&Header::new(jwt_alg()), &claims, encoding_key()).context("Failed to encode token")

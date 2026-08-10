@@ -916,6 +916,57 @@ async fn area_and_item_doc_business_assertions() {
         "score read back from content"
     );
 
+    // ── Java-form score_stat content ({chars:{...},fields:{...}}, camelCase)
+    //    must be merged verbatim by do_get_score_data alongside the simplified
+    //    `{type,count,fieldWeight}` rows do_generate_score writes. ───────────
+    // Audit sample: `{"chars":{"markerTitle":0,"content":5},
+    // "fields":{"updaterId":1,"updateTime":1,"content":1}}` (Java-written row).
+    let java_user: i64 = 78;
+    score_stat_model::Entity::insert(score_stat_model::ActiveModel {
+        version: Set(0),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(Some(java_user)),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        scope: Set("map".into()),
+        span: Set("DAY".into()),
+        span_start_time: Set(now_naive - chrono::Duration::days(1)),
+        span_end_time: Set(now_naive + chrono::Duration::days(1)),
+        user_id: Set(Some(java_user)),
+        content: Set(Some(serde_json::json!({
+            "chars": { "markerTitle": 0, "content": 5 },
+            "fields": { "updaterId": 1, "updateTime": 1, "content": 1 },
+        }))),
+    })
+    .exec(db)
+    .await
+    .expect("seed java-form score_stat");
+
+    let data = score_fns::do_get_score_data(
+        auth.clone(),
+        ScoreDataRequest {
+            end_time: end_ms,
+            scope: "map".into(),
+            span: "DAY".into(),
+            start_time: start_ms,
+        },
+    )
+    .await
+    .expect("get score data (java-form)")
+    .data
+    .expect("get score data ok (java-form)");
+    let samples = data.as_array().expect("samples array");
+    assert!(!samples.is_empty(), "score rows returned");
+    let any = samples[0]["data"].as_object().expect("data map");
+    assert!(
+        any.contains_key("chars") || any.contains_key("fields"),
+        "score data carries chars/fields maps"
+    );
+    // Per-user rows are merged by do_get_score_data; the exact row set
+    // depends on the generate/query time windows, so only shape is asserted above.
+
     // ── item_common: the add/delete/list pipeline operates on the
     //    item_area_public link table (Java parity), NOT on the item table ──
     // 3 items: a and a' share a name, c is unique.

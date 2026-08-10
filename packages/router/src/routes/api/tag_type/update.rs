@@ -14,6 +14,6 @@ pub async fn update(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag_type::do_update(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

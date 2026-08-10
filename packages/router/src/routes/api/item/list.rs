@@ -15,6 +15,6 @@ pub async fn get_list(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::item::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

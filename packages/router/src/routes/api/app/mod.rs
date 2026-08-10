@@ -12,7 +12,7 @@ pub async fn trigger_update(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::app::do_trigger_update(auth).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 

@@ -72,7 +72,7 @@ pub async fn do_update(
     am.is_final = Set(payload.is_final);
     am.hidden_flag = Set(payload.hidden_flag);
     if let Some(si) = payload.sort_index {
-        am.sort_index = Set(si as i32);
+        am.sort_index = Set(si.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     }
 
     item_type_model::Entity::update_safety(am)?
@@ -84,19 +84,18 @@ pub async fn do_update(
 
 // 将一组类型（typeId 列表）移动到目标类型下（更新 item_type.parent_id）
 pub async fn do_move_to_target(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     target_type_id: i64,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<EmptyResponse>> {
+    auth.require_non_anonymous()?;
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
-        {
-            return Err(anyhow!(
-                "batch too large: {} > {}",
-                payload.len(),
-                MAX_BATCH
-            ));
-        }
+        return Err(anyhow!(
+            "batch too large: {} > {}",
+            payload.len(),
+            MAX_BATCH
+        ));
     }
     let db = &DB_CONN.wait().pg_conn;
     // 校验目标类型存在
@@ -107,10 +106,9 @@ pub async fn do_move_to_target(
     {
         return Err(anyhow!("ItemType not found: {target_type_id}"));
     }
-    // 被移动类型的原父级（移动后需重算 is_final）
+    // 记录被移动类型的原父级，移动后重算 is_final。
     let mut old_parents: Vec<i64> = Vec::new();
     for type_id in payload {
-        // 把 typeId 移动到新父级：更新 parent_id（不再改写 link 表的 type_id）
         let item = item_type_model::Entity::find_safety_by_id(type_id)
             .one(db)
             .await?
@@ -122,7 +120,6 @@ pub async fn do_move_to_target(
             item_type_model::Entity::update_safety(am)?.exec(db).await?;
         }
     }
-    // is_final 重算：目标父级已有子级 → false；原父级无子级 → true
     refresh_is_final(db, target_type_id).await?;
     for p in old_parents {
         refresh_is_final(db, p).await?;
@@ -131,7 +128,6 @@ pub async fn do_move_to_target(
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
-// 列表（分页/筛选）
 pub async fn do_get_list(
     _auth: AuthInfo,
     self_flag: bool,
@@ -164,7 +160,8 @@ pub async fn do_get_list(
         }
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size_raw = payload.page.size.unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
@@ -247,10 +244,18 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     }
     let mut to_delete: Vec<i64> = Vec::new();
     let mut queue: Vec<i64> = vec![id];
+    // visited 防环：parent_id 由客户端控制，可构造 A.parent=B、B.parent=A 的环
+    // （或自指 parent_id=id），不加去重会无限遍历/无限写库。
+    let mut visited: std::collections::HashSet<i64> = std::collections::HashSet::new();
+    visited.insert(id);
     while let Some(cur) = queue.pop() {
         to_delete.push(cur);
         if let Some(cs) = children.get(&cur) {
-            queue.extend(cs.iter().copied());
+            for c in cs {
+                if visited.insert(*c) {
+                    queue.push(*c);
+                }
+            }
         }
     }
 
@@ -286,7 +291,10 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     // name 在逻辑上为必填
     let name = payload.name.ok_or(anyhow!("name required"))?;
 
-    let sort_index = payload.sort_index.unwrap_or(0) as i32;
+    let sort_index = payload
+        .sort_index
+        .unwrap_or(0)
+        .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 

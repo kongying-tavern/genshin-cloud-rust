@@ -25,6 +25,6 @@ pub async fn tweak(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::marker::do_tweak(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

@@ -19,6 +19,6 @@ pub async fn join_type(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::item::do_join_type(auth, type_id, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

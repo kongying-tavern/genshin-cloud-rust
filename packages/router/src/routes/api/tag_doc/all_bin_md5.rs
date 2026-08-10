@@ -12,6 +12,6 @@ pub async fn all_bin_md5(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag_doc::do_all_bin_md5(auth, serde_json::json!({})).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

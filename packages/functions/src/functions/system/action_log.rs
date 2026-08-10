@@ -19,6 +19,13 @@ fn action_to_str(action: SystemActionLogAction) -> String {
         .unwrap_or_default()
 }
 
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// List action logs with optional filtering by user_id / action.
 #[allow(clippy::too_many_arguments)]
 pub async fn do_list(
@@ -55,12 +62,12 @@ pub async fn do_list(
     if let Some(did) = device_id
         && !did.is_empty()
     {
-        query = query.filter(log_model::Column::DeviceId.contains(did));
+        query = query.filter(log_model::Column::DeviceId.like(format!("%{}%", escape_like(&did))));
     }
     if let Some(ip) = ipv4
         && !ip.is_empty()
     {
-        query = query.filter(log_model::Column::Ipv4.contains(ip));
+        query = query.filter(log_model::Column::Ipv4.like(format!("%{}%", escape_like(&ip))));
     }
     if let Some(err) = is_error {
         query = query.filter(log_model::Column::IsError.eq(err));

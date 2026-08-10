@@ -79,6 +79,16 @@ path = "tests/res_db_test.rs"
 name = "jwks_rotation"
 path = "tests/jwks_rotation_test.rs"
 
+# Wire-format compatibility unit tests. No DB: inline sample constants copied
+# from the real-database audit (db_audit.md) verify ser/de against the
+# production data shapes (access_policy prefixes, history content snapshots,
+# marker position strings, notice channel arrays, link_action enums, bcrypt
+# password prefix). One ignored test documents the P1 unprefixed
+# access_policy gap (rows id=194/195).
+[[test]]
+name = "wire_format"
+path = "tests/wire_format_test.rs"
+
 # Redis second-level BinaryMD5 cache test. Same GCS_TEST_DB gate plus a
 # reachable Redis (backend's redis_conn must be Some). Skips when either is
 # missing, so CI (which only provisions Postgres) stays green.

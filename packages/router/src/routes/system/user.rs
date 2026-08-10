@@ -138,7 +138,7 @@ pub async fn register(
             payload.password,
         )
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -159,7 +159,7 @@ pub async fn register_qq(
             payload.qq,
         )
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -248,7 +248,7 @@ pub async fn update_password_by_admin(
     Ok(Json(
         do_update_password_by_admin(auth, payload.password, payload.user_id)
             .await
-            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+            .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -262,7 +262,7 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     do_delete(auth, work_id)
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
 }
 
@@ -283,7 +283,7 @@ pub async fn list(
             payload.username,
         )
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -297,6 +297,6 @@ pub async fn kick_out(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     do_kick_out(auth, work_id)
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
 }

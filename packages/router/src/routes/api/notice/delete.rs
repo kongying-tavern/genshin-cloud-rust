@@ -13,6 +13,6 @@ pub async fn delete_notice(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::notice::do_delete_notice(auth, notice_id).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

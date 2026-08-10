@@ -17,6 +17,6 @@ pub async fn get(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::area::do_get(auth, area_id).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

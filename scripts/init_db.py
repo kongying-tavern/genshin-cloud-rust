@@ -3,7 +3,9 @@
 
 Wraps `cargo run --bin init_db` (the idempotent sea-orm schema initializer):
 reads DB_* settings from .env / environment and passes them through, so the
-tables are always generated from the current entity definitions.
+tables are always generated from the current entity definitions. The bin also
+applies the idempotent performance indexes from `scripts/indexes_dev.sql` (for
+production, run that file manually once).
 
 Usage:
     python scripts/init_db.py

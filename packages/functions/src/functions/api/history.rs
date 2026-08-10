@@ -83,7 +83,7 @@ pub async fn do_get_list(
     // loading the entire history table — it can have 400K+ rows)
     let mut select = query;
     let current = payload.page.current.unwrap_or(1);
-    let size = payload.page.size.unwrap_or(20);
+    let size = payload.page.size.unwrap_or(20).min(200);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
     select = select.limit(size as u64).offset(offset);
 

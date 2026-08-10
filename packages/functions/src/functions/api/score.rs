@@ -28,9 +28,10 @@ use _utils::{
 /// Deleted 计 1，content 无法解析时按 1 计）。相比旧的「每条计 1」，
 /// 改动字段越多的贡献得分越高。
 pub async fn do_generate_score(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: ScoreGenerateRequest,
 ) -> Result<CommonResponse<String>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     // 解析时间范围

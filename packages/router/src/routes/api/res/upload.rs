@@ -91,6 +91,6 @@ pub async fn upload_image(
     // 交给 functions 层（MinIO 未配置时明确报错，而非静默丢弃）。
     match _functions::functions::api::res::do_upload_image(auth, files, file_path).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

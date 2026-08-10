@@ -15,6 +15,6 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::item_type::do_delete(auth, item_type_id).await {
         Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

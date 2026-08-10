@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    ExprTrait, QueryFilter, QueryOrder, QuerySelect,
+    ExprTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -23,6 +23,13 @@ use _utils::{
         wrapper::CommonResponse,
     },
 };
+
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
 
 /// 全部 `item_type_link` 的 item_id → type_id 列表映射。
 /// 前端按 `typeIdList` 过滤/分组物品，`ItemVO` 必须携带该字段。
@@ -139,7 +146,7 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
     am.area_id = Set(p.area_id);
     am.default_content = Set(p.default_content.clone());
     if let Some(count) = p.default_count {
-        am.default_count = Set(count as i32);
+        am.default_count = Set(count.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     }
     am.default_refresh_time = Set(p.default_refresh_time.unwrap_or(0));
     if let Some(style) = p.icon_style_type {
@@ -147,21 +154,25 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
     }
     am.hidden_flag = Set(p.hidden_flag);
     if let Some(si) = p.sort_index {
-        am.sort_index = Set(si as i32);
+        am.sort_index = Set(si.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     }
-    am.special_flag = Set(p.special_flag.map(|v| v as i32));
+    am.special_flag = Set(p
+        .special_flag
+        .map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32));
 
     item_model::Entity::update_safety(am)?.exec(db).await?;
 
-    // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入
+    // 类型关联：先逻辑删除旧 link，再按新 typeIdList 插入。
+    // 删除+插入包事务，失败整体回滚，避免半更新状态（物品已改、类型关联丢失）。
+    let txn = db.begin().await?;
     let old_links = link_model::Entity::find_safety()
         .filter(link_model::Column::ItemId.eq(id))
-        .all(db)
+        .all(&txn)
         .await?;
     for link in old_links {
         let mut lam: link_model::ActiveModel = link.into();
         lam.del_flag = Set(true);
-        link_model::Entity::update_safety(lam)?.exec(db).await?;
+        link_model::Entity::update_safety(lam)?.exec(&txn).await?;
     }
     for t in &p.type_id_list {
         let now = chrono::Utc::now().naive_utc();
@@ -177,8 +188,9 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
             type_id: Set(*t),
             item_id: Set(id),
         };
-        active.insert(db).await?;
+        active.insert(&txn).await?;
     }
+    txn.commit().await?;
     Ok(())
 }
 
@@ -196,13 +208,13 @@ pub async fn do_get_list(
         query = query.filter(item_model::Column::AreaId.is_in(area_ids));
     }
     if let Some(name) = payload.name {
-        query = query.filter(item_model::Column::Name.like(format!("%{}%", name)));
+        query = query.filter(item_model::Column::Name.like(format!("%{}%", escape_like(&name))));
     }
     if let Some(sf) = payload.special_flag {
         // Java parity: special_flag is a bit-mask. param == 0 means "no special
         // flag set" (filter special_flag = 0); param > 0 means "has any of these
         // bits" (filter (special_flag & param) != 0).
-        let sf = sf as i32;
+        let sf = (sf as i64).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
         if sf == 0 {
             query = query.filter(item_model::Column::SpecialFlag.eq(0));
         } else {
@@ -235,7 +247,8 @@ pub async fn do_get_list(
         };
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size_raw = payload.page.size.unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
@@ -440,12 +453,19 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
         area_id: Set(payload.area_id),
         default_refresh_time: Set(payload.default_refresh_time.unwrap_or(0)),
         default_content: Set(Some(payload.default_content)),
-        default_count: Set(payload.default_count as i32),
+        default_count: Set(payload
+            .default_count
+            .clamp(i32::MIN as i64, i32::MAX as i64) as i32),
         icon_id: Set(icon_id),
         icon_style_type: Set(payload.icon_style_type),
         hidden_flag: Set(payload.hidden_flag),
-        sort_index: Set(payload.sort_index.unwrap_or(0) as i32),
-        special_flag: Set(payload.special_flag.map(|v| v as i32)),
+        sort_index: Set(payload
+            .sort_index
+            .unwrap_or(0)
+            .clamp(i32::MIN as i64, i32::MAX as i64) as i32),
+        special_flag: Set(payload
+            .special_flag
+            .map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32)),
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
