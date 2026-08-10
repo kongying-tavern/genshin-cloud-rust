@@ -137,7 +137,7 @@ pub async fn oauth(
                     "Refresh token is required for refresh token grant type".into(),
                 )
             })?;
-            let ret = oauth_refresh(refresh_token)
+            let ret = oauth_refresh(refresh_token, ip, user_agent)
                 .await
                 .map_err(crate::routes::internal_error)?;
             return Ok(Json(ret).into_response());

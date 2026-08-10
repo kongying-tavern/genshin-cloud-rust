@@ -357,7 +357,13 @@ fn parse_cached_payload(item: &str, claims: &Claims) -> Result<(SysUserVO, Claim
 
 /// 登录暴力破解限流：按 IP 固定窗口（每分钟最多 5 次失败的密码登录尝试）。
 /// 只计数失败尝试（成功登录不消耗额度），窗口过后自动重置。
+///
+/// 计数优先走 Redis（key `login_fail:{ip}`，60s 窗口，NX+EXPIRE+INCR 模式）：
+/// 多实例部署共享同一计数，攻击者无法靠打 N 个副本把额度放大 N 倍。Redis
+/// 不可用/命令失败时降级为进程内 HashMap（保留原有单实例行为，避免 Redis
+/// 抖动导致全站拒绝登录）。
 const LOGIN_RATE_LIMIT_PER_MINUTE: u32 = 5;
+const LOGIN_RATE_LIMIT_WINDOW_SECS: u64 = 60;
 
 static LOGIN_FAILURES: Lazy<std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -372,13 +378,73 @@ fn sweep_stale_login_failures(
     map.retain(|_, (_, entry_window)| *entry_window >= window);
 }
 
-fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
+/// Redis 侧失败计数。返回 `None` 表示 Redis 不可用/命令失败，由调用方降级
+/// 到进程内 HashMap。
+///
+/// `record=true` 用 NX+EXPIRE+INCR 模式写入：`SET key 1 NX EX 60` 原子创建
+/// 窗口（并发首击不会重复建键/续期），已有键则 INCR 累加；INCR 前键恰好
+/// 过期时会新建无 TTL 的键，补设一次过期保证窗口仍为 60s。
+async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> {
+    let client = DB_CONN.wait().redis_conn.as_ref()?;
+    let mut conn = client.get_multiplexed_async_connection().await.ok()?;
+    // 关键 key 只取 IP（不含端口）
+    let key = format!("login_fail:{}", ip.ip());
+    if record {
+        let created: bool = redis::cmd("SET")
+            .arg(&key)
+            .arg(1)
+            .arg("NX")
+            .arg("EX")
+            .arg(LOGIN_RATE_LIMIT_WINDOW_SECS)
+            .query_async(&mut conn)
+            .await
+            .ok()?;
+        let count: u32 = if created {
+            1
+        } else {
+            let n: i64 = redis::cmd("INCR")
+                .arg(&key)
+                .query_async(&mut conn)
+                .await
+                .ok()?;
+            let _: i64 = redis::cmd("EXPIRE")
+                .arg(&key)
+                .arg(LOGIN_RATE_LIMIT_WINDOW_SECS)
+                .query_async(&mut conn)
+                .await
+                .ok()?;
+            n.max(0) as u32
+        };
+        Some(count)
+    } else {
+        let count: i64 = redis::cmd("GET")
+            .arg(&key)
+            .query_async(&mut conn)
+            .await
+            .ok()?;
+        Some(count.max(0) as u32)
+    }
+}
+
+/// 限流检查主入口：Redis 可用时以 Redis 计数为准（跨实例一致），Redis 不可
+/// 用时降级到进程内 map（保留原单实例行为）。
+async fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
+    match login_failure_count_redis(ip, false).await {
+        Some(count) if count >= LOGIN_RATE_LIMIT_PER_MINUTE => Err(anyhow!(
+            "Too many failed login attempts; try again in a minute"
+        )),
+        Some(_) => Ok(()),
+        None => check_login_rate_limit_local(ip),
+    }
+}
+
+/// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
+fn check_login_rate_limit_local(ip: SocketAddr) -> Result<()> {
     let now = chrono::Utc::now().timestamp();
-    let window = now / 60;
+    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
     sweep_stale_login_failures(&mut map, window);
-    // 限流 key 只取 IP（SocketAddr::ip()），不含客户端临时端口：
-    // 端口每次新建连接都不同，含端口会导致每个请求独立计数、限流永不触发。
+    // 同 login_failure_count_redis：key 仅取 IP 不含临时端口
     let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
@@ -391,12 +457,21 @@ fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
     Ok(())
 }
 
-fn record_login_failure(ip: SocketAddr) {
+/// 失败计数入口：Redis 可用时写 Redis，不可用时降级到进程内 map。
+async fn record_login_failure(ip: SocketAddr) {
+    if login_failure_count_redis(ip, true).await.is_some() {
+        return;
+    }
+    record_login_failure_local(ip);
+}
+
+/// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
+fn record_login_failure_local(ip: SocketAddr) {
     let now = chrono::Utc::now().timestamp();
-    let window = now / 60;
+    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
     sweep_stale_login_failures(&mut map, window);
-    // 同 check_login_rate_limit：key 仅取 IP 不含临时端口
+    // 同 check_login_rate_limit_local：key 仅取 IP 不含临时端口
     let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
     if entry.1 != window {
         *entry = (0, window);
@@ -441,7 +516,7 @@ pub async fn oauth_password_login(
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
     // 限流检查在用户名查询之前：避免攻击者用无效用户名做无代价探测。
-    if let Err(e) = check_login_rate_limit(ip) {
+    if let Err(e) = check_login_rate_limit(ip).await {
         // 限流命中同样写失败审计日志（user_id 未知，记 None）
         let _ = record_login_log(None, ip, &user_agent, true).await;
         return Err(e);
@@ -456,7 +531,7 @@ pub async fn oauth_password_login(
     let Some(item) = item else {
         // 与“密码错误”返回同一文案并同样计入失败限流，
         // 避免用户名枚举与无代价探测。
-        record_login_failure(ip);
+        record_login_failure(ip).await;
         // 用户不存在同样写失败审计日志（user_id 未知，记 None）
         let _ = record_login_log(None, ip, &user_agent, true).await;
         return Err(anyhow!("Invalid username or password"));
@@ -466,7 +541,7 @@ pub async fn oauth_password_login(
     let ret = oauth_password_login_inner(item, password_raw, ip, &user_agent).await;
 
     if ret.is_err() {
-        record_login_failure(ip);
+        record_login_failure(ip).await;
     } else {
         // 登录成功：登记设备（幂等 upsert）
         let _ = record_device(user_id, ip, &user_agent).await;
@@ -595,7 +670,11 @@ pub async fn do_jwks() -> Result<serde_json::Value> {
     _utils::jwt::jwks()
 }
 
-pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> {
+pub async fn oauth_refresh(
+    refresh_token: String,
+    ip: SocketAddr,
+    user_agent: String,
+) -> Result<OauthLoginResponse> {
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;
 
@@ -617,6 +696,14 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
         .map_err(internal_error)?
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
+
+    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：策略违规直接拒绝
+    // 且**不消耗** refresh token —— 校验在下方 GETDEL 轮换之前，合法机主在原
+    // 环境仍可刷新，被偷的 refresh 在异地/异设备上无法续命（否则绑定策略只
+    // 挡登录、旧 refresh 可在 30 天窗口内无限轮换，策略形同虚设）。
+    // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
+    let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
+    check_access_policy(user.id, &policy, ip, &user_agent).await?;
 
     // 降级策略（与 oauth_parse_token 一致，补齐与密码登录 issue_token 的
     // 对齐，M1）：

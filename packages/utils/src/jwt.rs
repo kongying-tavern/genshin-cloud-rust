@@ -75,8 +75,11 @@ pub fn is_rsa_signing() -> bool {
 /// HS256 verification is opt-in via `JWT_ACCEPT_HS256=true` (local/dev only);
 /// RSA mode never accepts HMAC signatures by default.
 fn accept_alg(alg: Algorithm) -> bool {
+    // HS256 is rejected only when RSA signing is active (HMAC downgrade); a
+    // pure-HS256 deployment keeps working, and JWT_ACCEPT_HS256=true forces
+    // acceptance even in RSA mode (local/dev).
     if alg == Algorithm::HS256 {
-        std::env::var("JWT_ACCEPT_HS256").as_deref() == Ok("true")
+        !is_rsa_signing() || std::env::var("JWT_ACCEPT_HS256").as_deref() == Ok("true")
     } else {
         true
     }

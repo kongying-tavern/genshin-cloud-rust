@@ -33,7 +33,7 @@ use _functions::functions::api::{
     area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
     marker as marker_fns, score as score_fns,
 };
-use _functions::functions::system::{oauth as oauth_fns, user as user_fns};
+use _functions::functions::system::{device as device_fns, oauth as oauth_fns, user as user_fns};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::{AuthInfo, verify_token},
@@ -1212,8 +1212,9 @@ async fn area_and_item_doc_business_assertions() {
     // JWT payload contract: access/refresh carry distinct jti + token_type
     // claims, the response exposes the Java-contract userId/userRoles, and
     // Redis (when reachable) holds the paired session keys. Each group uses
-    // its own IP: LOGIN_FAILURES is process-global (5 failures/min/IP) and
-    // shared with the policy assertions above.
+    // its own IP: the login rate limiter is global per IP (5 failures/min/IP,
+    // Redis-backed with an in-process fallback) and shared with the policy
+    // assertions above.
     let ip_issue = "10.80.1.1:5678".parse::<std::net::SocketAddr>().unwrap();
     let uid_issue = seed_user(db, "oauth_issue", vec![], None, now)
         .await
@@ -1336,18 +1337,26 @@ async fn area_and_item_doc_business_assertions() {
 
     // An access token must never be accepted for refresh (S2) — this check
     // runs before any Redis logic, so it holds in both environments.
-    let err = oauth_fns::oauth_refresh(r1.access_token.clone())
-        .await
-        .expect_err("access token is not a refresh token");
+    let err = oauth_fns::oauth_refresh(
+        r1.access_token.clone(),
+        ip_refresh,
+        "oauth-refresh/1.0".into(),
+    )
+    .await
+    .expect_err("access token is not a refresh token");
     assert!(
         err.to_string().contains("Not a refresh token"),
         "got: {err}"
     );
 
     // First refresh rotates: new pair, new jti, same user.
-    let r2 = oauth_fns::oauth_refresh(r1.refresh_token.clone())
-        .await
-        .expect("refresh rotates the token pair");
+    let r2 = oauth_fns::oauth_refresh(
+        r1.refresh_token.clone(),
+        ip_refresh,
+        "oauth-refresh/1.0".into(),
+    )
+    .await
+    .expect("refresh rotates the token pair");
     assert_ne!(r2.access_token, r1.access_token, "new access token");
     assert_ne!(r2.refresh_token, r1.refresh_token, "new refresh token");
     assert_ne!(r2.jti, r1.jti, "new jti");
@@ -1369,9 +1378,13 @@ async fn area_and_item_doc_business_assertions() {
 
     if let Some(mut r) = oauth_redis_conn().await {
         // Replay of the consumed refresh token is rejected (GETDEL atomicity).
-        let err = oauth_fns::oauth_refresh(r1.refresh_token.clone())
-            .await
-            .expect_err("replayed refresh token must be rejected");
+        let err = oauth_fns::oauth_refresh(
+            r1.refresh_token.clone(),
+            ip_refresh,
+            "oauth-refresh/1.0".into(),
+        )
+        .await
+        .expect_err("replayed refresh token must be rejected");
         assert!(
             err.to_string()
                 .contains("Refresh token not found or already used"),
@@ -1421,9 +1434,13 @@ async fn area_and_item_doc_business_assertions() {
         // rotation happens, so the old refresh token stays valid (documented
         // degradation in oauth.rs oauth_refresh). Signature/token_type and
         // the response contract are still verified above.
-        let r3 = oauth_fns::oauth_refresh(r1.refresh_token.clone())
-            .await
-            .expect("degraded refresh re-issues without rotation");
+        let r3 = oauth_fns::oauth_refresh(
+            r1.refresh_token.clone(),
+            ip_refresh,
+            "oauth-refresh/1.0".into(),
+        )
+        .await
+        .expect("degraded refresh re-issues without rotation");
         assert!(!r3.access_token.is_empty());
         assert_eq!(r3.user_id, uid_refresh);
         eprintln!(
@@ -1519,9 +1536,10 @@ async fn area_and_item_doc_business_assertions() {
             .await
             .expect_err("kicked access token rejected");
         assert!(err.to_string().contains("Token revoked"), "got: {err}");
-        let err = oauth_fns::oauth_refresh(k1.refresh_token.clone())
-            .await
-            .expect_err("kicked refresh token rejected");
+        let err =
+            oauth_fns::oauth_refresh(k1.refresh_token.clone(), ip_kick_a, "oauth-kick/1.0".into())
+                .await
+                .expect_err("kicked refresh token rejected");
         assert!(
             err.to_string()
                 .contains("Refresh token not found or already used"),
@@ -1567,5 +1585,137 @@ async fn area_and_item_doc_business_assertions() {
             .expect("no-Redis revoke is a no-op; token still parses via DB");
         assert_eq!(vo.id, uid_kick);
         eprintln!("skipping revocation assertions (no reachable Redis): kick is a no-op");
+    }
+
+    // ── Assertion 14: refresh enforces access_policy WITHOUT consuming the
+    //    token. A bound user refreshing from a different IP is rejected before
+    //    the GETDEL rotation, so the legit owner can still refresh in-place. ─
+    let ip_pa = "10.80.5.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ip_pb = "10.80.5.2:5678".parse::<std::net::SocketAddr>().unwrap();
+    seed_user(
+        db,
+        "policy_refresh",
+        vec![AccessPolicyItemEnum::IpSameLastIp],
+        None,
+        now,
+    )
+    .await
+    .expect("seed policy_refresh user");
+    let pr1 = oauth_fns::oauth_password_login(
+        "policy_refresh".into(),
+        "pw123".into(),
+        ip_pa,
+        "policy-refresh/1.0".into(),
+    )
+    .await
+    .expect("policy-bound login from ip_pa");
+    let err = oauth_fns::oauth_refresh(
+        pr1.refresh_token.clone(),
+        ip_pb,
+        "policy-refresh/1.0".into(),
+    )
+    .await
+    .expect_err("refresh from a different IP must be rejected by the policy");
+    assert!(err.to_string().contains("Access denied"), "got: {err}");
+    // The refresh token was NOT consumed by the rejected attempt: a refresh
+    // from the bound IP still succeeds (in both Redis and degraded modes).
+    oauth_fns::oauth_refresh(
+        pr1.refresh_token.clone(),
+        ip_pa,
+        "policy-refresh/1.0".into(),
+    )
+    .await
+    .expect("token survives the policy-rejected refresh and rotates in-place");
+
+    // ── Assertion 15: device block revokes the user's sessions (coarse-
+    //    grained, all devices). Blocking a device must kill the already-issued
+    //    access/refresh pairs, not just gate future logins. ────────────────
+    let ip_bk = "10.80.6.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    let uid_bk = seed_user(db, "oauth_device_block", vec![], None, now)
+        .await
+        .expect("seed oauth_device_block user");
+    let bk = oauth_fns::oauth_password_login(
+        "oauth_device_block".into(),
+        "pw123".into(),
+        ip_bk,
+        "oauth-device-block/1.0".into(),
+    )
+    .await
+    .expect("login before device block");
+    oauth_fns::oauth_parse_token(bk.access_token.clone())
+        .await
+        .expect("token valid before device block");
+    let dev = device_model::Entity::find_safety()
+        .filter(device_model::Column::UserId.eq(Some(uid_bk)))
+        .one(db)
+        .await
+        .expect("fetch device row")
+        .expect("device registered by login");
+    device_fns::do_update(stub_auth(), dev.id, 1)
+        .await
+        .expect("block the device");
+
+    if let Some(mut r) = oauth_redis_conn().await {
+        let left: Vec<String> = redis::cmd("KEYS")
+            .arg(format!("jwt:*:{uid_bk}:*"))
+            .query_async(&mut r)
+            .await
+            .expect("redis keys after device block");
+        assert!(
+            left.is_empty(),
+            "device block revokes all sessions for the user: {left:?}"
+        );
+        let err = oauth_fns::oauth_parse_token(bk.access_token.clone())
+            .await
+            .expect_err("blocked user's access token rejected");
+        assert!(err.to_string().contains("Token revoked"), "got: {err}");
+    } else {
+        // Degraded branch (no Redis): revoke is a documented no-op; the token
+        // survives via the DB-fallback parse path (same as do_kick_out).
+        let (vo, _) = oauth_fns::oauth_parse_token(bk.access_token.clone())
+            .await
+            .expect("no-Redis device-block revoke is a no-op; token still parses");
+        assert_eq!(vo.id, uid_bk);
+        eprintln!("skipping device-block revocation assertions (no reachable Redis)");
+    }
+
+    // ── Assertion 16: login rate limit — Redis-backed when reachable, with
+    //    the in-process HashMap fallback otherwise. 5 failed attempts from a
+    //    fresh IP within the 60s window block the 6th. ─────────────────────
+    let ip_lim = "10.80.7.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    for _ in 0..5 {
+        let err = oauth_fns::oauth_password_login(
+            "oauth_issue".into(),
+            "wrong-password".into(),
+            ip_lim,
+            "rate-limit/1.0".into(),
+        )
+        .await
+        .expect_err("wrong password is rejected");
+        assert!(
+            err.to_string().contains("Invalid username or password"),
+            "got: {err}"
+        );
+    }
+    let err = oauth_fns::oauth_password_login(
+        "oauth_issue".into(),
+        "pw123".into(),
+        ip_lim,
+        "rate-limit/1.0".into(),
+    )
+    .await
+    .expect_err("6th attempt within the window is rate-limited");
+    assert!(
+        err.to_string().contains("Too many failed login attempts"),
+        "got: {err}"
+    );
+    // Cleanup the Redis counter so a re-run within the 60s window is not
+    // blocked (in-process fallback dies with the process anyway).
+    if let Some(mut r) = oauth_redis_conn().await {
+        let _: i64 = r
+            .del(format!("login_fail:{}", ip_lim.ip()))
+            .await
+            .ok()
+            .unwrap_or(0);
     }
 }
