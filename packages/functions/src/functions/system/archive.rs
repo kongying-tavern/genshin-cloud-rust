@@ -44,7 +44,7 @@ fn extract_archive(body: &serde_json::Value) -> String {
 pub async fn do_get_last(
     _auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
 ) -> Result<CommonResponse<Option<ArchiveSlotVo>>> {
     let db = &DB_CONN.wait().pg_conn;
     let archive = archive_model::Entity::find_safety()
@@ -60,7 +60,7 @@ pub async fn do_get_last(
 pub async fn do_get_history(
     _auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
 ) -> Result<CommonResponse<Vec<serde_json::Value>>> {
     let db = &DB_CONN.wait().pg_conn;
     let items = archive_model::Entity::find_safety()
@@ -150,7 +150,7 @@ const MAX_HISTORY_PER_SLOT: u64 = 20;
 async fn prune_slot_history(
     db: &sea_orm::DatabaseConnection,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
 ) -> Result<()> {
     let keep_ids: Vec<i64> = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
@@ -184,13 +184,16 @@ async fn prune_slot_history(
 pub async fn do_save(
     auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
     name: Option<String>,
     body: serde_json::Value,
 ) -> Result<CommonResponse<serde_json::Value>> {
     // 写操作：匿名（client_credentials，uid=0）一律拒绝——否则所有匿名
     // 客户端共享 uid=0 档案，互相覆盖/读取。
     auth.require_non_anonymous()?;
+    // 槽位列类型为 i32：路由层已限定 0..=4，此处兜底做收窄校验，不做截断
+    let slot_index: i32 =
+        i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let db = &DB_CONN.wait().pg_conn;
     let archive = extract_archive(&body);
     // create_time 由服务端定，不信任客户端传入的 time（防止时间戳伪造/脏数据）
@@ -211,7 +214,7 @@ pub async fn do_save(
     };
     let res = archive_model::Entity::insert(am).exec(db).await?;
     // 写入后按上限清理最旧历史
-    prune_slot_history(db, user_id, slot_index).await?;
+    prune_slot_history(db, user_id, slot_index.into()).await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "id": res.last_insert_id
     }))))
@@ -239,7 +242,7 @@ pub async fn do_rename(auth: AuthInfo, id: i64, name: String) -> Result<CommonRe
 pub async fn do_rename_by_slot(
     auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
     new_name: String,
 ) -> Result<CommonResponse<()>> {
     auth.require_non_anonymous()?;
@@ -277,7 +280,7 @@ pub async fn do_restore(auth: AuthInfo, id: i64) -> Result<CommonResponse<serde_
 pub async fn do_restore_slot(
     auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
 ) -> Result<CommonResponse<Option<ArchiveSlotVo>>> {
     // 恢复即删除最新一条历史，属写操作
     auth.require_non_anonymous()?;
@@ -307,7 +310,7 @@ pub async fn do_restore_slot(
 pub async fn do_delete_slot(
     auth: AuthInfo,
     user_id: i64,
-    slot_index: i32,
+    slot_index: i64,
 ) -> Result<CommonResponse<()>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;

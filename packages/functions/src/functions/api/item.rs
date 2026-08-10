@@ -405,6 +405,10 @@ pub async fn do_copy_to_area(
             am.area_id = Set(area_id);
             am.create_time = Set(chrono::Utc::now().naive_utc());
             am.update_time = Set(None);
+            // 新行乐观锁从 0 起步，创建/更新人归 None（与 do_add 语义一致）
+            am.version = Set(0);
+            am.creator_id = Set(None);
+            am.updater_id = Set(None);
             let res = am.insert(&DB_CONN.wait().pg_conn).await?;
             let new_id = res.id;
             // 复制类型关联

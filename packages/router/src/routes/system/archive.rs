@@ -8,6 +8,18 @@ use axum::{
 
 use crate::middlewares::ExtractAuthInfo;
 
+/// 槽位范围校验（route 层收口）：前端契约固定 5 个存档槽位（0..=4），
+/// 超限直接返回 400。校验通过后 i64 原值透传 do_*，不做 `as i32` 截断。
+fn check_slot_index(slot_index: i64) -> Result<(), (StatusCode, String)> {
+    if !(0..=4).contains(&slot_index) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "slot_index must be in range 0..=4".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// 获取指定槽位的最新存档
 /// GET /archive/last/{slot_index}
 #[tracing::instrument(skip(auth))]
@@ -15,10 +27,9 @@ pub async fn get_last(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index as i32)
-        .await
-    {
+    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -31,10 +42,9 @@ pub async fn get_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index as i32)
-        .await
-    {
+    match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -62,11 +72,12 @@ pub async fn put(
     Path((slot_index, name)): Path<(i64, String)>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
         auth,
         user_id,
-        slot_index as i32,
+        slot_index,
         Some(name),
         payload,
     )
@@ -85,15 +96,10 @@ pub async fn save(
     Path(slot_index): Path<i64>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_save(
-        auth,
-        user_id,
-        slot_index as i32,
-        None,
-        payload,
-    )
-    .await
+    match _functions::functions::system::archive::do_save(auth, user_id, slot_index, None, payload)
+        .await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -107,12 +113,10 @@ pub async fn rename(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, new_name)): Path<(i64, String)>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_rename_by_slot(
-        auth,
-        user_id,
-        slot_index as i32,
-        new_name,
+        auth, user_id, slot_index, new_name,
     )
     .await
     {
@@ -128,10 +132,9 @@ pub async fn restore(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_restore_slot(auth, user_id, slot_index as i32)
-        .await
-    {
+    match _functions::functions::system::archive::do_restore_slot(auth, user_id, slot_index).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -144,10 +147,9 @@ pub async fn delete_slot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_delete_slot(auth, user_id, slot_index as i32)
-        .await
-    {
+    match _functions::functions::system::archive::do_delete_slot(auth, user_id, slot_index).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

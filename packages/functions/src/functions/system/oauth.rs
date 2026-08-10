@@ -13,7 +13,7 @@ use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
     db_operations::SafeEntityTrait,
-    jwt::{Claims, EXPIRED_APPEND_DURATION, generate_token, verify_token},
+    jwt::{Claims, EXPIRED_APPEND_DURATION, REFRESH_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
         AccessPolicyItemEnum, AccessPolicyList, SystemActionLogAction, SystemUserRole,
@@ -178,8 +178,22 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
     let access_jti = Uuid::now_v7();
     let refresh_jti = Uuid::now_v7();
     let now = chrono::Utc::now();
-    let access_token = generate_token(now, item.id, access_jti, "access").await?;
-    let refresh_token = generate_token(now, item.id, refresh_jti, "refresh").await?;
+    let access_token = generate_token(
+        now,
+        item.id,
+        access_jti,
+        "access",
+        chrono::Duration::days(15),
+    )
+    .await?;
+    let refresh_token = generate_token(
+        now,
+        item.id,
+        refresh_jti,
+        "refresh",
+        chrono::Duration::days(30),
+    )
+    .await?;
 
     let id = item.id;
     let vo: SysUserVO = item.clone().into();
@@ -208,7 +222,7 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
                 SetOptions::default()
                     .conditional_set(redis::ExistenceCheck::NX)
                     .with_expiration(redis::SetExpiry::EX(
-                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                        REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                     )),
             )
             .await;
@@ -525,8 +539,10 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
     let access_jti = Uuid::now_v7();
     let refresh_jti = Uuid::now_v7();
     let now = chrono::Utc::now();
-    let access_token = generate_token(now, id, access_jti, "access").await?;
-    let _refresh_token = generate_token(now, id, refresh_jti, "refresh").await?;
+    let access_token =
+        generate_token(now, id, access_jti, "access", chrono::Duration::days(15)).await?;
+    let _refresh_token =
+        generate_token(now, id, refresh_jti, "refresh", chrono::Duration::days(30)).await?;
 
     // Redis 不可用时静默跳过（与 issue_token 一致）：降级模式下
     // `oauth_parse_token` 对 sub=0 特判构造匿名 VO，不发 Redis 键也能解析；
@@ -555,7 +571,7 @@ pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousRes
                 SetOptions::default()
                     .conditional_set(redis::ExistenceCheck::NX)
                     .with_expiration(redis::SetExpiry::EX(
-                        EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                        REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                     )),
             )
             .await;
@@ -652,8 +668,22 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
     let new_access_jti = Uuid::now_v7();
     let new_refresh_jti = Uuid::now_v7();
     let now = chrono::Utc::now();
-    let access_token = generate_token(now, claims.sub, new_access_jti, "access").await?;
-    let refresh_token_new = generate_token(now, claims.sub, new_refresh_jti, "refresh").await?;
+    let access_token = generate_token(
+        now,
+        claims.sub,
+        new_access_jti,
+        "access",
+        chrono::Duration::days(15),
+    )
+    .await?;
+    let refresh_token_new = generate_token(
+        now,
+        claims.sub,
+        new_refresh_jti,
+        "refresh",
+        chrono::Duration::days(30),
+    )
+    .await?;
 
     // 写入新的 access/refresh 条目（payload 取 DB 最新用户信息，
     // 不再依赖旧 access key 的缓存内容）
@@ -680,7 +710,7 @@ pub async fn oauth_refresh(refresh_token: String) -> Result<OauthLoginResponse> 
             SetOptions::default()
                 .conditional_set(redis::ExistenceCheck::NX)
                 .with_expiration(redis::SetExpiry::EX(
-                    EXPIRED_APPEND_DURATION.as_seconds_f32() as u64,
+                    REFRESH_APPEND_DURATION.as_seconds_f32() as u64,
                 )),
         )
         .await
