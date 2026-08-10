@@ -93,8 +93,24 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
         .one(db)
         .await?
         .ok_or_else(|| anyhow!("Device not found"))?;
+    let user_id = d.user_id;
+    let old_status = d.status;
     let mut am: device_model::ActiveModel = d.into();
     am.status = Set(status);
     device_model::Entity::update_safety(am)?.exec(db).await?;
+
+    // 封禁/解封状态变化后吊销该用户**全部** Redis 会话（粗粒度：踢全端，不
+    // 区分设备——会话 key 是 `jwt:access/refresh:{uid}:{jti}`，没有设备→jti
+    // 映射，无法按设备精确吊销）。封禁场景是安全必须：已签发的 access（15
+    // 天）/refresh（30 天）若不吊销，`block_disallow_*` 只挡新登录、旧 token
+    // 在 Redis 会话缓存有效期内照常可用；解封场景同样强制重新登录。封禁是
+    // 低频管理动作，踢全端可接受。Redis 不可用时忽略错误（降级，与
+    // revoke_user_sessions 语义一致）。
+    if old_status != status
+        && let Some(uid) = user_id
+    {
+        let _ = crate::functions::system::user::revoke_user_sessions(uid).await;
+    }
+
     Ok(CommonResponse::new(Ok(())))
 }
