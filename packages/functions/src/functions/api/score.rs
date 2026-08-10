@@ -153,7 +153,9 @@ pub async fn do_get_score_data(
         .filter(score_stat_model::Column::Span.eq(&payload.span))
         .filter(score_stat_model::Column::SpanStartTime.gte(start))
         .filter(score_stat_model::Column::SpanEndTime.lte(end))
-        .limit(10_000)
+        // 上限 10 万：原 10_000 会静默截断——单 span 贡献者 >1 万时排行缺人
+    // （round3 L13）。保留上限仅为兜底异常超大响应，正常数据量远达不到。
+    .limit(100_000)
         .all(db)
         .await?;
 

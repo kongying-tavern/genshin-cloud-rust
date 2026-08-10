@@ -57,8 +57,8 @@ async fn tag_result() -> Result<ResultEntry> {
         let tags = tag_model::Entity::find_safety().all(db).await?;
 
         // typeIdList per tag (tag_type_link is keyed by tag_name).
-        let mut type_map: std::collections::HashMap<String, Vec<i64>> =
-            std::collections::HashMap::new();
+        let mut type_map: std::collections::BTreeMap<String, Vec<i64>> =
+            std::collections::BTreeMap::new();
         for link in ttl_model::Entity::find_safety().all(db).await? {
             type_map
                 .entry(link.tag_name)

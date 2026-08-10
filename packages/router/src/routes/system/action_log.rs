@@ -61,7 +61,8 @@ pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
     Json(query): Json<ActionLogParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let size = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10) as u64;
+    let size_raw = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = query
         .pagination
         .as_ref()

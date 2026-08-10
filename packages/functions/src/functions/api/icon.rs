@@ -73,6 +73,8 @@ pub async fn do_list(
         query = query.filter(icon_model::Column::Tag.like(format!("%{}%", escape_like(&name))));
     }
     // 按图标分类（icon_type_link）过滤：icon_id IN (SELECT icon_id FROM icon_type_link WHERE type_id IN ...)
+    // typeIdList 有值时恒执行过滤：空命中集也必须过滤（返回空页），
+    // 否则 `!icon_ids.is_empty()` 守卫会丢弃过滤条件而返回全量数据。
     if let Some(type_ids) = payload.type_id_list {
         let icon_ids: Vec<i64> = icon_type_link_model::Entity::find_safety()
             .filter(icon_type_link_model::Column::TypeId.is_in(type_ids))
@@ -81,9 +83,7 @@ pub async fn do_list(
             .into_iter()
             .map(|l| l.icon_id)
             .collect();
-        if !icon_ids.is_empty() {
-            query = query.filter(icon_model::Column::Id.is_in(icon_ids));
-        }
+        query = query.filter(icon_model::Column::Id.is_in(icon_ids));
     }
 
     let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;

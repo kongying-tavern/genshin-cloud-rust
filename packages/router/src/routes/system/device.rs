@@ -31,11 +31,12 @@ pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let size = payload
+    let size_raw = payload
         .pagination
         .as_ref()
         .and_then(|p| p.size)
-        .unwrap_or(10) as u64;
+        .unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = payload
         .pagination
         .as_ref()

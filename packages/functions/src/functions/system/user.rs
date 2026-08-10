@@ -129,6 +129,8 @@ pub async fn do_register_qq(
 }
 
 pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
+    // 匿名（client_credentials）身份一律拒绝：防止未登录枚举任意用户公开字段
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
@@ -262,24 +264,24 @@ pub async fn do_update_password(
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await
-        .map_err(|e| (500, e.to_string()))?;
+        .map_err(|_| (500, "Internal server error".to_string()))?;
     let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
 
-    // 校验旧密码，拒绝错误凭据
+    // 校验旧密码，拒绝错误凭据（400：客户端凭据错误，非服务端故障）
     if !_utils::bcrypt::verify_password(old_password, m.password.clone())
-        .map_err(|e| (500, e.to_string()))?
+        .map_err(|_| (500, "Internal server error".to_string()))?
     {
-        return Err((500, "Invalid old password".to_string()));
+        return Err((400, "Old password is incorrect".to_string()));
     }
 
     let mut am: sys_user_model::ActiveModel = m.into();
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
-        .map_err(|e| (500, e.to_string()))?);
+        .map_err(|_| (500, "Internal server error".to_string()))?);
     sys_user_model::Entity::update_safety(am)
-        .map_err(|e| (500, e.to_string()))?
+        .map_err(|_| (500, "Internal server error".to_string()))?
         .exec(db)
         .await
-        .map_err(|e| (500, e.to_string()))?;
+        .map_err(|_| (500, "Internal server error".to_string()))?;
     // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
     // Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(user_id).await;

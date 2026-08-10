@@ -53,8 +53,8 @@ async fn icon_result() -> Result<ResultEntry> {
         let ids: Vec<i64> = icons.iter().map(|i| i.id).collect();
 
         // typeIdList per icon (Java: `IconTypeLink` by icon_id).
-        let mut type_map: std::collections::HashMap<i64, Vec<i64>> =
-            std::collections::HashMap::new();
+        let mut type_map: std::collections::BTreeMap<i64, Vec<i64>> =
+            std::collections::BTreeMap::new();
         if !ids.is_empty() {
             for link in itl_model::Entity::find_safety()
                 .filter(itl_model::Column::IconId.is_in(ids))

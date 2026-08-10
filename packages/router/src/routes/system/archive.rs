@@ -109,6 +109,7 @@ pub async fn rename(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_rename_by_slot(
+        auth,
         user_id,
         slot_index as i32,
         new_name,
@@ -128,7 +129,8 @@ pub async fn restore(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_restore_slot(user_id, slot_index as i32).await
+    match _functions::functions::system::archive::do_restore_slot(auth, user_id, slot_index as i32)
+        .await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -143,7 +145,9 @@ pub async fn delete_slot(
     Path(slot_index): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_delete_slot(user_id, slot_index as i32).await {
+    match _functions::functions::system::archive::do_delete_slot(auth, user_id, slot_index as i32)
+        .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
