@@ -15,5 +15,6 @@ use super::binary_doc;
 pub async fn do_trigger_update(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
+    super::super::ws::ws_broadcast("AppUpdated", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(true)))
 }

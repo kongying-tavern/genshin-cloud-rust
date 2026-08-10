@@ -26,6 +26,7 @@ pub async fn do_delete_area_cache(auth: AuthInfo) -> Result<CommonResponse<Empty
 pub async fn do_delete_item_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
+    super::super::ws::ws_broadcast("ItemBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -42,6 +43,7 @@ pub async fn do_delete_icon_tag_cache(
     _tags: Vec<String>,
 ) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
+    super::super::ws::ws_broadcast("IconTagBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -49,6 +51,7 @@ pub async fn do_delete_icon_tag_cache(
 pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
+    super::super::ws::ws_broadcast("MarkerBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -56,6 +59,7 @@ pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<Emp
 pub async fn do_delete_marker_link_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
+    super::super::ws::ws_broadcast("MarkerLinkageBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 

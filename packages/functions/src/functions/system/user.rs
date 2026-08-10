@@ -416,7 +416,10 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
     let user_id = work_id
         .parse::<i64>()
         .map_err(|_| anyhow!("Invalid user id"))?;
-    revoke_user_sessions(user_id).await
+    revoke_user_sessions(user_id).await?;
+    // 通知该用户的在线连接立即下线（对齐 Java SysUserController）
+    super::super::ws::ws_send_to_users(&[work_id], "UserKickedOut", serde_json::Value::Null);
+    Ok(())
 }
 
 /// 用 SCAN 游标分批收集匹配 pattern 的 key（不阻塞 Redis 主线程）。

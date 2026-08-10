@@ -49,12 +49,25 @@ pub async fn do_link(
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let group_id = uuid::Uuid::new_v4().simple().to_string();
+    // 受影响组与点位（对齐 Java `LinkChangeVo`：broadcast MarkerLinked 的 data）
+    let mut affected_groups: Vec<String> = vec![group_id.clone()];
+    let mut affected_markers: Vec<i64> = Vec::new();
+    let mut collect_markers = |id: i64| {
+        if id > 0 && !affected_markers.contains(&id) {
+            affected_markers.push(id);
+        }
+    };
     for p in payload {
         if let Some(id) = p.id
             && id > 0
         {
             // 尝试更新
             if let Some(existing) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
+                if !existing.group_id.is_empty() && !affected_groups.contains(&existing.group_id) {
+                    affected_groups.push(existing.group_id.clone());
+                }
+                collect_markers(existing.from_id);
+                collect_markers(existing.to_id);
                 let mut am: linkage_model::ActiveModel = existing.into();
                 am.group_id = Set(group_id.clone());
                 am.from_id = Set(p.from_id);
@@ -71,6 +84,8 @@ pub async fn do_link(
             }
         }
 
+        collect_markers(p.from_id);
+        collect_markers(p.to_id);
         // 插入新记录
         let now = chrono::Utc::now().naive_utc();
         let active = linkage_model::ActiveModel {
@@ -95,6 +110,13 @@ pub async fn do_link(
         active.insert(db).await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast(
+        "MarkerLinked",
+        serde_json::json!({
+            "groups": affected_groups,
+            "markers": affected_markers
+        }),
+    );
     Ok(CommonResponse::new(Ok(group_id)))
 }
 
@@ -200,6 +222,13 @@ pub async fn do_delete(
         }
     }
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast(
+        "MarkerLinkageDeleted",
+        serde_json::json!({
+            "groups": groups,
+            "markers": markers
+        }),
+    );
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "groups": groups,
         "markers": markers

@@ -90,6 +90,7 @@ pub async fn do_update_notice(
     am.valid_time_end = Set(parse_valid_time(payload.valid_time_end.as_ref(), now));
 
     notice_model::Entity::update_safety(am)?.exec(db).await?;
+    super::super::ws::ws_broadcast("NoticeUpdated", serde_json::json!(payload.id));
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -202,6 +203,7 @@ pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<
     let mut am: notice_model::ActiveModel = n.into();
     am.del_flag = Set(true);
     notice_model::Entity::delete_safety(am)?.exec(db).await?;
+    super::super::ws::ws_broadcast("NoticeDeleted", serde_json::json!(id));
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -240,5 +242,6 @@ pub async fn do_add_notice(
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    super::super::ws::ws_broadcast("NoticeAdded", serde_json::json!(res.id));
     Ok(CommonResponse::new(Ok(res.id)))
 }
