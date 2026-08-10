@@ -4,12 +4,12 @@
 #   cp .env.example .env        # 按需修改（DB/REDIS/MINIO/JWT_SECRET）
 #   ./deploy.sh
 #
-# 镜像：ghcr.io/langyo/genshin-cloud-rust（master push 自动构建 latest + sha-*）
+# 镜像：ghcr.io/kongying-tavern/genshin-cloud-rust（master push 自动构建 latest + sha-*）
 # 回滚指定版本：IMAGE_TAG=sha-abc123 docker compose up -d
 
 services:
   gcs-backend:
-    image: ghcr.io/langyo/genshin-cloud-rust:${IMAGE_TAG:-latest}
+    image: ghcr.io/kongying-tavern/genshin-cloud-rust:${IMAGE_TAG:-latest}
     container_name: gcs-backend
     restart: unless-stopped
     env_file:
@@ -56,3 +56,4 @@ services:
 
 volumes:
   gcs-redis-data:
+

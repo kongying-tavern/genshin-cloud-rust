@@ -2,7 +2,7 @@
 
 ## 一、镜像（GitHub Actions 自动构建）
 
-- 仓库：`ghcr.io/langyo/genshin-cloud-rust`
+- 仓库：`ghcr.io/kongying-tavern/genshin-cloud-rust`
 - master push → 自动构建并推送 `latest` + `sha-<短哈希>`
 - 打 tag（`git tag v1.2.3 && git push --tags`）→ 额外推送 `1.2.3` / `1.2` / `1` / `latest`
 - PR 只构建不推送
@@ -61,3 +61,4 @@ server {
   curl -s -X POST http://127.0.0.1:8101/oauth/token \
     -F grant_type=password -F username=<user> -F password=<pass>
   ```
+
