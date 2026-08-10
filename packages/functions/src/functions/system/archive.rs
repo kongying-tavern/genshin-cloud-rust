@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use chrono::Utc;
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QueryFilter, QueryOrder,
+    ColumnTrait, QueryFilter, QueryOrder, QuerySelect,
     prelude::*,
 };
 
@@ -140,15 +140,57 @@ pub async fn do_get_all_history(
     Ok(CommonResponse::new(Ok(record)))
 }
 
+/// 槽位历史条数上限：每用户每槽位最多保留最新 `MAX_HISTORY_PER_SLOT` 条，
+/// 超出部分在 `do_save` 写入后立即软删最旧记录（防止存档表随前端反复
+/// 保存无限膨胀，同时保证历史列表接口返回规模可控）。
+const MAX_HISTORY_PER_SLOT: u64 = 20;
+
+/// 写入后清理：按 create_time desc 保留最新 `MAX_HISTORY_PER_SLOT` 条，
+/// 其余软删。
+async fn prune_slot_history(
+    db: &sea_orm::DatabaseConnection,
+    user_id: i64,
+    slot_index: i32,
+) -> Result<()> {
+    let keep_ids: Vec<i64> = archive_model::Entity::find_safety()
+        .filter(archive_model::Column::UserId.eq(user_id))
+        .filter(archive_model::Column::SlotIndex.eq(slot_index))
+        .order_by_desc(archive_model::Column::CreateTime)
+        .limit(MAX_HISTORY_PER_SLOT)
+        .all(db)
+        .await?
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    if keep_ids.is_empty() {
+        return Ok(());
+    }
+    // 批量软删（避免逐条 find+delete 的 N+1 往返）
+    archive_model::Entity::update_many()
+        .col_expr(
+            archive_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(archive_model::Column::UserId.eq(user_id))
+        .filter(archive_model::Column::SlotIndex.eq(slot_index))
+        .filter(archive_model::Column::Id.is_not_in(keep_ids))
+        .exec(db)
+        .await?;
+    Ok(())
+}
+
 /// Save (put) an archive to a slot.
 /// 请求体为任意 JSON：前端直接上传存档 JSON 字符串；兼容 `{time, archive, historyIndex}` 包装体。
 pub async fn do_save(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
     name: Option<String>,
     body: serde_json::Value,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    // 写操作：匿名（client_credentials，uid=0）一律拒绝——否则所有匿名
+    // 客户端共享 uid=0 档案，互相覆盖/读取。
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let archive = extract_archive(&body);
     // create_time 由服务端定，不信任客户端传入的 time（防止时间戳伪造/脏数据）
@@ -168,6 +210,8 @@ pub async fn do_save(
         data: Set(serde_json::Value::String(archive)),
     };
     let res = archive_model::Entity::insert(am).exec(db).await?;
+    // 写入后按上限清理最旧历史
+    prune_slot_history(db, user_id, slot_index).await?;
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "id": res.last_insert_id
     }))))
@@ -178,7 +222,8 @@ pub async fn do_save(
 /// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
 /// 接线（router 只用 do_rename_by_slot），一旦接线即构成 IDOR——任意登录
 /// 用户可按 id 改他人存档。启用前必须先按 `auth.info.id` 过滤归属。
-pub async fn do_rename(_auth: AuthInfo, id: i64, name: String) -> Result<CommonResponse<()>> {
+pub async fn do_rename(auth: AuthInfo, id: i64, name: String) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)
         .one(db)
@@ -192,10 +237,12 @@ pub async fn do_rename(_auth: AuthInfo, id: i64, name: String) -> Result<CommonR
 
 /// Rename an archive slot (renames the latest archive in the slot).
 pub async fn do_rename_by_slot(
+    auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
     new_name: String,
 ) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
@@ -215,7 +262,8 @@ pub async fn do_rename_by_slot(
 /// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
 /// 接线（router 只用 do_restore_slot），一旦接线即构成 IDOR——任意登录
 /// 用户可按 id 读取他人存档数据。启用前必须先按 `auth.info.id` 过滤归属。
-pub async fn do_restore(_auth: AuthInfo, id: i64) -> Result<CommonResponse<serde_json::Value>> {
+pub async fn do_restore(auth: AuthInfo, id: i64) -> Result<CommonResponse<serde_json::Value>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)
         .one(db)
@@ -227,9 +275,12 @@ pub async fn do_restore(_auth: AuthInfo, id: i64) -> Result<CommonResponse<serde
 /// 恢复为上次存档：删除该槽位最新一条（按 create_time desc 取第一条软删），
 /// 然后返回剩余最新一条（结构同 `do_get_last`）。
 pub async fn do_restore_slot(
+    auth: AuthInfo,
     user_id: i64,
     slot_index: i32,
 ) -> Result<CommonResponse<Option<ArchiveSlotVo>>> {
+    // 恢复即删除最新一条历史，属写操作
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let latest = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
@@ -253,7 +304,12 @@ pub async fn do_restore_slot(
 }
 
 /// Delete an archive slot (soft-delete every archive in the slot).
-pub async fn do_delete_slot(user_id: i64, slot_index: i32) -> Result<CommonResponse<()>> {
+pub async fn do_delete_slot(
+    auth: AuthInfo,
+    user_id: i64,
+    slot_index: i32,
+) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     // 批量软删（避免逐条 find+delete 的 N+1 往返）
     archive_model::Entity::update_many()
@@ -273,7 +329,8 @@ pub async fn do_delete_slot(user_id: i64, slot_index: i32) -> Result<CommonRespo
 /// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
 /// 接线（router 只用 do_delete_slot），一旦接线即构成 IDOR——任意登录
 /// 用户可按 id 删除他人存档。启用前必须先按 `auth.info.id` 过滤归属。
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+    auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)
         .one(db)

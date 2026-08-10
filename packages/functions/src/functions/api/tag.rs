@@ -113,9 +113,9 @@ pub async fn do_list(
     {
         query = query.filter(tag_model::Column::Tag.is_in(tag_list));
     }
-    if let Some(type_id_list) = payload.type_id_list
-        && !type_id_list.is_empty()
-    {
+    // typeIdList 有值时恒执行过滤：空命中集也必须过滤（返回空页），
+    // 否则 `!tag_names.is_empty()` 守卫会丢弃过滤条件而返回全量数据。
+    if let Some(type_id_list) = payload.type_id_list {
         let tag_names: Vec<String> = ttl_model::Entity::find_safety()
             .filter(ttl_model::Column::TypeId.is_in(type_id_list))
             .all(db)
@@ -123,9 +123,7 @@ pub async fn do_list(
             .into_iter()
             .map(|l| l.tag_name)
             .collect();
-        if !tag_names.is_empty() {
-            query = query.filter(tag_model::Column::Tag.is_in(tag_names));
-        }
+        query = query.filter(tag_model::Column::Tag.is_in(tag_names));
     }
 
     let size = payload.page.size.unwrap_or(10).min(200) as u64;

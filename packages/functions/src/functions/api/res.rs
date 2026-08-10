@@ -23,6 +23,14 @@ pub struct UploadedFile {
     pub bytes: Vec<u8>,
 }
 
+/// `GET /res/get` 桩（**死代码**，保留仅为不破坏路由面）：
+///
+/// - Java 侧（`ResourceController`）只有 `PUT /upload/image`，无对应 GET 端点；
+/// - 前端（`vue_map_register_v3`）只调用 `uploadImage`（`/api/res/upload/image`），
+///   无 `res/get` 调用方。
+///
+/// 若未来协议侧定义该端点（如返回资源服务健康/配置信息），再按契约实现；
+/// 当前恒返回空成功，不产生任何副作用。
 pub async fn do_get() -> Result<CommonResponse<()>> {
     Ok(CommonResponse::new(Ok(())))
 }

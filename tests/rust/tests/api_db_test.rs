@@ -1,6 +1,14 @@
 //! DB-backed business-assertion test for the area + item_doc domains (M1 third
 //! item, PLAN.md §4).
 //!
+//! Also covers the OAuth session chain end-to-end: login issuance (token_type/
+//! jti payload contract + Java userId/userRoles response fields), refresh
+//! rotation (GETDEL replay protection), anonymous client-credentials tokens,
+//! and revocation (do_kick_out). Redis-semantic assertions are gated on a
+//! reachable Redis (`oauth_redis_conn`) — CI's `integration` job provisions
+//! only Postgres, so they self-skip there and the soft-degradation branches
+//! (DB-fallback parse, non-rotating refresh, no-op kick) are asserted instead.
+//!
 //! Same `GCS_TEST_DB` gate as `user_db_test`. Upgrades the e2e smoke checks
 //! (which treated 401/403 as "route exists ✓") into real data assertions:
 //! seeds rows and verifies the business-layer functions return them. Exercises
@@ -25,10 +33,10 @@ use _functions::functions::api::{
     area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
     marker as marker_fns, score as score_fns,
 };
-use _functions::functions::system::oauth as oauth_fns;
+use _functions::functions::system::{oauth as oauth_fns, user as user_fns};
 use _utils::{
     db_operations::SafeEntityTrait,
-    jwt::AuthInfo,
+    jwt::{AuthInfo, verify_token},
     models::{
         SysUserVO,
         area::{AreaAddRequest, AreaListRequest},
@@ -40,9 +48,10 @@ use _utils::{
     },
     types::{
         AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
-        IconStyleType, SystemUserRole,
+        IconStyleType, SystemUserRole, auth::OauthScopeType,
     },
 };
+use redis::AsyncCommands;
 use sea_orm::{
     ActiveValue::{NotSet, Set},
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Schema,
@@ -224,6 +233,25 @@ fn stub_anonymous_auth() -> AuthInfo {
     auth
 }
 
+/// Try to obtain a live Redis connection for the OAuth session assertions.
+///
+/// Returns `None` when Redis is unreachable — CI's `integration` job only
+/// provisions Postgres (`test.yml`), so the Redis-semantic assertions (key
+/// layout, rotation, revocation) self-skip there, mirroring
+/// `redis_cache_db_test::redis`. A PING probe is needed because
+/// `get_multiplexed_async_connection` hands back a lazily-connected
+/// multiplexer: `redis_conn` is `Some` as long as the URL parses, even with
+/// no server behind it.
+async fn oauth_redis_conn() -> Option<redis::aio::MultiplexedConnection> {
+    let client = DB_CONN.wait().redis_conn.as_ref()?;
+    let mut conn = client.get_multiplexed_async_connection().await.ok()?;
+    redis::cmd("PING")
+        .query_async::<String>(&mut conn)
+        .await
+        .ok()?;
+    Some(conn)
+}
+
 #[tokio::test]
 async fn area_and_item_doc_business_assertions() {
     // Enable RS256 signing for the whole test process: generate an ephemeral
@@ -244,6 +272,12 @@ async fn area_and_item_doc_business_assertions() {
     unsafe {
         std::env::set_var("JWT_RSA_PRIVATE_KEY_PEM", rsa_pem);
         std::env::set_var("JWT_SECRET", "integration-test-secret");
+        // Pin OAuth degradation to soft mode: with Redis down, login/parse/
+        // refresh must keep working via the fallback branches, which is what
+        // the no-Redis assertion branches below exercise. (Without this pin,
+        // a host running with REDIS_REQUIRED=true + no Redis would fail-closed
+        // and break the degraded-branch assertions.)
+        std::env::set_var("REDIS_REQUIRED", "false");
     }
 
     let Some(db) = db().await else {
@@ -1173,4 +1207,365 @@ async fn area_and_item_doc_business_assertions() {
         item_a_json["typeIdList"][0], 9,
         "item carries its typeIdList (Java ItemVo)"
     );
+
+    // ── Assertion 10: oauth login issuance ──────────────────────────────────
+    // JWT payload contract: access/refresh carry distinct jti + token_type
+    // claims, the response exposes the Java-contract userId/userRoles, and
+    // Redis (when reachable) holds the paired session keys. Each group uses
+    // its own IP: LOGIN_FAILURES is process-global (5 failures/min/IP) and
+    // shared with the policy assertions above.
+    let ip_issue = "10.80.1.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    let uid_issue = seed_user(db, "oauth_issue", vec![], None, now)
+        .await
+        .expect("seed oauth_issue user");
+    let issue = oauth_fns::oauth_password_login(
+        "oauth_issue".into(),
+        "pw123".into(),
+        ip_issue,
+        "oauth-issue/1.0".into(),
+    )
+    .await
+    .expect("password login issues a token pair");
+    assert!(!issue.access_token.is_empty(), "access token present");
+    assert!(!issue.refresh_token.is_empty(), "refresh token present");
+    assert_eq!(
+        issue.user_id, uid_issue,
+        "response userId is the seeded user"
+    );
+    assert_eq!(
+        issue.user_roles,
+        vec!["MAP_USER".to_string()],
+        "response userRoles carries the role code"
+    );
+    assert_eq!(
+        issue.expires_in,
+        15_i64 * 24 * 3600,
+        "expires_in is the 15-day TTL in seconds"
+    );
+    assert_ne!(issue.jti, uuid::Uuid::nil(), "jti is issued");
+
+    // Wire contract: serialized response uses the Java field names the
+    // frontend SysToken consumes (userId/userRoles camelCase).
+    let issue_json = serde_json::to_value(&issue).expect("serialize login response");
+    assert_eq!(issue_json["access_token"], issue.access_token);
+    assert_eq!(issue_json["refresh_token"], issue.refresh_token);
+    assert_eq!(issue_json["userId"], serde_json::json!(uid_issue));
+    assert_eq!(issue_json["userRoles"][0], "MAP_USER");
+    assert_eq!(issue_json["jti"], issue.jti.to_string());
+
+    // Decoded payload contract (S2): token_type claims, distinct jti, sub =
+    // user id; the response jti is the access jti.
+    let issue_access_claims = verify_token(&issue.access_token)
+        .await
+        .expect("verify access token");
+    let issue_refresh_claims = verify_token(&issue.refresh_token)
+        .await
+        .expect("verify refresh token");
+    assert_eq!(
+        issue_access_claims.token_type.as_deref(),
+        Some("access"),
+        "access token carries token_type=access"
+    );
+    assert_eq!(
+        issue_refresh_claims.token_type.as_deref(),
+        Some("refresh"),
+        "refresh token carries token_type=refresh"
+    );
+    assert_eq!(
+        issue_access_claims.jti, issue.jti,
+        "response jti equals the access jti"
+    );
+    assert_ne!(
+        issue_access_claims.jti, issue_refresh_claims.jti,
+        "access and refresh use distinct jti"
+    );
+    assert_eq!(issue_access_claims.sub, uid_issue);
+    assert_eq!(issue_refresh_claims.sub, uid_issue);
+
+    // Parse round-trip: the access token resolves to the seeded user VO.
+    let (issue_vo, _) = oauth_fns::oauth_parse_token(issue.access_token.clone())
+        .await
+        .expect("access token parses to a user VO");
+    assert_eq!(issue_vo.id, uid_issue);
+
+    // Redis session keys (skipped without a reachable Redis — CI has none).
+    if let Some(mut r) = oauth_redis_conn().await {
+        let access_key = format!("jwt:access:{}:{}", uid_issue, issue.jti);
+        let refresh_key = format!("jwt:refresh:{}:{}", uid_issue, issue_refresh_claims.jti);
+        let access_val: Option<String> = r.get(&access_key).await.expect("redis get access key");
+        let vo_val: SysUserVO = serde_json::from_str(
+            access_val
+                .as_deref()
+                .expect("access key stores the user VO JSON"),
+        )
+        .expect("stored VO json parses");
+        assert_eq!(vo_val.id, uid_issue, "cached VO is the seeded user");
+        let refresh_val: Option<String> = r.get(&refresh_key).await.expect("redis get refresh key");
+        assert_eq!(
+            refresh_val.as_deref(),
+            Some(issue.jti.to_string().as_str()),
+            "refresh key stores the paired access jti"
+        );
+        let ttl: i64 = r.ttl(&access_key).await.expect("redis ttl");
+        assert!(
+            ttl > 0 && ttl <= 15_i64 * 24 * 3600,
+            "session key TTL within the 15-day window"
+        );
+        let _: i64 = r.del(&access_key).await.expect("cleanup access key");
+        let _: i64 = r.del(&refresh_key).await.expect("cleanup refresh key");
+    } else {
+        eprintln!("skipping Redis session-key assertions (no reachable Redis)");
+    }
+
+    // ── Assertion 11: refresh rotation (GETDEL atomic consume) ───────────────
+    let ip_refresh = "10.80.2.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    let uid_refresh = seed_user(db, "oauth_refresh", vec![], None, now)
+        .await
+        .expect("seed oauth_refresh user");
+    let r1 = oauth_fns::oauth_password_login(
+        "oauth_refresh".into(),
+        "pw123".into(),
+        ip_refresh,
+        "oauth-refresh/1.0".into(),
+    )
+    .await
+    .expect("initial login");
+    let r1_refresh_claims = verify_token(&r1.refresh_token)
+        .await
+        .expect("verify initial refresh token");
+
+    // An access token must never be accepted for refresh (S2) — this check
+    // runs before any Redis logic, so it holds in both environments.
+    let err = oauth_fns::oauth_refresh(r1.access_token.clone())
+        .await
+        .expect_err("access token is not a refresh token");
+    assert!(
+        err.to_string().contains("Not a refresh token"),
+        "got: {err}"
+    );
+
+    // First refresh rotates: new pair, new jti, same user.
+    let r2 = oauth_fns::oauth_refresh(r1.refresh_token.clone())
+        .await
+        .expect("refresh rotates the token pair");
+    assert_ne!(r2.access_token, r1.access_token, "new access token");
+    assert_ne!(r2.refresh_token, r1.refresh_token, "new refresh token");
+    assert_ne!(r2.jti, r1.jti, "new jti");
+    assert_eq!(r2.user_id, uid_refresh);
+    assert_eq!(r2.user_roles, vec!["MAP_USER".to_string()]);
+    let r2_access_claims = verify_token(&r2.access_token)
+        .await
+        .expect("verify rotated access");
+    let r2_refresh_claims = verify_token(&r2.refresh_token)
+        .await
+        .expect("verify rotated refresh");
+    assert_eq!(r2_access_claims.token_type.as_deref(), Some("access"));
+    assert_eq!(r2_refresh_claims.token_type.as_deref(), Some("refresh"));
+    assert_eq!(r2_access_claims.jti, r2.jti);
+    let (vo2, _) = oauth_fns::oauth_parse_token(r2.access_token.clone())
+        .await
+        .expect("rotated access token parses");
+    assert_eq!(vo2.id, uid_refresh);
+
+    if let Some(mut r) = oauth_redis_conn().await {
+        // Replay of the consumed refresh token is rejected (GETDEL atomicity).
+        let err = oauth_fns::oauth_refresh(r1.refresh_token.clone())
+            .await
+            .expect_err("replayed refresh token must be rejected");
+        assert!(
+            err.to_string()
+                .contains("Refresh token not found or already used"),
+            "got: {err}"
+        );
+        // The old access token was revoked by the rotation.
+        let err = oauth_fns::oauth_parse_token(r1.access_token.clone())
+            .await
+            .expect_err("old access token revoked by rotation");
+        assert!(err.to_string().contains("Token revoked"), "got: {err}");
+
+        // Redis state: old refresh key consumed, new pair stored.
+        let old_refresh_key: Option<String> = r
+            .get(format!(
+                "jwt:refresh:{}:{}",
+                uid_refresh, r1_refresh_claims.jti
+            ))
+            .await
+            .expect("redis get old refresh key");
+        assert!(old_refresh_key.is_none(), "old refresh key consumed");
+        let new_access_val: Option<String> = r
+            .get(format!("jwt:access:{}:{}", uid_refresh, r2.jti))
+            .await
+            .expect("redis get new access key");
+        assert!(new_access_val.is_some(), "new access key stored");
+        let new_refresh_val: Option<String> = r
+            .get(format!(
+                "jwt:refresh:{}:{}",
+                uid_refresh, r2_refresh_claims.jti
+            ))
+            .await
+            .expect("redis get new refresh key");
+        assert!(new_refresh_val.is_some(), "new refresh key stored");
+        let _: i64 = r
+            .del(format!("jwt:access:{}:{}", uid_refresh, r2.jti))
+            .await
+            .expect("cleanup new access key");
+        let _: i64 = r
+            .del(format!(
+                "jwt:refresh:{}:{}",
+                uid_refresh, r2_refresh_claims.jti
+            ))
+            .await
+            .expect("cleanup new refresh key");
+    } else {
+        // Degraded branch (no Redis): refresh falls back to issue_token — no
+        // rotation happens, so the old refresh token stays valid (documented
+        // degradation in oauth.rs oauth_refresh). Signature/token_type and
+        // the response contract are still verified above.
+        let r3 = oauth_fns::oauth_refresh(r1.refresh_token.clone())
+            .await
+            .expect("degraded refresh re-issues without rotation");
+        assert!(!r3.access_token.is_empty());
+        assert_eq!(r3.user_id, uid_refresh);
+        eprintln!(
+            "skipping rotation/replay assertions (no reachable Redis): degraded refresh does not rotate"
+        );
+    }
+
+    // ── Assertion 12: anonymous client-credentials chain ─────────────────────
+    let anon = oauth_fns::oauth_client_credentials("all".into())
+        .await
+        .expect("client credentials issues an anonymous token");
+    assert!(!anon.access_token.is_empty());
+    assert_eq!(anon.scope, OauthScopeType::All);
+    let anon_claims = verify_token(&anon.access_token)
+        .await
+        .expect("verify anon token");
+    assert_eq!(anon_claims.sub, 0, "anonymous subject is user id 0");
+    assert_eq!(anon_claims.token_type.as_deref(), Some("access"));
+    assert_eq!(anon_claims.jti, anon.jti);
+
+    let (anon_vo, anon_parsed_claims) = oauth_fns::oauth_parse_token(anon.access_token.clone())
+        .await
+        .expect("anonymous token parses to the anonymous VO");
+    assert_eq!(anon_vo.id, 0, "anonymous VO id is 0");
+    assert_eq!(anon_parsed_claims.sub, 0);
+
+    // AuthInfo semantics: is_anonymous() = true, writes rejected.
+    let anon_auth = AuthInfo {
+        info: anon_vo,
+        created_at: anon_parsed_claims.iat,
+        expires_at: anon_parsed_claims.exp,
+    };
+    assert!(anon_auth.is_anonymous(), "anonymous identity detected");
+    assert!(
+        anon_auth.require_non_anonymous().is_err(),
+        "write operations reject anonymous tokens"
+    );
+
+    if let Some(mut r) = oauth_redis_conn().await {
+        let anon_val: Option<String> = r
+            .get(format!("jwt:access:0:{}", anon.jti))
+            .await
+            .expect("redis get anon key");
+        assert_eq!(
+            anon_val.as_deref(),
+            Some(r#"{"anon":true}"#),
+            "anon access key stores the marker payload"
+        );
+        let _: i64 = r
+            .del(format!("jwt:access:0:{}", anon.jti))
+            .await
+            .expect("cleanup anon key");
+    } else {
+        eprintln!("skipping anonymous Redis-key assertion (no reachable Redis)");
+    }
+
+    // ── Assertion 13: revocation (do_kick_out → revoke_user_sessions) ────────
+    let ip_kick_a = "10.80.3.1:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ip_kick_b = "10.80.3.2:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ip_kick_c = "10.80.3.3:5678".parse::<std::net::SocketAddr>().unwrap();
+    let ip_kick_d = "10.80.3.4:5678".parse::<std::net::SocketAddr>().unwrap();
+    let uid_kick = seed_user(db, "oauth_kick", vec![], None, now)
+        .await
+        .expect("seed oauth_kick user");
+    let k1 = oauth_fns::oauth_password_login(
+        "oauth_kick".into(),
+        "pw123".into(),
+        ip_kick_a,
+        "oauth-kick/1.0".into(),
+    )
+    .await
+    .expect("login before kick");
+    oauth_fns::oauth_parse_token(k1.access_token.clone())
+        .await
+        .expect("token valid before kick");
+
+    user_fns::do_kick_out(stub_auth(), uid_kick.to_string())
+        .await
+        .expect("kick out revokes the user's sessions");
+
+    if let Some(mut r) = oauth_redis_conn().await {
+        // All session keys for the user are gone (SCAN + pipeline delete).
+        let left: Vec<String> = redis::cmd("KEYS")
+            .arg(format!("jwt:*:{uid_kick}:*"))
+            .query_async(&mut r)
+            .await
+            .expect("redis keys after kick");
+        assert!(left.is_empty(), "no jwt:* keys left after kick: {left:?}");
+
+        // The kicked access token is rejected with the explicit revocation
+        // error (not a DB-fallback pass-through).
+        let err = oauth_fns::oauth_parse_token(k1.access_token.clone())
+            .await
+            .expect_err("kicked access token rejected");
+        assert!(err.to_string().contains("Token revoked"), "got: {err}");
+        let err = oauth_fns::oauth_refresh(k1.refresh_token.clone())
+            .await
+            .expect_err("kicked refresh token rejected");
+        assert!(
+            err.to_string()
+                .contains("Refresh token not found or already used"),
+            "got: {err}"
+        );
+
+        // Multi-session batch: 3 logins → 6 keys → one kick → all gone.
+        let sessions = [
+            ("oauth-kick/2.0", ip_kick_b),
+            ("oauth-kick/3.0", ip_kick_c),
+            ("oauth-kick/4.0", ip_kick_d),
+        ];
+        for (ua, ip) in sessions {
+            oauth_fns::oauth_password_login("oauth_kick".into(), "pw123".into(), ip, ua.into())
+                .await
+                .expect("repeated login");
+        }
+        let all: Vec<String> = redis::cmd("KEYS")
+            .arg(format!("jwt:*:{uid_kick}:*"))
+            .query_async(&mut r)
+            .await
+            .expect("redis keys before batch kick");
+        assert_eq!(all.len(), 6, "three logins leave six session keys");
+        user_fns::do_kick_out(stub_auth(), uid_kick.to_string())
+            .await
+            .expect("batch kick");
+        let left: Vec<String> = redis::cmd("KEYS")
+            .arg(format!("jwt:*:{uid_kick}:*"))
+            .query_async(&mut r)
+            .await
+            .expect("redis keys after batch kick");
+        assert!(left.is_empty(), "batch kick clears all six keys: {left:?}");
+        let err = oauth_fns::oauth_parse_token(k1.access_token.clone())
+            .await
+            .expect_err("first-session token also rejected after batch kick");
+        assert!(err.to_string().contains("Token revoked"), "got: {err}");
+    } else {
+        // Degraded branch (no Redis): revoke is a documented no-op and the
+        // token survives via the DB-fallback parse path (design, user.rs
+        // revoke_user_sessions).
+        let (vo, _) = oauth_fns::oauth_parse_token(k1.access_token.clone())
+            .await
+            .expect("no-Redis revoke is a no-op; token still parses via DB");
+        assert_eq!(vo.id, uid_kick);
+        eprintln!("skipping revocation assertions (no reachable Redis): kick is a no-op");
+    }
 }

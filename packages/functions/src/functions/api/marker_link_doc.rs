@@ -58,8 +58,9 @@ async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
         } else {
             // 按 group_id 分组（camelCase `MarkerLinkageVo` 命名，Java wire contract），
             // 前端解压后期望 `Record<string, MarkerLinkageVo[]>` 的 map
-            let mut map: std::collections::HashMap<String, Vec<MarkerLinkVO>> =
-                std::collections::HashMap::new();
+            // BTreeMap → 键序确定，保证数据未变时序列化结果（MD5）稳定
+            let mut map: std::collections::BTreeMap<String, Vec<MarkerLinkVO>> =
+                std::collections::BTreeMap::new();
             for l in linkages {
                 let vo = model_to_vo(l);
                 let group_id = vo.group_id.clone().unwrap_or_default();
@@ -94,8 +95,9 @@ async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
 }
 
 /// Build the adjacency map: marker_id → list of linked marker_ids.
-fn build_graph(linkages: &[ml_model::Model]) -> std::collections::HashMap<i64, Vec<i64>> {
-    let mut graph: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
+/// BTreeMap → 键序确定，保证序列化结果（MD5）稳定。
+fn build_graph(linkages: &[ml_model::Model]) -> std::collections::BTreeMap<i64, Vec<i64>> {
+    let mut graph: std::collections::BTreeMap<i64, Vec<i64>> = std::collections::BTreeMap::new();
     for l in linkages {
         graph.entry(l.from_id).or_default().push(l.to_id);
     }

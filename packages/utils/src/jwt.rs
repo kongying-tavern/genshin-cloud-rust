@@ -266,7 +266,7 @@ mod jwt_numeric_date {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: i64,
     pub jti: Uuid,

@@ -98,7 +98,7 @@ fn stub_auth() -> AuthInfo {
     let now = chrono::Utc::now();
     AuthInfo {
         info: SysUserVO {
-            id: 0,
+            id: 1,
             username: "stub".into(),
             nickname: None,
             qq: None,
