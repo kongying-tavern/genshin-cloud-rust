@@ -13,18 +13,25 @@ pub struct AreaRequest {
     /// 地区说明
     pub content: Option<String>,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 父级地区 ID
     /// 无父级则为 -1
     pub parent_id: i64,
     /// 是否为末端地区
     pub is_final: bool,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 排序
+    #[serde(default)]
     pub sort_index: i32,
     /// 额外标记
     /// 低位第一位：前台是否显示
+    #[serde(default)]
     pub special_flag: i32,
 }
 
@@ -54,4 +61,45 @@ pub struct AreaListRequest {
     pub is_traverse: Option<bool>,
     /// 父级 ID
     pub parent_id: Option<i64>,
+    /// 数据级过滤（与 marker 域一致，normal vs insider）
+    pub hidden_flag: Option<crate::types::HiddenFlag>,
+}
+
+/// 地区返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaVO {
+    pub version: i64,
+    pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
+    pub name: String,
+    pub code: Option<String>,
+    pub content: Option<String>,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub hidden_flag: crate::types::HiddenFlag,
+    pub sort_index: i32,
+    pub special_flag: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaListResponse(pub Vec<AreaVO>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaSingleResponse {
+    pub item: AreaVO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AreaAddResponse {
+    pub id: i64,
 }

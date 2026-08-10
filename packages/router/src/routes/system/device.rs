@@ -3,37 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
-use _utils::{models::wrapper::Pagination, types::SystemUserRole};
-
-/// 格式：字段+ 字段-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum DeviceSort {
-    #[serde(rename = "deviceId+")]
-    DeviceId,
-    #[serde(rename = "deviceId-")]
-    DeviceIdReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "ipv4+")]
-    Ipv4,
-    #[serde(rename = "ipv4-")]
-    Ipv4Reverse,
-    #[serde(rename = "lastLoginTime+")]
-    LastLoginTime,
-    #[serde(rename = "lastLoginTime-")]
-    LastLoginTimeReverse,
-    #[serde(rename = "status+")]
-    Status,
-    #[serde(rename = "status-")]
-    StatusReverse,
-    #[serde(rename = "updateTime+")]
-    UpdateTime,
-    #[serde(rename = "updateTime-")]
-    UpdateTimeReverse,
-}
+use crate::middlewares::ExtractAdmin;
+use _utils::models::wrapper::Pagination;
+use _utils::types::DeviceSort;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,21 +21,42 @@ pub struct DeviceListParams {
     /// 设备状态
     pub status: Option<i64>,
     /// 用户ID
-    pub user_id: i64,
+    pub user_id: Option<i64>,
 }
 
 /// 获取用户设备
 /// POST /device/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
+    let size_raw = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.size)
+        .unwrap_or(10);
+    let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
+    let current = payload
+        .pagination
+        .as_ref()
+        .and_then(|p| p.current)
+        .unwrap_or(1);
 
-    Ok(Json(()).into_response())
+    match _functions::functions::system::device::do_list(
+        auth,
+        payload.user_id,
+        payload.device_id,
+        payload.status.map(|s| s as i32),
+        payload.sort,
+        size,
+        current as u64,
+    )
+    .await
+    {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -78,12 +71,14 @@ pub struct DeviceUpdateParams {
 /// POST /device/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((axum::http::StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+    let status = payload
+        .status
+        .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
+    match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
+        Ok(v) => Ok(Json(v).into_response()),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
-
-    Ok(Json(()).into_response())
 }

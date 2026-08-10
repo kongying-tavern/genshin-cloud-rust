@@ -29,7 +29,8 @@ pub struct Model {
     #[sea_orm(indexed)]
     pub user_id: i64,
     /// 存档信息
-    /// TODO: 绑定一个完整的存档数据结构
+    /// 存档内容由前端定义（自由 JSON 结构），后端按不透明 blob 存取；
+    /// 刻意不做强类型绑定，避免在存档格式演进时破坏既有存档。
     pub data: serde_json::Value,
 }
 

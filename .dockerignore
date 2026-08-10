@@ -1,0 +1,42 @@
+# Keep the build context small and free of local artifacts. The Dockerfile only
+# COPYs Cargo.toml, Cargo.lock, packages/, and tests/, so everything else is
+# excluded here.
+
+# VCS & CI
+.git/
+.github/
+.gitattributes
+.gitignore
+
+# Build artifacts
+target/
+**/target/
+log/
+
+# Local env (never bake secrets into the image)
+.env
+.env.*
+!.env.example
+
+# Editor / tooling local state
+.vscode/
+.verysync/
+.zcode/
+__pycache__/
+*.pyc
+
+# Repo files not needed to build the binary
+docs/
+scripts/
+tests/docker/
+_site/
+PLAN.md
+CHANGELOG.md
+README.md
+LICENSE
+celestia-devtools.just
+justfile
+deny.toml
+.editorconfig
+rustfmt.toml
+rust-toolchain.toml

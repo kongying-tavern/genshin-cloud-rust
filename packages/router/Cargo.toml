@@ -1,9 +1,9 @@
 [package]
 authors = ["langyo <langyo.china@gmail.com>"]
-edition = "2021"
+edition = "2024"
 name = "_router"
 publish = false
-version = "0.1.0"
+version.workspace = true
 
 [dependencies]
 _database = { path = "../database", version = "*" }
@@ -12,24 +12,17 @@ _utils = { path = "../utils", version = "*" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-derive_more = { workspace = true }
 once_cell = { workspace = true }
 tokio = { workspace = true }
 
 base64 = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
-percent-encoding = { workspace = true }
 
-flume = { workspace = true }
-futures = { workspace = true }
-oneshot = { workspace = true }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 uuid = { workspace = true }
-yuuka = { workspace = true }
 
 bcrypt = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -37,10 +30,13 @@ jsonwebtoken = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
-tracing-appender = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 axum = { workspace = true }
 axum-extra = { workspace = true }
 reqwest = { workspace = true }
+rustls = { workspace = true }
+urlencoding = "2"
 tower-http = { workspace = true }
+md5 = { workspace = true }
+bzip2 = { workspace = true }
+sea-orm = { workspace = true }

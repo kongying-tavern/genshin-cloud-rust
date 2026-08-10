@@ -2,12 +2,45 @@ use serde::{Deserialize, Serialize};
 
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
 
+/// 物品类型对外 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemTypeVO {
+    pub version: i64,
+    pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
+    pub name: String,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
+    pub content: Option<String>,
+    pub parent_id: i64,
+    pub is_final: bool,
+    pub hidden_flag: HiddenFlag,
+    pub sort_index: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemTypeListResponse {
+    pub total: i64,
+    #[serde(rename = "record")]
+    pub items: Vec<ItemTypeVO>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ItemTypeAllResponse(pub Vec<ItemTypeVO>);
+
 /// 物品类型基础请求模型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeRequest {
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 类型名
     pub name: String,
     /// 类型补充说明
@@ -30,10 +63,16 @@ pub struct ItemTypeAddRequest {
     /// 类型补充说明
     pub content: Option<String>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 是否为末端地区
+    #[serde(default)]
     pub is_final: bool,
     /// 类型名
     pub name: Option<String>,
@@ -52,7 +91,11 @@ pub struct ItemTypeUpdateData {
     /// 权限屏蔽标记
     pub hidden_flag: HiddenFlag,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品类型 ID
     pub id: i64,
     /// 是否为末端地区

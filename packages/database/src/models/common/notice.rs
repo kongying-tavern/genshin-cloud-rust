@@ -1,5 +1,5 @@
 use _utils::impl_safe_operation;
-use sea_orm::{entity::prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
@@ -27,6 +27,7 @@ pub struct Model {
     /// 标题
     pub title: String,
     /// 内容
+    #[sea_orm(column_type = "Text")]
     pub content: Option<String>,
     /// 有效期开始时间
     pub valid_time_start: Option<DateTime>,
@@ -37,7 +38,7 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct ChannelWrapper(Vec<String>);
+pub struct ChannelWrapper(pub Vec<String>);
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
 pub enum Relation {

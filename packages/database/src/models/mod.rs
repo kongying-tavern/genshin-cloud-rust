@@ -4,3 +4,4 @@ pub mod icon;
 pub mod item;
 pub mod marker;
 pub mod system;
+pub mod tag;

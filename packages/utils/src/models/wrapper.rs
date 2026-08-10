@@ -2,7 +2,10 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-use crate::models::SysUserVO;
+/// users 字段的序列化默认值：空对象（前端 `Record<string, SysUserSmallVo>`）
+fn default_users() -> serde_json::Value {
+    serde_json::json!({})
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,7 +15,9 @@ pub struct CommonResponse<T> {
     pub error_data: Option<serde_json::Value>,
     pub message: String,
     pub data: Option<T>,
-    pub users: Vec<SysUserVO>,
+    /// 用户信息 map：`{id: {id, username, nickname}}`（前端按 Record 取昵称）
+    #[serde(default = "default_users")]
+    pub users: serde_json::Value,
     pub time: NaiveDateTime,
 }
 
@@ -32,7 +37,7 @@ impl<T> CommonResponse<T> {
         }
     }
 
-    pub fn with_users(mut self, users: Vec<SysUserVO>) -> Self {
+    pub fn with_users(mut self, users: serde_json::Value) -> Self {
         self.users = users;
         self
     }
@@ -61,7 +66,7 @@ impl<T> Default for CommonResponse<T> {
             error_data: None,
             message: "".to_string(),
             data: None,
-            users: Vec::new(),
+            users: serde_json::json!({}),
             time: chrono::Local::now().naive_local(),
         }
     }

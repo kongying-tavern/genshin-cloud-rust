@@ -29,6 +29,7 @@ pub struct Model {
     /// 角色 ID
     pub role_id: Option<SystemUserRole>,
     /// 备注
+    #[sea_orm(column_type = "Text")]
     pub remark: Option<String>,
     /// 权限策略
     pub access_policy: Option<serde_json::Value>,

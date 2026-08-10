@@ -9,19 +9,33 @@ pub trait SafeEntityTrait: ::sea_orm::EntityTrait {
     where
         Self: Sized;
 
+    /// sea-orm 2.0 returns a `ValidatedUpdateOne` (the primary-key check is
+    /// eager), so the safety helpers return `Result<ValidatedUpdateOne, _>`.
+    /// Callers must `?` the result before `.exec().await`.
     fn update_safety(
         model: <Self as SafeEntityTrait>::ActiveModel,
-    ) -> ::sea_orm::UpdateOne<<Self as SafeEntityTrait>::ActiveModel>
+    ) -> std::result::Result<
+        ::sea_orm::ValidatedUpdateOne<<Self as SafeEntityTrait>::ActiveModel>,
+        ::sea_orm::DbErr,
+    >
     where
         Self: Sized;
 
     fn delete_safety(
         model: <Self as SafeEntityTrait>::ActiveModel,
-    ) -> ::sea_orm::UpdateOne<<Self as SafeEntityTrait>::ActiveModel>
+    ) -> std::result::Result<
+        ::sea_orm::ValidatedUpdateOne<<Self as SafeEntityTrait>::ActiveModel>,
+        ::sea_orm::DbErr,
+    >
     where
         Self: Sized;
 
-    fn delete_safety_by_id(id: i64) -> ::sea_orm::UpdateOne<<Self as SafeEntityTrait>::ActiveModel>
+    fn delete_safety_by_id(
+        id: i64,
+    ) -> std::result::Result<
+        ::sea_orm::ValidatedUpdateOne<<Self as SafeEntityTrait>::ActiveModel>,
+        ::sea_orm::DbErr,
+    >
     where
         Self: Sized;
 }
@@ -77,7 +91,9 @@ macro_rules! impl_safe_operation {
                 Self::find_safety().filter(Column::Id.eq(id))
             }
 
-            fn update_safety(model: ActiveModel) -> ::sea_orm::UpdateOne<ActiveModel> {
+            fn update_safety(
+                model: ActiveModel,
+            ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
                 let last_version = model
                     .version
                     .into_value()
@@ -93,21 +109,33 @@ macro_rules! impl_safe_operation {
                         _ => None,
                     })
                     .unwrap_or(1);
+                // sea-orm 2.0: UpdateOne wraps Result<ValidatedUpdateOne>; call
+                // .validate() then .map(.filter()) to stay in Result without ?.
                 Self::update(ActiveModel {
                     version: ::sea_orm::ActiveValue::Set(last_version + 1),
+                    // 调用方多由 `m.into()` 构造全字段 ActiveModel（含 del_flag=false），
+                    // 若整行写回会覆盖 del_flag，把已软删的行“复活”；置 NotSet 让
+                    // del_flag 不参与 UPDATE，更新只作用于业务字段。
+                    del_flag: ::sea_orm::ActiveValue::NotSet,
                     ..model
                 })
-                .filter(Column::Version.eq(last_version))
+                .validate()
+                .map(|v| v.filter(Column::Version.eq(last_version)))
             }
 
-            fn delete_safety(model: ActiveModel) -> ::sea_orm::UpdateOne<ActiveModel> {
+            fn delete_safety(
+                model: ActiveModel,
+            ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
                 Self::update(ActiveModel {
                     del_flag: ::sea_orm::ActiveValue::Set(true),
                     ..model
                 })
+                .validate()
             }
 
-            fn delete_safety_by_id(id: i64) -> ::sea_orm::UpdateOne<ActiveModel> {
+            fn delete_safety_by_id(
+                id: i64,
+            ) -> std::result::Result<::sea_orm::ValidatedUpdateOne<ActiveModel>, ::sea_orm::DbErr> {
                 Self::delete_safety(ActiveModel {
                     id: ::sea_orm::ActiveValue::Set(id),
                     ..Default::default()

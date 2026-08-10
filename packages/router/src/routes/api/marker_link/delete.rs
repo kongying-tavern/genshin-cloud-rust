@@ -12,6 +12,8 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkDeleteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现删除点位关联的逻辑
-    Ok(())
+    match _functions::functions::api::marker_link::do_delete(auth, payload).await {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

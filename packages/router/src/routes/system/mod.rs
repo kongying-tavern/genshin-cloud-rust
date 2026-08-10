@@ -9,46 +9,52 @@ mod user;
 use anyhow::Result;
 
 use axum::{
+    Router,
     middleware::from_extractor,
     routing::{delete, get, post, put},
-    Router,
 };
 
 pub async fn router() -> Result<Router> {
+    // /invitation/consume 与 /user/register/qq 是公开接口（注册流程未登录
+    // 调用），不挂 auth layer；其余路由合并到一个挂 ExtractAuthInfo layer 的
+    // router 中。
     let ret = Router::new()
-        .route("/archive/last/{slot_index}", get(archive::get_last))
-        .route("/archive/history/{slot_index}", get(archive::get_history))
-        .route("/archive/all_history", get(archive::get_all_history))
-        .route("/archive/{slot_index}/{name}", put(archive::put))
-        .route("/archive/save/{slot_index}", post(archive::save))
-        .route(
-            "/archive/rename/{slot_index}/{new_name}",
-            post(archive::rename),
-        )
-        .route("/archive/restore/{slot_index}", delete(archive::restore))
-        .route("/archive/slot/{slot_index}", delete(archive::delete_slot))
-        .route("/action_log/list", post(action_log::list))
-        .route("/device/list", post(device::list))
-        .route("/device/update", post(device::update))
-        .route("/invitation/list", post(invitation::list))
-        .route("/invitation/update", post(invitation::update))
-        .route("/invitation/info", post(invitation::info))
         .route("/invitation/consume", post(invitation::consume))
-        .route("/invitation/{invitation_id}", delete(invitation::delete))
-        .route("/role/list", get(role::list))
-        .route("/user/register", post(user::register))
         .route("/user/register/qq", post(user::register_qq))
-        .route("/user/info/{user_id}", get(user::get_info))
-        .route("/user/update", post(user::update))
-        .route("/user/update_password", post(user::update_password))
-        .route(
-            "/user/update_password_by_admin",
-            post(user::update_password_by_admin),
-        )
-        .route("/user/{work_id}", delete(user::delete))
-        .route("/user/info/list", post(user::list))
-        .route("/user/kick_out/{work_id}", delete(user::kick_out))
-        .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>());
+        .merge(
+            Router::new()
+                .route("/archive/last/{slot_index}", get(archive::get_last))
+                .route("/archive/history/{slot_index}", get(archive::get_history))
+                .route("/archive/all_history", get(archive::get_all_history))
+                .route("/archive/{slot_index}/{name}", put(archive::put))
+                .route("/archive/save/{slot_index}", post(archive::save))
+                .route(
+                    "/archive/rename/{slot_index}/{new_name}",
+                    post(archive::rename),
+                )
+                .route("/archive/restore/{slot_index}", delete(archive::restore))
+                .route("/archive/slot/{slot_index}", delete(archive::delete_slot))
+                .route("/action_log/list", post(action_log::list))
+                .route("/device/list", post(device::list))
+                .route("/device/update", post(device::update))
+                .route("/invitation/list", post(invitation::list))
+                .route("/invitation/update", post(invitation::update))
+                .route("/invitation/info", post(invitation::info))
+                .route("/invitation/{invitation_id}", delete(invitation::delete))
+                .route("/role/list", get(role::list))
+                .route("/user/register", post(user::register))
+                .route("/user/info/{user_id}", get(user::get_info))
+                .route("/user/update", post(user::update))
+                .route("/user/update_password", post(user::update_password))
+                .route(
+                    "/user/update_password_by_admin",
+                    post(user::update_password_by_admin),
+                )
+                .route("/user/{work_id}", delete(user::delete))
+                .route("/user/info/userList", post(user::list))
+                .route("/user/kick_out/{work_id}", delete(user::kick_out))
+                .layer(from_extractor::<crate::middlewares::ExtractAuthInfo>()),
+        );
 
     Ok(ret)
 }

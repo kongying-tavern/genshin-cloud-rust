@@ -13,6 +13,8 @@ pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现新增物品类型的逻辑
-    Ok(())
+    match _functions::functions::api::item_type::do_add(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

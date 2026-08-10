@@ -15,11 +15,13 @@ use _utils::models::item_type::ItemTypeListRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(self_flag): Path<bool>,
+    Path(self_flag): Path<i64>,
     Json(payload): Json<ItemTypeListRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现物品类型列表查询逻辑
-    Ok(())
+    match crate::functions::api::item_type::do_get_list(auth, self_flag != 0, payload).await {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }
 
 /// 列出所有物品类型
@@ -29,6 +31,8 @@ pub async fn get_list(
 pub async fn get_list_all(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现获取所有物品类型的逻辑
-    Ok(())
+    match crate::functions::api::item_type::do_get_list_all(auth).await {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

@@ -21,8 +21,10 @@ use _utils::models::marker::MarkerTweakRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn tweak(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<MarkerTweakRequest>,
+    Json(payload): Json<Vec<MarkerTweakRequest>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现点位调整的逻辑
-    Ok(())
+    match crate::functions::api::marker::do_tweak(auth, payload).await {
+        Ok(v) => Ok((StatusCode::OK, Json(v))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

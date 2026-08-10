@@ -13,5 +13,8 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<IconUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::icon::do_update(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
 
@@ -29,7 +29,7 @@ where
                 })?;
 
                 Ok(Self(user_agent.to_string()))
-            }
+            },
             None => Ok(Self("".to_string())),
         }
     }

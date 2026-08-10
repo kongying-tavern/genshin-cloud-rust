@@ -41,14 +41,16 @@ pub struct Model {
     #[sea_orm(indexed)]
     pub phone: Option<String>,
     /// 头像链接
+    #[sea_orm(column_type = "Text")]
     pub logo: Option<String>,
 
     /// 角色
     pub role_id: SystemUserRole,
     /// 权限策略
     #[sea_orm(column_type = "Json")]
-    pub access_policy: AccessPolicyList,
+    pub access_policy: Option<AccessPolicyList>,
     /// 备注
+    #[sea_orm(column_type = "Text")]
     pub remark: Option<String>,
 }
 
@@ -75,18 +77,18 @@ impl_safe_operation! {
     del_flag_column: Column::DelFlag
 }
 
-impl Into<SysUserVO> for Model {
-    fn into(self) -> SysUserVO {
+impl From<Model> for SysUserVO {
+    fn from(val: Model) -> Self {
         SysUserVO {
-            id: self.id,
-            username: self.username,
-            nickname: self.nickname,
-            qq: self.qq,
-            phone: self.phone,
-            logo: self.logo,
-            role_id: self.role_id,
-            access_policy: self.access_policy,
-            remark: self.remark,
+            id: val.id,
+            username: val.username,
+            nickname: val.nickname,
+            qq: val.qq,
+            phone: val.phone,
+            logo: val.logo,
+            role_id: val.role_id,
+            access_policy: val.access_policy.unwrap_or_default(),
+            remark: val.remark,
         }
     }
 }

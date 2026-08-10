@@ -1,20 +1,22 @@
 use anyhow::Result;
 
 use axum::{
-    extract::Path,
+    extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
 
 use crate::middlewares::ExtractAuthInfo;
 
-/// 删除标签
-/// 需要确保已经没有条目在使用这个标签，否则会删除失败
-/// DELETE /tag/{tagName}
+/// 软删除标签
+/// DELETE /tag/delete/{tagId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Path(tag_name): Path<String>,
+    Path(tag_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::tag::do_delete(auth, tag_id).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

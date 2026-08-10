@@ -7,64 +7,52 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
 use _functions::functions::system::user::*;
-use _utils::{
-    models::Pagination,
-    types::{AccessPolicyItemEnum, SystemUserRole},
-};
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum UserSort {
-    #[serde(rename = "createTime+")]
-    CreateTime,
-    #[serde(rename = "createTime-")]
-    CreateTimeReverse,
-    #[serde(rename = "id+")]
-    Id,
-    #[serde(rename = "id-")]
-    IdReverse,
-    #[serde(rename = "nickname+")]
-    Nickname,
-    #[serde(rename = "nickname-")]
-    NicknameReverse,
-}
+use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegisterParams {
     /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
+    pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
     /// 头像链接
-    pub logo: String,
+    pub logo: Option<String>,
     /// 备注
-    pub remark: String,
+    pub remark: Option<String>,
     /// 角色列表
-    pub role_id: SystemUserRole,
+    pub role_id: Option<SystemUserRole>,
     /// 用户名
     pub username: String,
+    /// 初始密码
+    pub password: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegisterQQParams {
     /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
+    pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
     /// 头像链接
-    pub logo: String,
+    pub logo: Option<String>,
     /// 备注
-    pub remark: String,
-    /// 角色列表
-    pub role_id: SystemUserRole,
-    /// 用户名
+    pub remark: Option<String>,
+    /// 用户名（QQ 号）
     pub username: String,
+    /// 初始密码
+    pub password: String,
+    /// QQ 号（与 Java 契约一致：注册时 username 即 QQ 号，缺省时与
+    /// username 相同；不做腾讯 OAuth 的 openid 语义）
+    pub qq: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdateParams {
     /// 用户 ID
-    pub id: i64,
+    pub user_id: Option<i64>,
+    /// 用户 ID（前端 InfoEditor 展开 userStore.info 时使用 `id` 字段）
+    pub id: Option<i64>,
     /// 权限策略
     pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
     /// 头像链接
@@ -78,24 +66,28 @@ pub struct UserUpdateParams {
     /// 备注
     pub remark: Option<String>,
     /// 角色列表
-    pub role_id: SystemUserRole,
+    pub role_id: Option<SystemUserRole>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdatePasswordParams {
     /// 权限策略
-    pub access_policy: Vec<AccessPolicyItemEnum>,
+    pub access_policy: Option<Vec<AccessPolicyItemEnum>>,
     /// ID
-    pub id: i64,
+    pub user_id: i64,
     /// 头像链接
-    pub logo: String,
+    pub logo: Option<String>,
     /// 旧密码
     pub old_password: String,
+    /// 新密码
+    pub new_password: Option<String>,
+    /// 新密码（前端兼容字段，与 new_password 二选一）
+    pub password: Option<String>,
     /// 备注
-    pub remark: String,
+    pub remark: Option<String>,
     /// 角色列表
-    pub role_id: SystemUserRole,
+    pub role_id: Option<SystemUserRole>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -113,66 +105,63 @@ pub struct UserListParams {
     #[serde(flatten)]
     pub pagination: Pagination,
     /// 昵称
-    pub nickname: String,
+    pub nickname: Option<String>,
     /// 角色 ID
     pub role_ids: Option<Vec<SystemUserRole>>,
     /// 排序优先级
-    pub sort: Option<Vec<UserSort>>,
+    pub sort: Option<Vec<_utils::types::UserSort>>,
     /// 用户名
-    pub username: String,
+    pub username: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // request body type for the kick-out endpoint (not yet wired)
 pub struct UserKickOutParams {
     pub work_id: String,
 }
 
-/// 注册用户
+/// 注册用户（仅管理员）
 /// POST /user/register
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn register(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserRegisterParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_register(
-        auth,
-        payload.access_policy,
-        payload.logo,
-        payload.remark,
-        payload.role_id,
-        payload.username,
+    Ok(Json(
+        do_register(
+            auth,
+            payload.access_policy,
+            payload.logo,
+            payload.remark,
+            payload.role_id,
+            payload.username,
+            payload.password,
+        )
+        .await
+        .map_err(crate::routes::internal_error)?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 
-/// 用QQ注册用户
+/// 用QQ注册用户（公开接口：QQ 授权后未登录调用）
 /// POST /user/register/qq
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(payload))]
 pub async fn register_qq(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_register_qq(
-        auth,
-        payload.access_policy,
-        payload.logo,
-        payload.remark,
-        payload.role_id,
-        payload.username,
+    Ok(Json(
+        do_register_qq(
+            payload.access_policy,
+            payload.logo,
+            payload.remark,
+            payload.username,
+            payload.password,
+            payload.qq,
+        )
+        .await
+        .map_err(crate::routes::internal_error)?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 
@@ -183,14 +172,10 @@ pub async fn get_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(user_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_get_info(auth, user_id)
-        .await
-        .map_err(|err| (StatusCode::NOT_FOUND, err.to_string()))?
-        .into_response())
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(
+        do_get_info(auth, user_id).await,
+    ))
+    .into_response())
 }
 
 /// 更新用户信息
@@ -200,110 +185,107 @@ pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdateParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_update(
-        auth,
-        payload.id,
-        payload.access_policy,
-        payload.logo,
-        payload.nickname,
-        payload.phone,
-        payload.qq,
-        payload.remark,
-        payload.role_id,
+    let uid = payload
+        .user_id
+        .or(payload.id)
+        .ok_or((StatusCode::BAD_REQUEST, "user id is required".to_string()))?;
+    Ok(Json(
+        do_update(
+            auth,
+            uid,
+            payload.access_policy,
+            payload.logo,
+            payload.nickname,
+            payload.phone,
+            payload.qq,
+            payload.remark,
+            payload.role_id,
+        )
+        .await
+        .map_err(|(code, msg)| {
+            (
+                StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                msg,
+            )
+        })?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 
 /// 更新用户密码
 /// POST /user/update_password
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_update_password(
-        auth,
-        payload.access_policy,
-        payload.id,
-        payload.logo,
-        payload.old_password,
-        payload.remark,
-        payload.role_id,
+    let new_pw = payload.new_password.or(payload.password);
+    let Some(new_pw) = new_pw else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "new password is required".to_string(),
+        ));
+    };
+    Ok(Json(
+        do_update_password(auth, payload.user_id, payload.old_password, new_pw)
+            .await
+            .map_err(|(code, msg)| {
+                (
+                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    msg,
+                )
+            })?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 
 /// 更新用户密码（管理员）
 /// POST /user/update_password_by_admin
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(auth, payload))]
 pub async fn update_password_by_admin(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(
+    Ok(Json(
         do_update_password_by_admin(auth, payload.password, payload.user_id)
             .await
-            .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
-            .into_response(),
+            .map_err(crate::routes::internal_error)?,
     )
+    .into_response())
 }
 
 /// 删除用户
 /// DELETE /user/{workId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_delete(auth, work_id)
+    do_delete(auth, work_id)
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
-        .into_response())
+        .map_err(crate::routes::internal_error)?;
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
 }
 
 /// 用户信息(批量查询)
 /// POST /user/info/list
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserListParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_list(
-        auth,
-        payload.pagination,
-        payload.nickname,
-        payload.role_ids,
-        payload
-            .sort
-            .map(|sorts| sorts.into_iter().map(|s| format!("{:?}", s)).collect()),
-        payload.username,
+    Ok(Json(
+        do_list(
+            auth,
+            payload.pagination,
+            payload.nickname,
+            payload.role_ids,
+            payload.sort,
+            payload.username,
+        )
+        .await
+        .map_err(crate::routes::internal_error)?,
     )
-    .await
-    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
     .into_response())
 }
 
@@ -311,15 +293,11 @@ pub async fn list(
 /// DELETE /user/kick_out/{workId}
 #[tracing::instrument(skip(auth))]
 pub async fn kick_out(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    if auth.info.role_id != SystemUserRole::Admin {
-        return Ok((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
-    }
-
-    Ok(do_kick_out(auth, work_id)
+    do_kick_out(auth, work_id)
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?
-        .into_response())
+        .map_err(crate::routes::internal_error)?;
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
 }

@@ -1,10 +1,6 @@
 use anyhow::Result;
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 
@@ -15,5 +11,8 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(icon_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::icon::do_delete(auth, icon_id).await {
+        Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

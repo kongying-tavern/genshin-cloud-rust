@@ -16,19 +16,25 @@ pub struct ItemRequest {
     pub area_id: i64,
     /// 默认刷新时间
     /// 单位为毫秒
+    #[serde(default)]
     pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
     pub default_content: Option<String>,
     /// 默认数量
+    #[serde(default)]
     pub default_count: i32,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
     /// 图标样式类型
+    #[serde(default)]
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品排序
+    #[serde(default)]
     pub sort_index: i32,
     /// 特殊物品标记
     /// 低位第一位: 前台是否显示
@@ -42,24 +48,35 @@ pub struct ItemAddRequest {
     /// 地区 ID
     pub area_id: i64,
     /// 默认描述模板
+    #[serde(default)]
     pub default_content: String,
     /// 默认点位计数
+    #[serde(default)]
     pub default_count: i64,
     /// 默认刷新时间
     pub default_refresh_time: Option<i64>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品显示类型
+    #[serde(default)]
     pub icon_style_type: IconStyleType,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品名称
     pub name: String,
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
-    pub special_flag: i64,
+    /// 存量数据可能为 null，缺失或 null 均接受
+    #[serde(default)]
+    pub special_flag: Option<i64>,
     /// 物品类型 ID 列表
+    #[serde(default)]
     pub type_id_list: Vec<i64>,
 }
 
@@ -70,17 +87,28 @@ pub struct ItemUpdateData {
     /// 地区 ID
     pub area_id: i64,
     /// 默认描述模板
-    pub default_content: String,
+    /// 前端旧数据可能传 null，缺失或 null 均接受
+    #[serde(default)]
+    pub default_content: Option<String>,
     /// 默认点位计数
-    pub default_count: i64,
+    /// 存量数据可能为 null，缺失或 null 均接受
+    #[serde(default)]
+    pub default_count: Option<i64>,
     /// 默认刷新时间
     pub default_refresh_time: Option<i64>,
     /// 权限屏蔽标记
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 物品显示类型
-    pub icon_style_type: IconStyleType,
+    /// 存量数据可能为 null，缺失或 null 均接受
+    #[serde(default)]
+    pub icon_style_type: Option<IconStyleType>,
     /// 图标标签
-    pub icon_tag: String,
+    #[serde(default)]
+    pub icon_id: i64,
+    /// 图标标签名（前端以 iconTag 提交；iconId 为 0 时按此查 tag 表解析）
+    #[serde(default)]
+    pub icon_tag: Option<String>,
     /// 物品 ID
     pub id: i64,
     /// 物品名称
@@ -88,8 +116,11 @@ pub struct ItemUpdateData {
     /// 排序
     pub sort_index: Option<i64>,
     /// 特殊物品标记，二进制表示；低位第一位：是否为显示物品
-    pub special_flag: i64,
+    /// 存量数据可能为 null，缺失或 null 均接受
+    #[serde(default)]
+    pub special_flag: Option<i64>,
     /// 物品类型 ID 列表
+    #[serde(default)]
     pub type_id_list: Vec<i64>,
 }
 
@@ -148,4 +179,84 @@ pub struct ItemListRequest {
 
     #[serde(flatten)]
     pub page: Pagination,
+}
+
+/// 物品返回值 VO
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemVO {
+    pub version: i64,
+    pub id: i64,
+    pub create_time: f64,
+    pub update_time: Option<f64>,
+    pub creator_id: Option<i64>,
+    pub updater_id: Option<i64>,
+    pub name: String,
+    pub area_id: i64,
+    pub default_refresh_time: i64,
+    pub default_content: Option<String>,
+    pub default_count: i32,
+    pub icon_tag: Option<String>,
+    /// 图标 ID（远程 schema 列）
+    pub icon_id: i64,
+    pub icon_style_type: crate::types::IconStyleType,
+    pub hidden_flag: crate::types::HiddenFlag,
+    pub sort_index: i32,
+    pub special_flag: Option<i64>,
+    /// 所属物品类型（`item_type_link`），Java `ItemVo.typeIdList`
+    /// 前端按类型过滤/分组物品，缺失会导致筛选面板恒空。
+    #[serde(default)]
+    pub type_id_list: Vec<i64>,
+    /// 点位数量（`marker_item_link` 计数），Java `ItemVo.count`
+    #[serde(default)]
+    pub count: Option<i64>,
+    /// 点位数量分组（Java `ItemVo.countSplit`；暂未实现，恒为 null）
+    #[serde(default)]
+    pub count_split: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemListResponse {
+    pub total: i64,
+    #[serde(rename = "record")]
+    pub items: Vec<ItemVO>,
+}
+
+/// 公用物品 VO（`item_common` 列表）：ItemVO + itemId。
+/// 前端按 `itemId` 关联/操作公用物品，而 ItemVO 主键是 `id`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAreaPublicVo {
+    /// 物品 ID（与 ItemVO.id 一致）
+    pub item_id: i64,
+    #[serde(flatten)]
+    pub item: ItemVO,
+}
+
+/// 公用物品列表响应
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAreaPublicListResponse {
+    pub total: i64,
+    #[serde(rename = "record")]
+    pub items: Vec<ItemAreaPublicVo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemSingleResponse {
+    pub item: ItemVO,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemAddResponse {
+    pub id: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyCountResponse {
+    pub count: i64,
 }

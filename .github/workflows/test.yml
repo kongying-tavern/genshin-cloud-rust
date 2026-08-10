@@ -1,0 +1,125 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: true
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run unit tests
+        run: cargo test --workspace --lib --no-fail-fast
+
+      - name: Run integration tests
+        run: cargo test --workspace --tests --no-fail-fast
+
+  # DB-backed integration tests. Provisions a Postgres service and runs the
+  # `user_db` test binary (and any future `*_db` binaries). Tests self-skip when
+  # GCS_TEST_DB is unset, so this job is the only place that actually exercises
+  # them. Mirrors tests/docker/docker-compose.e2e.yml credentials.
+  integration:
+    name: DB integration
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: genshin_map
+          POSTGRES_PASSWORD: genshin_map
+          POSTGRES_DB: genshin_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U genshin_map"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      GCS_TEST_DB: "1"
+      DB_USERNAME: genshin_map
+      DB_PASSWORD: genshin_map
+      DB_DATABASE: genshin_map
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run DB-backed tests
+        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --no-fail-fast
+
+  # Delegates to the org reusable workflow, which lints both the PR title
+  # (the squash-merge subject) and every commit in the PR/push range.
+  commit-msg:
+    name: Commit Message Lint
+    uses: celestia-island/celestia-devtools/.github/workflows/commit-msg-lint.yml@master
+
+  secrets-scan:
+    name: Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Trufflehog Secrets Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: .
+          extra_args: --only-verified

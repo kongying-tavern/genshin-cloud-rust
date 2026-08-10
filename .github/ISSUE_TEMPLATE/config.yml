@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/kongying-tavern/genshin-cloud-rust/tree/dev/docs
+    about: Browse the documentation before opening an issue.

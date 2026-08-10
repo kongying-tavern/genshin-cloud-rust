@@ -1,21 +1,19 @@
 use anyhow::Result;
 
-use axum::{
-    extract::Json,
-    http::StatusCode,
-    response::IntoResponse,
-};
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::tag_type::TagTypeAddRequest;
+use _utils::models::TagTypeAddRequest;
 
-/// 新增分类
-/// 类型id在创建后返回
+/// 新增标签类型
 /// PUT /tag_type/add
 #[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<TagTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::tag_type::do_add(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

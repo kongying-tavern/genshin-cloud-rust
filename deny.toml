@@ -1,0 +1,52 @@
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+unmaintained = "workspace"
+unsound = "workspace"
+yanked = "warn"
+ignore = [
+    # Marvin Attack (timing sidechannel in RSA decryption): the `rsa` crate is
+    # used for RS256 token signing and RSA public-key export (JWKS) only when
+    # JWT_RSA_PRIVATE_KEY_PEM is configured — there is no RSA *decryption*
+    # path anywhere in this workspace (tokens are verified with the public
+    # key; HMAC HS256 is the default when no RSA key is set). The advisory
+    # targets PKCS#1 v1.5 decryption timing, which is never exercised.
+    "RUSTSEC-2023-0071",
+]
+
+[licenses]
+version = 2
+private = { ignore = true }
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    # Permissive licenses required by the current dependency graph:
+    "bzip2-1.0.6",        # libbz2-rs-sys (via bzip2)
+    "NCSA",               # libfuzzer-sys (via image/ravif)
+    "CDLA-Permissive-2.0", # webpki-roots / webpki-root-certs (via sqlx, reqwest)
+    "BSL-1.0",            # xxhash-rust (via redis)
+]
+confidence-threshold = 0.8
+
+[[licenses.clarify]]
+name = "ring"
+expression = "MIT AND ISC AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

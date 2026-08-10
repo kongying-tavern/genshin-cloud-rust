@@ -1,17 +1,32 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{
+    body::Bytes,
+    extract::Path,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 
 use crate::middlewares::ExtractAuthInfo;
+use axum::http::header;
 
-/// 点位分页数据
-/// 查询分页点位信息，返回bz2压缩格式的byte数组
+/// 点位分页数据（GZIP 压缩二进制）
 /// GET /marker_doc/list_page_bin/{md5}
 #[tracing::instrument(skip(auth))]
 pub async fn list_page_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(md5): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: 实现根据md5获取点位分页数据的逻辑
-    Ok(())
+) -> Result<Response, (StatusCode, String)> {
+    match _functions::functions::api::marker_doc::do_list_page_bin(auth, md5).await {
+        Ok(bytes) => Ok((
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, "application/octet-stream"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            Bytes::from(bytes),
+        )
+            .into_response()),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

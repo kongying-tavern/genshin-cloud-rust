@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString};
 
-use sea_orm::{prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, prelude::*};
 
 use super::HiddenFlag;
 
@@ -29,9 +29,7 @@ pub struct AccessPolicyItem {
     pub policy: AccessPolicyItemEnum,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, AsRefStr, EnumString, Display,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, EnumIter, AsRefStr, EnumString, Display)]
 pub enum AccessPolicyItemEnum {
     /// 与最后一次登录 IP 相同
     #[strum(serialize = "ip:same_last_ip")]
@@ -71,7 +69,108 @@ pub enum AccessPolicyItemEnum {
     DevBlockDisallowDevice,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
+/// 反序列化兼容历史/远程数据：`sys_user.access_policy` / `sys_user_invitation.access_policy`
+/// 中可能存无前缀格式（如 `same_last_ip`），与带前缀的 Java 契约（`ip:same_last_ip`）并存。
+/// 先去掉 `ip:` / `dev:` / `area:` 前缀再匹配变体；序列化仍输出带前缀格式（Java 契约）。
+impl<'de> Deserialize<'de> for AccessPolicyItemEnum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bare = s
+            .strip_prefix("ip:")
+            .or_else(|| s.strip_prefix("dev:"))
+            .or_else(|| s.strip_prefix("area:"))
+            .unwrap_or(s.as_str());
+        match bare {
+            "same_last_ip" => Ok(Self::IpSameLastIp),
+            "pass_allow_ip" => Ok(Self::IpPassAllowIp),
+            "block_disallow_ip" => Ok(Self::IpBlockDisallowIp),
+            "same_last_region" => Ok(Self::IpSameLastRegion),
+            "pass_allow_region" => Ok(Self::IpPassAllowRegion),
+            "block_disallow_region" => Ok(Self::IpBlockDisallowRegion),
+            "same_last_device" => Ok(Self::DevSameLastDevice),
+            "pass_allow_device" => Ok(Self::DevPassAllowDevice),
+            "block_disallow_device" => Ok(Self::DevBlockDisallowDevice),
+            _ => Err(serde::de::Error::custom(format!(
+                "unknown access policy item: {s}"
+            ))),
+        }
+    }
+}
+
+/// Sort keys for the user list. The serde renames are the **wire contract**
+/// ("createTime+", "createTime-", "id+", "id-", "nickname+", "nickname-") —
+/// the business layer matches the enum variants directly, so renaming a
+/// variant is a compile error instead of a silently-ignored sort key.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum UserSort {
+    #[serde(rename = "createTime+")]
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "nickname+")]
+    Nickname,
+    #[serde(rename = "nickname-")]
+    NicknameReverse,
+}
+
+/// Sort keys for the user device list（wire 契约与 UserSort 一致：字段+ 升序 / 字段- 降序）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum DeviceSort {
+    #[serde(rename = "deviceId+")]
+    DeviceId,
+    #[serde(rename = "deviceId-")]
+    DeviceIdReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "ipv4+")]
+    Ipv4,
+    #[serde(rename = "ipv4-")]
+    Ipv4Reverse,
+    #[serde(rename = "lastLoginTime+")]
+    LastLoginTime,
+    #[serde(rename = "lastLoginTime-")]
+    LastLoginTimeReverse,
+    #[serde(rename = "status+")]
+    Status,
+    #[serde(rename = "status-")]
+    StatusReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+}
+
+/// Sort keys for the user invitation list（wire 契约：createTime± / id± / updateTime± / username±）。
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+pub enum InvitationSort {
+    #[serde(rename = "createTime+")]
+    CreateTime,
+    #[serde(rename = "createTime-")]
+    CreateTimeReverse,
+    #[serde(rename = "id+")]
+    Id,
+    #[serde(rename = "id-")]
+    IdReverse,
+    #[serde(rename = "updateTime+")]
+    UpdateTime,
+    #[serde(rename = "updateTime-")]
+    UpdateTimeReverse,
+    #[serde(rename = "username+")]
+    Username,
+    #[serde(rename = "username-")]
+    UsernameReverse,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {
     /// 系统管理员
@@ -88,7 +187,53 @@ pub enum SystemUserRole {
     Visitor = 5,
 }
 
+/// 序列化为**数字**（Java 契约；前端 `roleId` 为数字枚举值）。
+impl Serialize for SystemUserRole {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i32(*self as i32)
+    }
+}
+
+/// 反序列化同时接受数字（新契约/前端）与枚举名（旧数据）。
+impl<'de> Deserialize<'de> for SystemUserRole {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let v = serde_json::Value::deserialize(deserializer)?;
+        match v {
+            serde_json::Value::Number(n) => match n.as_i64() {
+                Some(0) => Ok(SystemUserRole::Admin),
+                Some(1) => Ok(SystemUserRole::MapManager),
+                Some(2) => Ok(SystemUserRole::MapNeigui),
+                Some(3) => Ok(SystemUserRole::MapPunctuate),
+                Some(4) => Ok(SystemUserRole::MapUser),
+                Some(5) => Ok(SystemUserRole::Visitor),
+                _ => Err(serde::de::Error::custom(format!("unknown roleId {n}"))),
+            },
+            serde_json::Value::String(s) => match s.as_str() {
+                "Admin" => Ok(SystemUserRole::Admin),
+                "MapManager" => Ok(SystemUserRole::MapManager),
+                "MapNeigui" => Ok(SystemUserRole::MapNeigui),
+                "MapPunctuate" => Ok(SystemUserRole::MapPunctuate),
+                "MapUser" => Ok(SystemUserRole::MapUser),
+                "Visitor" => Ok(SystemUserRole::Visitor),
+                _ => Err(serde::de::Error::custom(format!("unknown roleId {s}"))),
+            },
+            _ => Err(serde::de::Error::custom(
+                "roleId must be an integer or enum name",
+            )),
+        }
+    }
+}
+
 impl SystemUserRole {
+    /// Check whether this role may access content tagged with `flag`.
+    /// Kept for the role-gated query layer (RBAC); not yet wired into every route.
+    #[allow(dead_code)]
     fn is_available(self, flag: HiddenFlag) -> bool {
         if matches!(flag, HiddenFlag::Visible | HiddenFlag::Suprise) {
             return true;
@@ -97,10 +242,10 @@ impl SystemUserRole {
         match self {
             SystemUserRole::Admin | SystemUserRole::MapNeigui => {
                 matches!(flag, HiddenFlag::Hidden | HiddenFlag::Spy)
-            }
+            },
             SystemUserRole::MapManager | SystemUserRole::MapPunctuate => {
                 matches!(flag, HiddenFlag::Hidden)
-            }
+            },
             SystemUserRole::MapUser | SystemUserRole::Visitor => false,
         }
     }

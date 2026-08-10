@@ -37,11 +37,14 @@ pub async fn oauth(
     ExtractIP(ip): ExtractIP,
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
-    mut form: Multipart,
+    form: Option<Multipart>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let ip = ip.unwrap_or(native_ip);
 
-    let mut form_fields = {
+    // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
+    // 此时 Multipart extractor 会因 Content-Type 不匹配而 415 —— 用 Option 兜底，
+    // 仅 password 模式（multipart/form-data）才消费 form 字段。
+    let mut form_fields = if let Some(mut form) = form {
         let mut ret = HashMap::new();
         while let Some(field) = form.next_field().await.map_err(|err| {
             (
@@ -62,6 +65,8 @@ pub async fn oauth(
             ret.insert(name, value);
         }
         ret
+    } else {
+        HashMap::new()
     };
     if !form_fields.is_empty() {
         let grant_type = form_fields
@@ -80,7 +85,7 @@ pub async fn oauth(
         return Ok(Json(
             oauth_password_login(username, password, ip, user_agent)
                 .await
-                .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+                .map_err(crate::routes::internal_error)?,
         )
         .into_response());
     }
@@ -99,10 +104,10 @@ pub async fn oauth(
             return Ok(Json(
                 oauth_client_credentials(scope)
                     .await
-                    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+                    .map_err(crate::routes::internal_error)?,
             )
             .into_response());
-        }
+        },
         LoginQueryType::RefreshToken => {
             let refresh_token = query.refresh_token.ok_or_else(|| {
                 (
@@ -110,10 +115,10 @@ pub async fn oauth(
                     "Refresh token is required for refresh token grant type".into(),
                 )
             })?;
-            oauth_refresh(refresh_token)
+            let ret = oauth_refresh(refresh_token, ip, user_agent)
                 .await
-                .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
-            return Ok(StatusCode::NO_CONTENT.into_response());
-        }
+                .map_err(crate::routes::internal_error)?;
+            return Ok(Json(ret).into_response());
+        },
     }
 }

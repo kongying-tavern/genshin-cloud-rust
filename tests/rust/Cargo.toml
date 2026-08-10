@@ -1,0 +1,97 @@
+[package]
+name = "genshin-cloud-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+# Workspace crates under test
+_utils = { path = "../../packages/utils" }
+_database = { path = "../../packages/database" }
+_functions = { path = "../../packages/functions" }
+
+# sea-orm traits (EntityName, Iterable) for compile-time entity assertions;
+# Schema + ConnectionTrait for DB-backed tests to create tables on the fly.
+sea-orm = { workspace = true }
+
+# Test runtime
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+md5 = { workspace = true }
+minio = { workspace = true }
+jsonwebtoken = { workspace = true }
+uuid = { workspace = true }
+redis = { workspace = true }
+flate2 = { workspace = true }
+
+[dev-dependencies]
+tokio-test = "^0.4"
+regex-lite = "^0.1"
+base64 = { workspace = true }
+rsa = { version = "^0.9", features = ["pem"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[[test]]
+name = "utils_smoke"
+path = "tests/utils_smoke.rs"
+
+[[test]]
+name = "area_domain"
+path = "tests/area/area_domain_test.rs"
+
+[[test]]
+name = "marker_domain"
+path = "tests/marker/marker_domain_test.rs"
+
+[[test]]
+name = "schema"
+path = "tests/schema_test.rs"
+
+# DB-backed integration test. Gated on the GCS_TEST_DB env var (set by the CI
+# `integration` job, which also provisions a Postgres service). Skips cleanly
+# when no database is available, so `cargo test --workspace` stays green
+# everywhere else.
+[[test]]
+name = "user_db"
+path = "tests/user_db_test.rs"
+
+# DB-backed API business-assertion test. Same GCS_TEST_DB gate as user_db;
+# seeds area + item rows and asserts the business-layer functions return real
+# data (not just 401/403 smoke checks). Covers area list/add and the
+# BinaryMD5 item_doc pipeline.
+[[test]]
+name = "api_db"
+path = "tests/api_db_test.rs"
+
+# MinIO-backed res-upload test. Same GCS_TEST_DB gate plus a reachable MinIO
+# instance (MINIO_ACCESS_KEY / MINIO_SECRET_KEY set). Skips when either is
+# missing, so CI (which only provisions Postgres) stays green.
+[[test]]
+name = "res_db"
+path = "tests/res_db_test.rs"
+
+# JWKS key-rotation unit test. No DB; sets JWT_* env vars before touching the
+# lazy key material (own process, same pattern as api_db).
+[[test]]
+name = "jwks_rotation"
+path = "tests/jwks_rotation_test.rs"
+
+# Wire-format compatibility unit tests. No DB: inline sample constants copied
+# from the real-database audit (db_audit.md) verify ser/de against the
+# production data shapes (access_policy prefixes, history content snapshots,
+# marker position strings, notice channel arrays, link_action enums, bcrypt
+# password prefix). One ignored test documents the P1 unprefixed
+# access_policy gap (rows id=194/195).
+[[test]]
+name = "wire_format"
+path = "tests/wire_format_test.rs"
+
+# Redis second-level BinaryMD5 cache test. Same GCS_TEST_DB gate plus a
+# reachable Redis (backend's redis_conn must be Some). Skips when either is
+# missing, so CI (which only provisions Postgres) stays green.
+[[test]]
+name = "redis_cache_db"
+path = "tests/redis_cache_db_test.rs"

@@ -23,8 +23,7 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 点位签戳
-    /// 用于兼容旧点位 ID
-    #[deprecated = "仅用于兼容旧数据，现已不再使用"]
+    /// 用于兼容旧点位 ID（仅兼容历史数据，新数据不再写入；业务层仍需读取旧记录）
     pub marker_stamp: Option<String>,
     /// 点位名称
     pub marker_title: Option<String>,
@@ -32,8 +31,10 @@ pub struct Model {
     /// 形如 "{x},{y}" 的格式，其中 x 与 y 均为浮点数文本
     pub position: String,
     /// 点位说明
-    pub content: String,
+    #[sea_orm(column_type = "Text")]
+    pub content: Option<String>,
     /// 点位图片
+    #[sea_orm(column_type = "Text")]
     pub picture: Option<String>,
     /// 点位初始标记者
     pub marker_creator_id: i64,

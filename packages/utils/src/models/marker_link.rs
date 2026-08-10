@@ -31,6 +31,8 @@ pub enum LineType {
     Dashed,
     #[serde(rename = "SOLID")]
     Solid,
+    #[serde(rename = "DOTTED")]
+    Dotted,
 }
 
 /// 点位关联路径边
@@ -71,14 +73,18 @@ pub struct MarkerLinkagePathEdge {
 pub struct MarkerLinkage {
     /// 起始点点位 ID
     pub from_id: i64,
-    /// 关联 ID
-    pub id: i64,
+    /// 关联 ID（新增时可不传）
+    #[serde(default)]
+    pub id: Option<i64>,
     /// 关联关系
     pub link_action: Option<MarkerLinkageLinkAction>,
     /// 路线
     pub path: Option<Vec<Option<MarkerLinkagePathEdge>>>,
     /// 终止点点位 ID
     pub to_id: i64,
+    /// 是否反向（前端箭头方向契约 linkReverse；缺省 false）
+    #[serde(default)]
+    pub link_reverse: Option<bool>,
 }
 
 /// 点位关联列表查询请求
@@ -95,4 +101,48 @@ pub struct MarkerLinkDeleteRequest {
     pub group_ids: Option<Vec<String>>,
     /// 关联 ID
     pub ids: Option<Vec<i64>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkVO {
+    /// 乐观锁
+    pub version: i64,
+    /// ID
+    pub id: i64,
+    /// 创建人
+    pub creator_id: Option<i64>,
+    /// 更新人
+    pub updater_id: Option<i64>,
+    /// 更新时间（毫秒时间戳）
+    pub update_time: Option<f64>,
+    /// 组 ID
+    pub group_id: Option<String>,
+    /// 起始点点位 ID
+    pub from_id: i64,
+    /// 终止点点位 ID
+    pub to_id: i64,
+    /// 关联操作类型
+    pub link_action: Option<crate::types::MarkerLinkageLinkAction>,
+    /// 是否反向
+    pub link_reverse: Option<bool>,
+    /// 路线
+    pub path: Option<Vec<Option<MarkerLinkagePathEdge>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkListResponse(pub Vec<MarkerLinkVO>);
+
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkGraphResponse(pub HashMap<String, Vec<MarkerLinkVO>>);
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarkerLinkUpsertResult {
+    pub id: i64,
+    pub status: String,
 }

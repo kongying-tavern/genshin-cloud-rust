@@ -13,5 +13,8 @@ pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::area::do_add(auth, payload).await {
+        Ok(resp) => Ok((StatusCode::OK, Json(resp))),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }

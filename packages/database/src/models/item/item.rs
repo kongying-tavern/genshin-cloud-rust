@@ -37,12 +37,13 @@ pub struct Model {
     pub default_refresh_time: i64,
     /// 默认描述模板
     /// 用于提交新物品点位时的描述模板
+    #[sea_orm(column_type = "Text")]
     pub default_content: Option<String>,
     /// 默认数量
     #[sea_orm(default_value = 1)]
     pub default_count: i32,
-    /// 图标标签
-    pub icon_tag: String,
+    /// 图标 ID（0 = 无图标，远程 schema 无 icon_tag 列）
+    pub icon_id: i64,
     /// 图标样式类型
     pub icon_style_type: IconStyleType,
     /// 权限屏蔽标记
@@ -77,12 +78,6 @@ pub enum Relation {
         to = "super::super::area::area::Column::Id"
     )]
     AreaId,
-    #[sea_orm(
-        belongs_to = "super::super::icon::icon::Entity",
-        from = "Column::IconTag",
-        to = "super::super::icon::icon::Column::Name"
-    )]
-    IconTag,
 }
 
 impl_safe_operation! {

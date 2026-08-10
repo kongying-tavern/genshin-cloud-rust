@@ -1,0 +1,23 @@
+name: Cargo Deny
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deny-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2

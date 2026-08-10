@@ -1,0 +1,59 @@
+# 空荧酒馆后端线上部署编排（试部署用）
+#
+# 用法：
+#   cp .env.example .env        # 按需修改（DB/REDIS/MINIO/JWT_SECRET）
+#   ./deploy.sh
+#
+# 镜像：ghcr.io/kongying-tavern/genshin-cloud-rust（master push 自动构建 latest + sha-*）
+# 回滚指定版本：IMAGE_TAG=sha-abc123 docker compose up -d
+
+services:
+  gcs-backend:
+    image: ghcr.io/kongying-tavern/genshin-cloud-rust:${IMAGE_TAG:-latest}
+    container_name: gcs-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # 容器内监听 80（main.rs 默认 PORT=80）；宿主机端口由 .env 的 HOST_PORT 控制
+      PORT: "80"
+      # Redis 走 compose 内网（服务名 gcs-redis）
+      REDIS_HOST: gcs-redis
+      REDIS_PORT: "6379"
+    ports:
+      - "${HOST_PORT:-8101}:80"
+    depends_on:
+      gcs-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/.well-known/jwks.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # 会话/限流 Redis（后端 Redis 不可用时会降级，但线上应保持可用）
+  gcs-redis:
+    image: redis:7-alpine
+    container_name: gcs-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    # 仅供本机运维检查，不暴露公网
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - gcs-redis-data:/data
+
+volumes:
+  gcs-redis-data:
+

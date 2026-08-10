@@ -1,4 +1,4 @@
-use sea_orm::{entity::prelude::*, FromJsonQueryResult};
+use sea_orm::{FromJsonQueryResult, entity::prelude::*};
 use serde::{Deserialize, Serialize};
 
 use _utils::{impl_safe_operation, types::HiddenFlag};
@@ -33,15 +33,16 @@ pub struct Model {
     #[sea_orm(indexed)]
     pub hidden_flag: HiddenFlag,
     /// 视频地址
+    #[sea_orm(column_type = "Text")]
     pub video: Option<String>,
     /// 额外信息
-    pub extra: serde_json::Value,
+    pub extra: Option<serde_json::Value>,
     /// 创建人昵称
     pub creator_nickname: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
-pub struct MarkerListWrapper(Vec<i64>);
+pub struct MarkerListWrapper(pub Vec<i64>);
 
 #[derive(Debug, Clone, Copy, EnumIter, DeriveRelation)]
 pub enum Relation {

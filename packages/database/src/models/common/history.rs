@@ -26,6 +26,7 @@ pub struct Model {
     pub del_flag: bool,
 
     /// 内容
+    #[sea_orm(column_type = "Text")]
     pub content: String,
     /// MD5
     pub md5: Option<String>,

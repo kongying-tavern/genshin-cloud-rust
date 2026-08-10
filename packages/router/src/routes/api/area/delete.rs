@@ -1,8 +1,10 @@
 use anyhow::Result;
 
+use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除地区
 /// DELETE /area/{areaId}
@@ -14,5 +16,8 @@ pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(area_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    Ok(())
+    match _functions::functions::api::area::do_delete(auth, area_id).await {
+        Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
+        Err(e) => Err(crate::routes::internal_error(e)),
+    }
 }
