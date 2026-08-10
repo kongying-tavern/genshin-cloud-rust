@@ -131,6 +131,11 @@ pub async fn do_update(
         }
     }
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -320,6 +325,11 @@ pub async fn do_join_type(
         active.insert(db).await?;
     }
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -371,6 +381,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
         .exec(db)
         .await?;
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(())))
 }
 
@@ -435,6 +450,11 @@ pub async fn do_copy_to_area(
         }
     }
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(new_ids)))
 }
 
@@ -506,6 +526,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     }
 
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(new_id)))
 }
 

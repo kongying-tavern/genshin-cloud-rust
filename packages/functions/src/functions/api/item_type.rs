@@ -79,6 +79,11 @@ pub async fn do_update(
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -125,6 +130,11 @@ pub async fn do_move_to_target(
         refresh_is_final(db, p).await?;
     }
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -281,6 +291,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     // is_final 重算：被删类型的父级若再无子级，恢复为末端类型
     refresh_is_final(db, root_parent_id).await?;
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -324,6 +339,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     // 父级新增子级后不再是末端类型
     refresh_is_final(&DB_CONN.wait().pg_conn, payload.parent_id).await?;
     super::binary_doc::invalidate_item_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(res.id)))
 }
 

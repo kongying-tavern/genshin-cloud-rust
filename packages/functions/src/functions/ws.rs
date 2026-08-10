@@ -13,6 +13,7 @@
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use tokio::sync::mpsc;
@@ -112,6 +113,29 @@ pub fn ws_send_to_users(user_ids: &[String], event: &str, data: Value) {
             }
         }
     }
+}
+
+/// 防抖推送窗口：对齐 Java `server.cache.debounce-delay` 默认 30s，
+/// 写操作触发的缓存清理事件（`*BinaryPurged`）在窗口内合并为一次广播，
+/// 避免批量操作（如逐条导入物品）触发事件风暴。
+pub const PURGE_DEBOUNCE_WINDOW: Duration = Duration::from_secs(30);
+
+/// 各事件最近一次广播时间（防抖状态）。
+static LAST_PUSH: Lazy<Mutex<HashMap<String, Instant>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// 带防抖的全员广播：同一事件在窗口内只推一次（窗口内重复调用静默丢弃）。
+pub fn ws_broadcast_debounced(event: &str, data: Value, window: Duration) {
+    let now = Instant::now();
+    {
+        let mut last = LAST_PUSH.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(prev) = last.get(event)
+            && now.duration_since(*prev) < window
+        {
+            return;
+        }
+        last.insert(event.to_string(), now);
+    }
+    ws_broadcast(event, data);
 }
 
 #[cfg(test)]

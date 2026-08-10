@@ -412,6 +412,21 @@ pub async fn do_tweak(
     }
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast("MarkerTweaked", serde_json::json!(touched_ids));
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     let item_map = marker_item_map(db, &touched_ids).await?;
     let mut arr = Vec::new();
     for chunk in touched_ids.chunks(1000) {
@@ -623,6 +638,21 @@ pub async fn do_add_single(
     super::binary_doc::invalidate_doc_cache().await;
     // 直接返回裸 id，前端期望 data 为 number
     super::super::ws::ws_broadcast("MarkerAdded", serde_json::json!(res.id));
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(res.id)))
 }
 
@@ -679,6 +709,21 @@ pub async fn do_update_single(
 
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast("MarkerUpdated", serde_json::json!(payload.id));
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
 
@@ -924,5 +969,20 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerE
 
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast("MarkerDeleted", serde_json::json!(id));
+    super::super::ws::ws_broadcast_debounced(
+        "ItemBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
 }
