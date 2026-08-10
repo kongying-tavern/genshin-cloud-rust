@@ -17,7 +17,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 TAG="${1:-latest}"
-IMAGE="ghcr.io/langyo/genshin-cloud-rust:${TAG}"
+IMAGE="ghcr.io/kongying-tavern/genshin-cloud-rust:${TAG}"
 ENV_FILE="${ENV_FILE:-.env}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -57,3 +57,4 @@ done
 echo "[WARN] 等待超时，当前状态：" >&2
 docker compose ps >&2
 exit 1
+
