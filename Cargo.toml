@@ -48,7 +48,7 @@ bcrypt = "^0.19"
 # jsonwebtoken 10 requires an explicit crypto provider. Use rust_crypto (ring)
 # to stay consistent with the workspace's aws-lc-free rustls+ring policy.
 # use_pem enables RSA key loading from PEM (RS256 signing, JWKS).
-jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto", "use_pem"] }
+jsonwebtoken = { version = "^11", default-features = false, features = ["rust_crypto", "use_pem"] }
 
 md5 = "^0.8"
 # moka: in-process cache for the BinaryMD5 archive export (Java uses Caffeine).
