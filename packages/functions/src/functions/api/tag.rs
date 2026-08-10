@@ -53,6 +53,11 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
 
     let res = tag_model::Entity::insert(am).exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(TagAddResponse {
         id: res.last_insert_id,
     })
@@ -91,6 +96,11 @@ pub async fn do_update(
             .await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -165,6 +175,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -213,6 +228,11 @@ pub async fn do_update_type(
     }
 
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -247,6 +267,11 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
     .exec(db)
     .await?;
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -264,6 +289,11 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
     am.del_flag = Set(true);
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(true)))
 }
 
@@ -285,6 +315,11 @@ pub async fn do_update_by_name(
     am.icon_id = Set(icon_id);
     tag_model::Entity::update_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
+    super::super::ws::ws_broadcast_debounced(
+        "IconTagBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(true)))
 }
 

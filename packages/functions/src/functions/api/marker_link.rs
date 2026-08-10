@@ -117,6 +117,16 @@ pub async fn do_link(
             "markers": affected_markers
         }),
     );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
     Ok(CommonResponse::new(Ok(group_id)))
 }
 
@@ -228,6 +238,16 @@ pub async fn do_delete(
             "groups": groups,
             "markers": markers
         }),
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerLinkageBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "groups": groups,
