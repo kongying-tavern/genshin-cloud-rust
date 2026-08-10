@@ -28,6 +28,8 @@ fn sign_with(now: chrono::DateTime<chrono::Utc>, private_pem: &str) -> String {
     let claims = _utils::jwt::Claims {
         sub: 42,
         jti: uuid::Uuid::new_v4(),
+        iss: "genshin-cloud".to_string(),
+        aud: "genshin-map".to_string(),
         iat: now,
         exp: now + chrono::Duration::days(1),
         token_type: None,

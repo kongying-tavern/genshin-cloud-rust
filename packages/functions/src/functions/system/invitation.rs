@@ -204,10 +204,12 @@ pub async fn do_consume(
     let username = username
         .filter(|u| !u.is_empty())
         .unwrap_or_else(|| code.clone());
-    // 前端注册流程必带密码；缺省时生成随机密码（邀请人可再通过管理员改密）
+    // 前端注册流程必带密码；缺省时生成随机密码（邀请人可再通过管理员改密）。
+    // 随机短串（uuid 前 12 位）替代 `{code}_{timestamp}`：后者可从邀请码与
+    // 时间戳推算，随机串不可推算。
     let password = password
         .filter(|p| !p.is_empty())
-        .unwrap_or_else(|| format!("{}_{}", code, now.and_utc().timestamp()));
+        .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()[..12].to_string());
 
     // 事务内完成「查邀请 → 抢占消费 → 建用户」，防并发重复消费
     let txn = db.begin().await?;

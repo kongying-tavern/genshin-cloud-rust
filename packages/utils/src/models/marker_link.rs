@@ -82,6 +82,9 @@ pub struct MarkerLinkage {
     pub path: Option<Vec<Option<MarkerLinkagePathEdge>>>,
     /// 终止点点位 ID
     pub to_id: i64,
+    /// 是否反向（前端箭头方向契约 linkReverse；缺省 false）
+    #[serde(default)]
+    pub link_reverse: Option<bool>,
 }
 
 /// 点位关联列表查询请求

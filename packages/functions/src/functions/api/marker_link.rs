@@ -62,6 +62,9 @@ pub async fn do_link(
                 if let Some(action) = p.link_action {
                     am.link_action = Set(action);
                 }
+                if let Some(reverse) = p.link_reverse {
+                    am.link_reverse = Set(reverse);
+                }
                 am.path = Set(p.path.and_then(|v| serde_json::to_value(v).ok()));
                 linkage_model::Entity::update_safety(am)?.exec(db).await?;
                 continue;
@@ -85,7 +88,7 @@ pub async fn do_link(
             link_action: Set(p
                 .link_action
                 .unwrap_or(_utils::types::MarkerLinkageLinkAction::Trigger)),
-            link_reverse: Set(false),
+            link_reverse: Set(p.link_reverse.unwrap_or(false)),
             path: Set(p.path.and_then(|v| serde_json::to_value(v).ok())),
             extra: Set(None),
         };

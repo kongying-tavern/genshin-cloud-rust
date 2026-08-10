@@ -277,9 +277,15 @@ pub async fn get_result_cached(
         RESULT_CACHE.insert(key.clone(), entries.clone()).await;
         return Ok(entries);
     }
+    // compute 前记录 epoch：compute 期间若有写操作 invalidate（bump epoch），
+    // 计算结果是陈旧数据，复检不一致则丢弃回填（下次请求自然重新计算），
+    // 防止「失效 = 没失效」竞态把旧结果写进新 epoch 键。
+    let epoch_before = redis_epoch().await;
     let result = compute.await?;
-    RESULT_CACHE.insert(key.clone(), result.clone()).await;
-    redis_store(&key, &result).await;
+    if redis_epoch().await == epoch_before {
+        RESULT_CACHE.insert(key.clone(), result.clone()).await;
+        redis_store(&key, &result).await;
+    }
     Ok(result)
 }
 

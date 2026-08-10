@@ -26,11 +26,14 @@ where
             TypedHeader::<Authorization<Bearer>>::from_request_parts(parts, state).await
         {
             let token = bearer.token().to_string();
-            let (info, claims) = oauth_parse_token(token).await.map_err(|err| {
+            // 401 固定文案：不回显 verify_token 的内部错误（算法/签名细节）
+            let (info, claims) = oauth_parse_token(token).await.map_err(|_| {
                 (
                     StatusCode::UNAUTHORIZED,
-                    serde_json::to_string(&CommonResponse::<()>::new(Err(err)))
-                        .expect("Failed to serialize error response"),
+                    serde_json::to_string(&CommonResponse::<()>::new(Err(anyhow!(
+                        "Invalid or expired token"
+                    ))))
+                    .expect("Failed to serialize error response"),
                 )
                     .into_response()
             })?;
