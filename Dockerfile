@@ -47,9 +47,11 @@ FROM debian:bookworm-slim AS runtime
 # ca-certificates: reqwest loads the system root store via rustls-native-certs
 # for outbound HTTPS (CDN proxy, OAuth, etc.).
 # tini: reaps zombies and forwards SIGTERM to tokio for graceful shutdown.
+# wget: container healthcheck (jwks probe).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         tini \
+        wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
