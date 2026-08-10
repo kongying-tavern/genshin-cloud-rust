@@ -13,6 +13,6 @@ pub async fn update_notice(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::notice::do_update_notice(auth, request).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

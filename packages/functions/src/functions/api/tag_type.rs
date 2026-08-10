@@ -21,6 +21,13 @@ use _utils::{
     },
 };
 
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// 新增标签类型
 pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
@@ -42,6 +49,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<Commo
     };
 
     let res = tag_type_model::Entity::insert(am).exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
@@ -64,6 +72,7 @@ pub async fn do_update(
     am.is_final = Set(payload.base.is_final);
 
     tag_type_model::Entity::update_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 
@@ -76,7 +85,8 @@ pub async fn do_list(
     let mut query = tag_type_model::Entity::find_safety();
 
     if let Some(name) = payload.name {
-        query = query.filter(tag_type_model::Column::Name.like(format!("%{}%", name)));
+        query =
+            query.filter(tag_type_model::Column::Name.like(format!("%{}%", escape_like(&name))));
     }
     if let Some(parent_id) = payload.parent_id {
         query = query.filter(tag_type_model::Column::ParentId.eq(parent_id));
@@ -92,7 +102,7 @@ pub async fn do_list(
         }
     }
 
-    let size = payload.page.size.unwrap_or(10) as u64;
+    let size = payload.page.size.unwrap_or(10).min(200) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
@@ -131,5 +141,6 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     let mut am: tag_type_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     tag_type_model::Entity::delete_safety(am)?.exec(db).await?;
+    super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }

@@ -14,6 +14,6 @@ pub async fn list_page_bin_md5(
     let payload = serde_json::json!({});
     match _functions::functions::api::marker_doc::do_list_page_bin_md5(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

@@ -54,7 +54,7 @@ pub async fn list(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -78,6 +78,6 @@ pub async fn update(
         .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
     match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

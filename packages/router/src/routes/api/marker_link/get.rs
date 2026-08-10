@@ -15,7 +15,7 @@ pub async fn get_list(
     // removed local alias
     match _functions::functions::api::marker_link::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -28,6 +28,6 @@ pub async fn get_graph(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::marker_link::do_get_graph(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

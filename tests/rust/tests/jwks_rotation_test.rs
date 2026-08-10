@@ -30,6 +30,7 @@ fn sign_with(now: chrono::DateTime<chrono::Utc>, private_pem: &str) -> String {
         jti: uuid::Uuid::new_v4(),
         iat: now,
         exp: now + chrono::Duration::days(1),
+        token_type: None,
     };
     jsonwebtoken::encode(
         &Header::new(Algorithm::RS256),

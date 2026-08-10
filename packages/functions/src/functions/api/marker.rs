@@ -3,7 +3,7 @@ use chrono::Utc;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QuerySelect,
+    QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -287,7 +287,7 @@ pub async fn do_tweak(
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
-    let mut touched_ids: Vec<i64> = Vec::new();
+    let touched_ids: Vec<i64> = Vec::new();
     for payload in payloads {
         for marker_id in payload.marker_ids.iter() {
             let m = marker_model::Entity::find_safety_by_id(*marker_id)
@@ -382,7 +382,7 @@ pub async fn do_tweak(
                                 && let Some(i) = tweak_int_value(val)
                             {
                                 // HiddenFlag 是一个枚举；utils 中定义。尝试从整数转换。
-                                let hf = match i as i32 {
+                                let hf = match i.clamp(i32::MIN as i64, i32::MAX as i64) as i32 {
                                     0 => _utils::types::HiddenFlag::Visible,
                                     1 => _utils::types::HiddenFlag::Hidden,
                                     2 => _utils::types::HiddenFlag::Spy,
@@ -403,10 +403,8 @@ pub async fn do_tweak(
 
             // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
             marker_model::Entity::update_safety(am)?.exec(db).await?;
-            touched_ids.push(*marker_id);
         }
     }
-
     // 返回被修改 marker 的 VO 列表
     if touched_ids.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
@@ -444,7 +442,11 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
                     .or_else(|| obj.get("itemId"))
                     .and_then(|x| x.as_i64())
                 {
-                    let count = obj.get("count").and_then(|x| x.as_i64()).unwrap_or(1) as i32;
+                    let count =
+                        obj.get("count")
+                            .and_then(|x| x.as_i64())
+                            .unwrap_or(1)
+                            .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
                     ret.push((id, count));
                 }
             },
@@ -555,8 +557,8 @@ async fn tweak_item_list(
     Ok(())
 }
 
-async fn insert_item_link(
-    db: &sea_orm::DatabaseConnection,
+async fn insert_item_link<C: sea_orm::ConnectionTrait>(
+    db: &C,
     marker_id: i64,
     item_id: i64,
     count: i32,
@@ -598,9 +600,9 @@ pub async fn do_add_single(
 
         marker_title: Set(Some(payload.marker_title)),
         position: Set(payload.position),
-        content: Set(payload.content),
+        content: Set(payload.content.or(Some(String::new()))),
         picture: Set(payload.picture),
-        marker_creator_id: Set(payload.marker_creator_id),
+        marker_creator_id: Set(auth.info.id),
         picture_creator_id: Set(payload.picture_creator_id),
         video_path: Set(payload.video_path),
         refresh_time: Set(payload.refresh_time.unwrap_or(0)),
@@ -640,7 +642,6 @@ pub async fn do_update_single(
     if let Some(extra) = payload.extra {
         am.extra = Set(Some(serde_json::to_value(extra)?));
     }
-    am.marker_creator_id = Set(payload.marker_creator_id);
     am.marker_title = Set(Some(payload.marker_title));
     am.picture = Set(payload.picture);
     am.picture_creator_id = Set(payload.picture_creator_id);
@@ -656,19 +657,22 @@ pub async fn do_update_single(
     marker_model::Entity::update_safety(am)?.exec(db).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
-    // 空列表视为清空全部关联。
+    // 空列表视为清空全部关联。删除+插入包事务，失败整体回滚，
+    // 避免留下半更新状态（点位已改、关联已丢）。
+    let txn = db.begin().await?;
     let existing = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(payload.id))
-        .all(db)
+        .all(&txn)
         .await?;
     for link in existing {
         mil_model::Entity::delete_safety(link.into())?
-            .exec(db)
+            .exec(&txn)
             .await?;
     }
     for (item_id, count) in parse_item_entries(&payload.item_list) {
-        insert_item_link(db, payload.id, item_id, count).await?;
+        insert_item_link(&txn, payload.id, item_id, count).await?;
     }
+    txn.commit().await?;
 
     super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
@@ -853,7 +857,7 @@ pub async fn do_get_page(
 ) -> Result<CommonResponse<MarkerListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let size = payload.size.unwrap_or(10) as u64;
+    let size = payload.size.unwrap_or(10).min(200) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

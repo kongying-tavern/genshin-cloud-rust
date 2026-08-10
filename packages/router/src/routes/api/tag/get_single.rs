@@ -13,6 +13,6 @@ pub async fn get_single(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag::do_get_single(auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

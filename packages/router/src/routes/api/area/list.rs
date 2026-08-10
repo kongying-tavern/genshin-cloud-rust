@@ -15,6 +15,6 @@ pub async fn list(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::area::do_list(auth, payload).await {
         Ok(list) => Ok((StatusCode::OK, Json(list))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

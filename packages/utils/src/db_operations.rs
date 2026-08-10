@@ -113,6 +113,10 @@ macro_rules! impl_safe_operation {
                 // .validate() then .map(.filter()) to stay in Result without ?.
                 Self::update(ActiveModel {
                     version: ::sea_orm::ActiveValue::Set(last_version + 1),
+                    // 调用方多由 `m.into()` 构造全字段 ActiveModel（含 del_flag=false），
+                    // 若整行写回会覆盖 del_flag，把已软删的行“复活”；置 NotSet 让
+                    // del_flag 不参与 UPDATE，更新只作用于业务字段。
+                    del_flag: ::sea_orm::ActiveValue::NotSet,
                     ..model
                 })
                 .validate()

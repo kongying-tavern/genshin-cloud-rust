@@ -25,6 +25,13 @@ use _utils::{
     },
 };
 
+/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 /// 解析有效期字段：接受毫秒数字或 ISO/普通时间字符串，解析失败回退 `now`。
 /// `None` 或 JSON `null` 表示前端传空（保持原值/NULL），不回退 `now`。
 fn parse_valid_time(
@@ -78,7 +85,7 @@ pub async fn do_update_notice(
             })
             .collect(),
     ));
-    am.sort_index = Set(payload.sort_index as i32);
+    am.sort_index = Set(payload.sort_index.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     am.valid_time_start = Set(parse_valid_time(payload.valid_time_start.as_ref(), now));
     am.valid_time_end = Set(parse_valid_time(payload.valid_time_end.as_ref(), now));
 
@@ -94,7 +101,8 @@ pub async fn do_get_notice_list(
 
     let mut query = notice_model::Entity::find_safety();
     if let Some(title) = payload.title {
-        query = query.filter(notice_model::Column::Title.like(format!("%{}%", title)));
+        query =
+            query.filter(notice_model::Column::Title.like(format!("%{}%", escape_like(&title))));
     }
     // 公告量小：全量取回后在内存做 channel/有效期过滤（对齐前端参数，
     // jsonb 数组的 SQL 过滤跨方言繁琐且不值得）。
@@ -129,7 +137,7 @@ pub async fn do_get_notice_list(
 
     let total = rows.len();
     let creator_ids: HashSet<i64> = rows.iter().filter_map(|n| n.creator_id).collect();
-    let size = payload.page.size.unwrap_or(10) as usize;
+    let size = payload.page.size.unwrap_or(10).min(200) as usize;
     let current = payload.page.current.unwrap_or(1) as usize;
     let offset = (current.saturating_sub(1)) * size;
     let items = rows.into_iter().skip(offset).take(size);
@@ -226,7 +234,7 @@ pub async fn do_add_notice(
                 })
                 .collect(),
         )),
-        sort_index: Set(payload.sort_index as i32),
+        sort_index: Set(payload.sort_index.clamp(i32::MIN as i64, i32::MAX as i64) as i32),
         valid_time_start: Set(parse_valid_time(payload.valid_time_start.as_ref(), now)),
         valid_time_end: Set(parse_valid_time(payload.valid_time_end.as_ref(), now)),
     };

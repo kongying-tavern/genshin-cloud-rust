@@ -27,6 +27,6 @@ pub async fn list_page_bin(
             Bytes::from(bytes),
         )
             .into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

@@ -13,6 +13,6 @@ pub async fn create(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag::do_create_by_name(auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

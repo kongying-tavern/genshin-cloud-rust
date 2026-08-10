@@ -13,6 +13,6 @@ pub async fn get_score_data(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::score::do_get_score_data(auth, request).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

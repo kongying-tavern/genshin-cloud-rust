@@ -278,7 +278,7 @@ pub async fn do_consume(
             .access_policy
             .as_ref()
             .and_then(|v| serde_json::from_value::<AccessPolicyList>(v.clone()).ok())),
-        remark: Set(None),
+        remark: Set(Some(String::new())),
     };
     let res = sys_user_model::Entity::insert(user_am).exec(&txn).await?;
 

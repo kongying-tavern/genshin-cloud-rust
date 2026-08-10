@@ -20,7 +20,7 @@ pub async fn get_last(
         .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -36,7 +36,7 @@ pub async fn get_history(
         .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -49,7 +49,7 @@ pub async fn get_all_history(
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -73,7 +73,7 @@ pub async fn put(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -96,7 +96,7 @@ pub async fn save(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -116,7 +116,7 @@ pub async fn rename(
     .await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -131,7 +131,7 @@ pub async fn restore(
     match _functions::functions::system::archive::do_restore_slot(user_id, slot_index as i32).await
     {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }
 
@@ -145,6 +145,6 @@ pub async fn delete_slot(
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_delete_slot(user_id, slot_index as i32).await {
         Ok(v) => Ok(Json(v).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{e}"))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

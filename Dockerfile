@@ -61,3 +61,4 @@ ENV RUST_LOG=info
 EXPOSE 80
 
 ENTRYPOINT ["/usr/bin/tini", "--", "_router"]
+

@@ -40,15 +40,6 @@ fn extract_archive(body: &serde_json::Value) -> String {
         .unwrap_or_else(|| serde_json::to_string(body).unwrap_or_default())
 }
 
-/// 从任意 JSON body 中提取保存时间（毫秒时间戳），取不到默认当前时间。
-fn extract_time(body: &serde_json::Value) -> chrono::NaiveDateTime {
-    body.get("time")
-        .and_then(|v| v.as_f64())
-        .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms as i64))
-        .map(|dt| dt.naive_utc())
-        .unwrap_or_else(|| Utc::now().naive_utc())
-}
-
 /// Get the latest archive for a given slot index.
 pub async fn do_get_last(
     _auth: AuthInfo,
@@ -160,7 +151,8 @@ pub async fn do_save(
 ) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
     let archive = extract_archive(&body);
-    let now = extract_time(&body);
+    // create_time 由服务端定，不信任客户端传入的 time（防止时间戳伪造/脏数据）
+    let now = Utc::now().naive_utc();
 
     let am = archive_model::ActiveModel {
         version: Set(0),
@@ -182,6 +174,10 @@ pub async fn do_save(
 }
 
 /// Rename an archive slot.
+///
+/// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
+/// 接线（router 只用 do_rename_by_slot），一旦接线即构成 IDOR——任意登录
+/// 用户可按 id 改他人存档。启用前必须先按 `auth.info.id` 过滤归属。
 pub async fn do_rename(_auth: AuthInfo, id: i64, name: String) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)
@@ -215,6 +211,10 @@ pub async fn do_rename_by_slot(
 }
 
 /// Restore from an archive (return the archived data).
+///
+/// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
+/// 接线（router 只用 do_restore_slot），一旦接线即构成 IDOR——任意登录
+/// 用户可按 id 读取他人存档数据。启用前必须先按 `auth.info.id` 过滤归属。
 pub async fn do_restore(_auth: AuthInfo, id: i64) -> Result<CommonResponse<serde_json::Value>> {
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)
@@ -269,6 +269,10 @@ pub async fn do_delete_slot(user_id: i64, slot_index: i32) -> Result<CommonRespo
 }
 
 /// Delete an archive slot (soft delete).
+///
+/// 注意：按 id 操作，**未校验存档归属**（user_id == 请求者）。当前无路由
+/// 接线（router 只用 do_delete_slot），一旦接线即构成 IDOR——任意登录
+/// 用户可按 id 删除他人存档。启用前必须先按 `auth.info.id` 过滤归属。
 pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     let db = &DB_CONN.wait().pg_conn;
     let a = archive_model::Entity::find_safety_by_id(id)

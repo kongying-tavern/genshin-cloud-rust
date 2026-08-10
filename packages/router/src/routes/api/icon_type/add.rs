@@ -16,6 +16,6 @@ pub async fn add(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::icon_type::do_add(auth, payload).await {
         Ok(id) => Ok((StatusCode::OK, Json(CommonResponse::new(Ok(id))))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

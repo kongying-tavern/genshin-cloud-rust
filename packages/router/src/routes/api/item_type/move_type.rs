@@ -22,6 +22,6 @@ pub async fn move_to_target(
         .await
     {
         Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

@@ -17,6 +17,6 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::marker::do_delete(auth, marker_id).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e))),
+        Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

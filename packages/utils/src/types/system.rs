@@ -29,9 +29,7 @@ pub struct AccessPolicyItem {
     pub policy: AccessPolicyItemEnum,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, AsRefStr, EnumString, Display,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, EnumIter, AsRefStr, EnumString, Display)]
 pub enum AccessPolicyItemEnum {
     /// 与最后一次登录 IP 相同
     #[strum(serialize = "ip:same_last_ip")]
@@ -69,6 +67,37 @@ pub enum AccessPolicyItemEnum {
     #[strum(serialize = "dev:block_disallow_device")]
     #[serde(rename = "dev:block_disallow_device")]
     DevBlockDisallowDevice,
+}
+
+/// 反序列化兼容历史/远程数据：`sys_user.access_policy` / `sys_user_invitation.access_policy`
+/// 中可能存无前缀格式（如 `same_last_ip`），与带前缀的 Java 契约（`ip:same_last_ip`）并存。
+/// 先去掉 `ip:` / `dev:` / `area:` 前缀再匹配变体；序列化仍输出带前缀格式（Java 契约）。
+impl<'de> Deserialize<'de> for AccessPolicyItemEnum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bare = s
+            .strip_prefix("ip:")
+            .or_else(|| s.strip_prefix("dev:"))
+            .or_else(|| s.strip_prefix("area:"))
+            .unwrap_or(s.as_str());
+        match bare {
+            "same_last_ip" => Ok(Self::IpSameLastIp),
+            "pass_allow_ip" => Ok(Self::IpPassAllowIp),
+            "block_disallow_ip" => Ok(Self::IpBlockDisallowIp),
+            "same_last_region" => Ok(Self::IpSameLastRegion),
+            "pass_allow_region" => Ok(Self::IpPassAllowRegion),
+            "block_disallow_region" => Ok(Self::IpBlockDisallowRegion),
+            "same_last_device" => Ok(Self::DevSameLastDevice),
+            "pass_allow_device" => Ok(Self::DevPassAllowDevice),
+            "block_disallow_device" => Ok(Self::DevBlockDisallowDevice),
+            _ => Err(serde::de::Error::custom(format!(
+                "unknown access policy item: {s}"
+            ))),
+        }
+    }
 }
 
 /// Sort keys for the user list. The serde renames are the **wire contract**

@@ -39,6 +39,24 @@ fn ext_for_content_type(content_type: &str) -> &'static str {
     }
 }
 
+/// Verify the file-header magic number matches the declared content type.
+/// The content type is fully client-controlled, so MIME alone can't stop a
+/// fake `image/png` HTML/SVG from being stored and served publicly.
+/// Only image types are validated; other types pass through.
+fn magic_matches_content_type(content_type: &str, bytes: &[u8]) -> bool {
+    match content_type {
+        // PNG: \x89PNG
+        "image/png" => bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
+        // JPEG: \xFF\xD8
+        "image/jpeg" => bytes.starts_with(&[0xFF, 0xD8]),
+        // GIF: GIF8
+        "image/gif" => bytes.starts_with(b"GIF8"),
+        // WEBP: RIFF....WEBP
+        "image/webp" => bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP",
+        _ => true,
+    }
+}
+
 /// Store uploaded images in MinIO and return their public URLs.
 ///
 /// Returns `{"filePath": ..., "fileUrl": ...}` for the first uploaded file
@@ -64,6 +82,13 @@ pub async fn do_upload_image(
         .into_iter()
         .next()
         .ok_or_else(|| anyhow!("no file uploaded"))?;
+
+    if !magic_matches_content_type(&f.content_type, &f.bytes) {
+        return Err(anyhow!(
+            "uploaded file content does not match declared content type: {}",
+            f.content_type
+        ));
+    }
 
     let key = format!(
         "uploads/{}.{}",

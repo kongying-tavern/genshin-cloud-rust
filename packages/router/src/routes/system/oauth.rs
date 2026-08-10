@@ -31,7 +31,7 @@ pub async fn qq_login(
     let ip = ip.unwrap_or(native_ip);
     let ret = oauth_qq_login(params.qq_openid, ip, user_agent)
         .await
-        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        .map_err(crate::routes::internal_error)?;
     Ok(Json(ret).into_response())
 }
 
@@ -107,7 +107,7 @@ pub async fn oauth(
         return Ok(Json(
             oauth_password_login(username, password, ip, user_agent)
                 .await
-                .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+                .map_err(crate::routes::internal_error)?,
         )
         .into_response());
     }
@@ -126,7 +126,7 @@ pub async fn oauth(
             return Ok(Json(
                 oauth_client_credentials(scope)
                     .await
-                    .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?,
+                    .map_err(crate::routes::internal_error)?,
             )
             .into_response());
         },
@@ -139,7 +139,7 @@ pub async fn oauth(
             })?;
             let ret = oauth_refresh(refresh_token)
                 .await
-                .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+                .map_err(crate::routes::internal_error)?;
             return Ok(Json(ret).into_response());
         },
     }
