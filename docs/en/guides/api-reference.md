@@ -49,12 +49,10 @@ a content domain.
 | --- | --- | --- |
 | Cache | `/api/cache/{area,common_item,icon_tag,item,marker,marker_link,notice}` | Hot, Redis-backed read views per content type. |
 
-## Community workflow — submissions, approvals, scoring
+## Community workflow — scoring
 
 | Domain | Prefix | Purpose |
 | --- | --- | --- |
-| Punctuate | `/api/punctuate` | User-submitted marker candidates (the "打点" workflow). |
-| Punctuate audit | `/api/punctuate_audit` | Reviewer approval/rejection of punctuate submissions. |
 | Score | `/api/score` | Per-user contribution scoring (score_stat aggregate). |
 | Notice | `/api/notice` | In-app announcements and broadcast messages. |
 | History | `/api/history` | Audit history of edits to content entities. |

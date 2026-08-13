@@ -27,7 +27,6 @@
 
 ## 设计文档 / Designs
 
-- [打点审批工作流](./designs/punctuate-workflow.md) — 社区众包打点提交→审核→晋升的状态机设计
 - [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md) — 客户端冷启动的全量数据 GZIP 压缩增量同步管线
 - [隐藏与特殊标记](./designs/hidden-and-special-flags.md) — `hidden_flag` 数据级防剧透 + `special_flag` 位掩码过滤
 

@@ -23,14 +23,13 @@ completa está em [English](../en/README.md) ou
 | [Glossary](../en/guides/glossary.md) | Terminologia de domínio chinês-inglês |
 | [Architecture](../en/guides/architecture.md) | Camadas dos quatro pacotes, fluxo de requisições, padrão `SafeEntityTrait` |
 | [Building](../en/guides/building.md) | Pré-requisitos, comandos `just`, arquivo `.env`, docker-compose local |
-| [API Reference](../en/guides/api-reference.md) | Domínios de API expostos pelo roteador (area/icon/item/marker/punctuate/score/system…) |
+| [API Reference](../en/guides/api-reference.md) | Domínios de API expostos pelo roteador (area/icon/item/marker/score/system…) |
 | [Commit Convention](../en/guides/commit-message-convention.md) | Convenção de commits gitmoji |
 | [Java Sync Roadmap](../en/guides/sync-with-java-roadmap.md) | Prioridade do port da implementação Java |
 | [Domain Sync Template](../en/guides/domain-sync-template.md) | Modelo de cinco camadas para portar um domínio Java para Rust |
 
 ### Designs
 
-- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](../en/designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](../en/designs/hidden-and-special-flags.md)
 

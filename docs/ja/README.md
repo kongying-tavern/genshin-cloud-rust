@@ -22,14 +22,13 @@
 | [Glossary](../en/guides/glossary.md) | 中英ドメイン用語集 |
 | [Architecture](../en/guides/architecture.md) | 4 パッケージのレイヤリング・リクエストフロー・`SafeEntityTrait` パターン |
 | [Building](../en/guides/building.md) | 前提条件・`just` コマンド・`.env`・ローカル docker-compose |
-| [API Reference](../en/guides/api-reference.md) | ルーターが公開する API ドメイン（area/icon/item/marker/punctuate/score/system…） |
+| [API Reference](../en/guides/api-reference.md) | ルーターが公開する API ドメイン（area/icon/item/marker/score/system…） |
 | [Commit Convention](../en/guides/commit-message-convention.md) | gitmoji コミット規約 |
 | [Java Sync Roadmap](../en/guides/sync-with-java-roadmap.md) | Java 参照実装からの移植優先順位 |
 | [Domain Sync Template](../en/guides/domain-sync-template.md) | Java ドメインを Rust へ移植する 5 層テンプレート |
 
 ### 設計
 
-- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](../en/designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](../en/designs/hidden-and-special-flags.md)
 
