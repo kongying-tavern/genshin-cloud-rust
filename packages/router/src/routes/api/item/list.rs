@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::item::ItemFilterRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 根据筛选条件列出物品信息
 /// 传入的物品类型ID和地区ID列表，必须为末端的类型或地区
@@ -11,8 +11,8 @@ use _utils::models::item::ItemFilterRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<ItemFilterRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<ItemFilterRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::item::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

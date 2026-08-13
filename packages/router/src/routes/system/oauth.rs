@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use std::{collections::HashMap, net::SocketAddr};
+use crate::middlewares::{ApiError, ExtractIP, ExtractUserAgent, api_error};
 
 use axum::{
     extract::{ConnectInfo, Json, Multipart, Query},
@@ -8,7 +9,6 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::{ExtractIP, ExtractUserAgent};
 use _functions::functions::system::oauth::{
     oauth_client_credentials, oauth_password_login, oauth_refresh,
 };
@@ -38,7 +38,7 @@ pub async fn oauth(
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
     form: Option<Multipart>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     let ip = ip.unwrap_or(native_ip);
 
     // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
@@ -54,7 +54,7 @@ pub async fn oauth(
         })? {
             let name = field
                 .name()
-                .ok_or((StatusCode::BAD_REQUEST, "Field name is required".into()))?
+                .ok_or(api_error(StatusCode::BAD_REQUEST, "Field name is required"))?
                 .to_string();
             let value = field.text().await.map_err(|err| {
                 (
@@ -71,17 +71,17 @@ pub async fn oauth(
     if !form_fields.is_empty() {
         let grant_type = form_fields
             .remove("grant_type")
-            .ok_or((StatusCode::BAD_REQUEST, "Grant type is required".into()))?;
+            .ok_or(api_error(StatusCode::BAD_REQUEST, "Grant type is required"))?;
         if grant_type != "password" {
-            return Err((StatusCode::BAD_REQUEST, "Invalid grant type".into()));
+            return Err(api_error(StatusCode::BAD_REQUEST, "Invalid grant type"));
         }
 
         let username = form_fields
             .remove("username")
-            .ok_or((StatusCode::BAD_REQUEST, "Username is required".into()))?;
+            .ok_or(api_error(StatusCode::BAD_REQUEST, "Username is required"))?;
         let password = form_fields
             .remove("password")
-            .ok_or((StatusCode::BAD_REQUEST, "Password is required".into()))?;
+            .ok_or(api_error(StatusCode::BAD_REQUEST, "Password is required"))?;
         return Ok(Json(
             oauth_password_login(username, password, ip, user_agent)
                 .await

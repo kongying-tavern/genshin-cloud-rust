@@ -4,11 +4,13 @@ use crate::types::MarkerLinkageLinkAction;
 
 /// 通用的组 ID 查询请求模型
 /// 用于需要通过组 ID 列表进行查询的场景
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupIdsRequest {
-    /// 关联组 ID 列表
-    pub group_ids: Vec<String>,
+    /// 关联组 ID 列表（'groupIds'；配合 'isTraverse' 全量遍历时可为空）
+    pub group_ids: Option<Vec<String>>,
+    /// 是否遍历全量关联数据（'isTraverse'）
+    pub is_traverse: Option<bool>,
 }
 
 /// 箭头类型枚举

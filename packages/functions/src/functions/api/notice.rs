@@ -138,7 +138,7 @@ pub async fn do_get_notice_list(
 
     let total = rows.len();
     let creator_ids: HashSet<i64> = rows.iter().filter_map(|n| n.creator_id).collect();
-    let size = payload.page.size.unwrap_or(10).min(200) as usize;
+    let size = payload.page.size.unwrap_or(10).min(500) as usize;
     let current = payload.page.current.unwrap_or(1) as usize;
     let offset = (current.saturating_sub(1)) * size;
     let items = rows.into_iter().skip(offset).take(size);

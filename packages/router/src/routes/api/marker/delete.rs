@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 
 use axum::{
     extract::{Json, Path},
@@ -6,7 +7,6 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 
 /// 删除点位
 /// DELETE /marker/{markerId}
@@ -14,7 +14,7 @@ use crate::middlewares::ExtractAuthInfo;
 pub async fn delete(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(marker_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::marker::do_delete(auth, marker_id).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

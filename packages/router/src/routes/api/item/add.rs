@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::item::ItemAddRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 新增物品
 /// 新建成功后会返回新物品ID
@@ -11,8 +11,8 @@ use _utils::models::item::ItemAddRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<ItemAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<ItemAddRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match crate::functions::api::item::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

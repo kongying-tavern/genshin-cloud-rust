@@ -7,9 +7,9 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
 use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
+use crate::middlewares::{ApiError, AppJson, ExtractAdmin, ExtractAuthInfo, api_error};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,8 +126,8 @@ pub struct UserKickOutParams {
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(payload): Json<UserRegisterParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserRegisterParams>,
+) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(
         do_register(
             auth,
@@ -148,8 +148,8 @@ pub async fn register(
 /// POST /user/register/qq
 #[tracing::instrument(skip(payload))]
 pub async fn register_qq(
-    Json(payload): Json<UserRegisterQQParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserRegisterQQParams>,
+) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(
         do_register_qq(
             payload.access_policy,
@@ -171,7 +171,7 @@ pub async fn register_qq(
 pub async fn get_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(user_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(_utils::models::wrapper::CommonResponse::new(
         do_get_info(auth, user_id).await,
     ))
@@ -183,12 +183,12 @@ pub async fn get_info(
 #[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<UserUpdateParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserUpdateParams>,
+) -> Result<impl IntoResponse, ApiError> {
     let uid = payload
         .user_id
         .or(payload.id)
-        .ok_or((StatusCode::BAD_REQUEST, "user id is required".to_string()))?;
+        .ok_or(api_error(StatusCode::BAD_REQUEST, "user id is required"))?;
     Ok(Json(
         do_update(
             auth,
@@ -217,13 +217,13 @@ pub async fn update(
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<UserUpdatePasswordParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserUpdatePasswordParams>,
+) -> Result<impl IntoResponse, ApiError> {
     let new_pw = payload.new_password.or(payload.password);
     let Some(new_pw) = new_pw else {
-        return Err((
+        return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "new password is required".to_string(),
+            "new password is required",
         ));
     };
     Ok(Json(
@@ -244,8 +244,8 @@ pub async fn update_password(
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password_by_admin(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(payload): Json<UserUpdatePasswordByAdminParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserUpdatePasswordByAdminParams>,
+) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(
         do_update_password_by_admin(auth, payload.password, payload.user_id)
             .await
@@ -260,7 +260,7 @@ pub async fn update_password_by_admin(
 pub async fn delete(
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     do_delete(auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
@@ -272,8 +272,8 @@ pub async fn delete(
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(payload): Json<UserListParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<UserListParams>,
+) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(
         do_list(
             auth,
@@ -295,7 +295,7 @@ pub async fn list(
 pub async fn kick_out(
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     do_kick_out(auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;

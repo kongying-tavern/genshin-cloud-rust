@@ -3,6 +3,7 @@ mod system;
 mod ws;
 
 use anyhow::Result;
+use crate::middlewares::{ApiError, api_error};
 
 use axum::{
     Router,
@@ -16,7 +17,7 @@ use axum::{
 /// 将 handler 返回的错误映射为 500 响应：
 /// - 业务错误（如 "Item not found"，由 `anyhow!("...")` 产生）保留原文返回给客户端；
 /// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息，避免泄露内部细节。
-pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
+pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> ApiError {
     let err: anyhow::Error = e.into();
     let detail = format!("{err}");
     let chain = err
@@ -39,12 +40,9 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
     ];
     if INTERNAL_KEYWORDS.iter().any(|kw| chain.contains(kw)) {
         tracing::error!("internal server error: {detail}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".into(),
-        )
+        api_error(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
     } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, detail)
+        api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail)
     }
 }
 
@@ -54,6 +52,8 @@ pub async fn router() -> Result<Router> {
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .route("/ws/{user_id}", get(ws::ws_handler))
+        // 前端契约：wss 连接 userId 走 query（/ws?userId=...）
+        .route("/ws", get(ws::ws_handler_query))
         // The domain endpoints live under /api/* (Java contract — the
         // frontend's production build and direct clients call these paths).
         // They are ALSO merged at the root: the Vite dev proxy rewrites
@@ -62,7 +62,7 @@ pub async fn router() -> Result<Router> {
         .merge(api::router().await?)
         .nest("/api", api::router().await?)
         .nest_service("/cdn", cdn_proxy())
-        .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
+        .fallback(|| async { api_error(StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(cors_layer())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())

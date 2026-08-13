@@ -7,7 +7,7 @@
 
 use axum::{
     extract::{
-        Path,
+        Path, Query,
         ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
     },
     response::Response,
@@ -16,6 +16,19 @@ use serde_json::Value;
 
 /// `GET /ws/{userId}` 升级握手。
 pub async fn ws_handler(ws: WebSocketUpgrade, Path(user_id): Path<String>) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, user_id))
+}
+
+/// `GET /ws?userId={id}` 升级握手（前端契约：userId 走 query）。
+#[derive(serde::Deserialize, Default)]
+pub struct WsQuery {
+    #[serde(rename = "userId", default)]
+    pub user_id: Option<String>,
+}
+
+/// 兼容前端 wss://.../ws?userId=xxx 形式的连接。
+pub async fn ws_handler_query(ws: WebSocketUpgrade, Query(q): Query<WsQuery>) -> Response {
+    let user_id = q.user_id.unwrap_or_default();
     ws.on_upgrade(move |socket| handle_socket(socket, user_id))
 }
 

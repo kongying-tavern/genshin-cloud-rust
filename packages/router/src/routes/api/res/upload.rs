@@ -3,8 +3,8 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _functions::functions::api::res::UploadedFile;
+use crate::middlewares::{ApiError, ExtractAuthInfo, api_error};
 
 /// 允许上传的内容类型白名单。
 const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -16,7 +16,7 @@ const MAX_FIELD_BYTES: usize = 16 * 1024 * 1024;
 pub async fn upload_image(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     mut multipart: Multipart,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     // 收集文件字节与元数据，交给 functions 层落盘 MinIO。
     // 注意：这里不写临时文件——无主临时文件会泄漏磁盘，且字节最终
     // 需要原样上传。
@@ -52,9 +52,9 @@ pub async fn upload_image(
 
         // 文件字段：内容类型白名单（防任意文件上传）+ 大小上限。
         if !ALLOWED_IMAGE_TYPES.contains(&content_type.as_str()) {
-            return Err((
+            return Err(api_error(
                 StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                format!(
+                &format!(
                     "unsupported content type '{content_type}' — allowed: {ALLOWED_IMAGE_TYPES:?}"
                 ),
             ));
@@ -68,9 +68,9 @@ pub async fn upload_image(
         })?;
         // 单字段大小上限（防内存/对象存储耗尽）。
         if data.len() > MAX_FIELD_BYTES {
-            return Err((
+            return Err(api_error(
                 StatusCode::PAYLOAD_TOO_LARGE,
-                format!("file exceeds the {MAX_FIELD_BYTES}-byte limit"),
+                &format!("file exceeds the {MAX_FIELD_BYTES}-byte limit"),
             ));
         }
 
