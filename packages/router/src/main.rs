@@ -43,6 +43,12 @@ impl Write for TeeTarget {
 /// then stays on stderr only, and startup never fails because of logs.
 fn open_log_file() -> Option<std::fs::File> {
     let dir = std::env::var("LOG_DIR").ok()?;
+    // Create the directory when it doesn't exist yet (containers often mount
+    // an empty volume; a missing dir should not silently disable file logs).
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("LOG_DIR set but {dir} cannot be created, logging to stderr only: {e}");
+        return None;
+    }
     let path = Path::new(&dir).join("genshin-cloud.log");
     match std::fs::OpenOptions::new()
         .create(true)
@@ -81,6 +87,16 @@ async fn main() -> Result<()> {
         })));
     }
     builder.init();
+
+    // Fail fast on a missing JWT secret. The lazy JWT key statics would
+    // otherwise panic on the first authenticated request — and with
+    // `panic = "abort"` in the release profile that kills the whole process
+    // mid-traffic instead of refusing to start with a clear message.
+    if std::env::var("JWT_SECRET").is_err() {
+        anyhow::bail!(
+            "JWT_SECRET must be set (see .env.example); generate one with: openssl rand -base64 48"
+        );
+    }
 
     let port = std::env::var("PORT")
         .ok()
