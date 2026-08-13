@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use _utils::models::{
     common::EmptyResponse, item_type::ItemTypeUpdateData, wrapper::CommonResponse,

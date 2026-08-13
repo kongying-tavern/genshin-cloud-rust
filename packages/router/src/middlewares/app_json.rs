@@ -4,7 +4,7 @@
 use crate::middlewares::{ApiError, api_error};
 use axum::{
     Json,
-    extract::{FromRequest, Request, rejection::JsonRejection},
+    extract::{FromRequest, Request},
     http::StatusCode,
 };
 use serde::de::DeserializeOwned;

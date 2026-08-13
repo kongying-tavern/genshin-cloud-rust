@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::{ApiError, ExtractAuthInfo};
 use _utils::models::SysRoleVo;

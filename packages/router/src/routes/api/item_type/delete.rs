@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Json, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, extract::Path, response::IntoResponse};
 
 use crate::middlewares::{ApiError, ExtractAuthInfo};
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
