@@ -19,7 +19,6 @@ set windows-shell := ["C:/Program Files/Git/usr/bin/bash.exe", "-c"]
 
 # Import vendored devtools recipes (provides python_cmd, cache-guard, etc.).
 # Recipes we don't use are overridden below or simply ignored.
-# Upstream tool: https://github.com/celestia-island/celestia-devtools
 import "./celestia-devtools.just"
 
 default:
@@ -28,16 +27,8 @@ default:
 # ── init ─────────────────────────────────────────────────────────────────────
 
 # Initialize the development environment (devtools + cargo fetch + hooks).
-# `celestia-devtools` is the celestia-island dev toolchain:
-#   install:  pip install git+https://github.com/celestia-island/celestia-devtools.git
-#   source:   https://github.com/celestia-island/celestia-devtools
 init:
     @echo "🔧 Initializing development environment..."
-    @command -v celestia-devtools >/dev/null 2>&1 || { \
-        echo "❌ celestia-devtools not found."; \
-        echo "   Install: pip install git+https://github.com/celestia-island/celestia-devtools.git"; \
-        echo "   Source:  https://github.com/celestia-island/celestia-devtools"; \
-        exit 1; }
     celestia-devtools init
     cargo fetch
     celestia-devtools hook install --force
@@ -45,11 +36,6 @@ init:
 
 # Install the celestia-devtools commit-msg hook (gitmoji convention).
 hooks:
-    @command -v celestia-devtools >/dev/null 2>&1 || { \
-        echo "❌ celestia-devtools not found."; \
-        echo "   Install: pip install git+https://github.com/celestia-island/celestia-devtools.git"; \
-        echo "   Source:  https://github.com/celestia-island/celestia-devtools"; \
-        exit 1; }
     celestia-devtools hook install --force
     @echo "✅ commit-msg hook installed"
 

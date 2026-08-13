@@ -71,13 +71,7 @@ just hooks        # install (or refresh) the commit-msg hook
 
 Run `just hooks` once per fresh checkout. The hook is the vendored
 `celestia-devtools` hook; reinstall it after `git clean -dfx` or when switching
-machines. `celestia-devtools` itself comes from
-[celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools)
-— install it once with:
-
-```bash
-pip install git+https://github.com/celestia-island/celestia-devtools.git
-```
+machines.
 
 To **skip the check for a single commit** (emergencies only), set the escape
 hatch inline:

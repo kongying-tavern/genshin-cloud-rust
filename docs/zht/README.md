@@ -1,7 +1,7 @@
 # Genshin Map Cloud — Rust 後端
 
 > 「空熒酒館·原神地圖」後端的 Rust 重寫，與 Java 參考實作
-> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud))
+> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
 > 功能對齊。
 
 這是繁體中文文件區。後端是以 `axum`、`sea-orm`（PostgreSQL）、`redis`、

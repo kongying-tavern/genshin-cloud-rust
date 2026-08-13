@@ -68,8 +68,8 @@ def _resolve_vue_frontend() -> Path:
         raise RuntimeError(
             "E2E_VUE_FRONTEND is not set — refusing to start.\n"
             "Add it to .env, e.g.:\n"
-            "  E2E_VUE_FRONTEND=D:\\code\\map_register_v3\n"
-            "  E2E_VUE_FRONTEND=../map_register_v3   # relative to the repo root"
+            "  E2E_VUE_FRONTEND=D:\\code\\vue_map_register_v3\n"
+            "  E2E_VUE_FRONTEND=../vue_map_register_v3   # relative to the repo root"
         )
     # Convert Windows path to native if running in WSL
     native_path = _win_to_native(env_path)

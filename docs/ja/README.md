@@ -1,7 +1,7 @@
 # Genshin Map Cloud — Rust バックエンド
 
 > 「空荧酒館・原神マップ」バックエンドの Rust による書き直し。Java の参照実装
-> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud))
+> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
 > と機能を同期しています。
 
 これは日本語ドキュメントセクションです。バックエンドは `axum`・`sea-orm`

@@ -172,7 +172,7 @@ Rust 侧当前**每次都重新生成**——`item_doc.rs:44` 的注释明确写
 
 ## 7. 与 Java 实现的对齐
 
-| Java（`genshin-map-cloud`） | Rust |
+| Java（`java-genshin-map-cloud`） | Rust |
 | --- | --- |
 | `CompressUtils` + `DigestUtils.md5` | `binary_doc::serialize_compress_md5` |
 | `MarkerDaoImpl.refreshMarkerBinaryList` | `marker_doc::do_list_page_bin_md5` / `do_list_page_bin` |

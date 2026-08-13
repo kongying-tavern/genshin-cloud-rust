@@ -6,7 +6,7 @@
 > [← 返回文档索引](../README.md)
 
 本项目是「空荧酒馆·原神地图」后端服务的 Rust 重写，目标是与 Java 参考实现
-（[`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)）
+（[`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)）
 功能对齐，并在性能、部署体验与类型安全上有所改进。工作区按 `utils → database →
 functions → router` 自底向上分层，逐层单向依赖。
 

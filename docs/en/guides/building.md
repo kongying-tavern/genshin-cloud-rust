@@ -10,7 +10,7 @@ variables, the local docker-compose stack, and how CI mirrors the same steps.
 | Rust (stable) | Compiles the workspace. | Pinned by `rust-toolchain.toml` (stable + `rustfmt` + `clippy`). Edition 2024. |
 | [`just`](https://github.com/casey/just) | Task runner; the recommended entry point. | `justfile` imports `celestia-devtools.just`. |
 | Docker + `docker-compose` | Local Postgres, Redis, MinIO. | Use `dev.compose.yml`. |
-| `celestia-devtools` (Python) | Commit-msg hook + markdown formatting. | From [celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools). Install once with `pip install git+https://github.com/celestia-island/celestia-devtools.git` (or clone + `pip install -e .`). The repo vendors a trimmed copy as `celestia-devtools.just`; refresh with `celestia-devtools init --force`. |
+| `celestia-devtools` (Python) | Commit-msg hook + markdown formatting. | Installed by `just init`. |
 
 The TLS stack is `rustls` with the **ring** provider only — no `aws-lc-rs` /
 `aws-lc-sys` C build is required, so the workspace compiles cleanly on MSVC
@@ -64,11 +64,9 @@ MINIO_SECRET_KEY=genshin_cloud
 # PORT=80                  # optional; defaults to 80
 ```
 
-`JWT_SECRET` is required — the process refuses to start without it
-(generate with `openssl rand -base64 48`). The DB variables fall back to the
-localhost defaults shown above. MinIO access/secret keys are required when
-the object-storage path is exercised. See `.env.example` and the root
-`README.md` for the complete variable reference.
+Only `DB_PASSWORD` is strictly required to start (the rest fall back to the
+localhost defaults shown above). MinIO access/secret keys are required when
+the object-storage path is exercised.
 
 ## Local docker-compose stack
 

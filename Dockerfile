@@ -34,10 +34,8 @@ RUN mkdir -p packages/utils/src packages/database/src packages/functions/src \
 # Real sources + release build. The cache mounts keep cargo registry and the
 # target dir out of the image layers; the binary is copied to a stable path so
 # it survives the cache mount being unmounted.
-# indexes_dev.sql is embedded by the init_db bin via include_str!.
-COPY packages/                     packages/
-COPY tests/                        tests/
-COPY scripts/indexes_dev.sql       scripts/indexes_dev.sql
+COPY packages/ packages/
+COPY tests/     tests/
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
     cargo build --release --package _router \

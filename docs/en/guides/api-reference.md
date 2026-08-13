@@ -2,7 +2,7 @@
 
 This is an overview of the HTTP surface the router exposes, grouped by
 purpose. Every domain below is a direct Rust port of the corresponding Java
-controller in `genshin-map-cloud`; the request/response shapes match so
+controller in `java-genshin-map-cloud`; the request/response shapes match so
 the existing front-end works against either backend. For exact route paths
 and payload fields, read the relevant module under
 `packages/router/src/routes/`.

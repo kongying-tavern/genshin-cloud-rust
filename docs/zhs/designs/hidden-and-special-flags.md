@@ -198,7 +198,7 @@ if let Some(sf) = payload.special_flag {
 
 ## 6. 与 Java 实现的对齐
 
-| Java（`genshin-map-cloud`） | Rust |
+| Java（`java-genshin-map-cloud`） | Rust |
 | --- | --- |
 | `HiddenFlag` 枚举（0~3） | `HiddenFlag` 枚举（`Visible/Hidden/Beta/Suprise`，`Beta` 旧名 `Spy`） |
 | `userDataLevel` 请求头位掩码 | 由前端按位组合，后端按 flag 分组归档 |

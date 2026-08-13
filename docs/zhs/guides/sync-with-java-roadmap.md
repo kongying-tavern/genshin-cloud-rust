@@ -2,7 +2,7 @@
 
 > [← 返回索引](../README.md) · 单域移植步骤见 [域同步模板](./domain-sync-template.md)
 
-Rust 后端的目标是与 Java 参考实现 `genshin-map-cloud` 功能对齐。Java 侧的
+Rust 后端的目标是与 Java 参考实现 `java-genshin-map-cloud` 功能对齐。Java 侧的
 大致范围：约 30 个控制器、约 20 个实体，覆盖地图内容域（area/icon/item/marker
 及其 type/tag 变体、notice/route/history）与系统域（user/role/device/invitation/
 `action_log`），以及 OAuth2/JWKS 鉴权、BinaryMD5 压缩归档导出、打点（punctuate）

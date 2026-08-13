@@ -53,30 +53,6 @@ fn is_valid_schema_name(name: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// Percent-encode a URL component (username / password / database name) so
-/// credentials containing reserved characters (`@`, `:`, `/`, `#`, `?`,
-/// `%`, spaces …) can't break — or smuggle extra components into — the
-/// connection URL built from env vars. Both sqlx and the redis crate
-/// percent-decode these components while parsing, and every unreserved
-/// character encodes to itself, so already-safe values are unchanged.
-pub fn encode_url_component(input: &str) -> String {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let mut out = String::with_capacity(input.len());
-    for &b in input.as_bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(b as char)
-            },
-            _ => {
-                out.push('%');
-                out.push(HEX[(b >> 4) as usize] as char);
-                out.push(HEX[(b & 0x0F) as usize] as char);
-            },
-        }
-    }
-    out
-}
-
 async fn build_db_map() -> Result<DatabaseConnectionMap> {
     // ── Postgres (required — startup fails if unreachable) ─────────────────
     let pg_conn = {
@@ -86,15 +62,13 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
                 .map_err(|e| anyhow!("Invalid DB_PORT '{v}': {e}"))?,
             Err(_) => 5432,
         };
-        // Credentials are percent-encoded so reserved characters in the
-        // password can't break the URL; sqlx decodes them while parsing.
         let mut opt = ConnectOptions::new(format!(
             "postgres://{}:{}@{}:{}/{}",
-            encode_url_component(&std::env::var("DB_USERNAME").unwrap_or("genshin_map".into())),
-            encode_url_component(&std::env::var("DB_PASSWORD").unwrap_or("".into())),
+            std::env::var("DB_USERNAME").unwrap_or("genshin_map".into()),
+            std::env::var("DB_PASSWORD").unwrap_or("".into()),
             std::env::var("DB_HOST").unwrap_or("localhost".into()),
             db_port,
-            encode_url_component(&std::env::var("DB_DATABASE").unwrap_or("genshin_map".into())),
+            std::env::var("DB_DATABASE").unwrap_or("genshin_map".into()),
         ));
         opt.max_connections(100)
             .min_connections(5)
@@ -118,9 +92,9 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
     // ── Redis (optional — graceful degradation for e2e mode) ──────────────
     let redis_conn = match redis::Client::open(format!(
         "redis://{}{}@{}:{}/{}",
-        encode_url_component(&std::env::var("REDIS_USERNAME").unwrap_or("".into())),
+        std::env::var("REDIS_USERNAME").unwrap_or("".into()),
         std::env::var("REDIS_PASSWORD")
-            .map(|p| format!(":{}", encode_url_component(&p)))
+            .map(|p| format!(":{}", p))
             .unwrap_or_default(),
         std::env::var("REDIS_HOST").unwrap_or("localhost".into()),
         std::env::var("REDIS_PORT")
@@ -250,21 +224,4 @@ async fn build_minio_conn() -> Option<minio::s3::MinioClient> {
     }
     info!("MinIO is ready");
     Some(client)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn encode_url_component_encodes_reserved_and_keeps_unreserved() {
-        assert_eq!(encode_url_component("genshin_map"), "genshin_map");
-        assert_eq!(
-            encode_url_component("p@ss:w/rd#1?x=%"),
-            "p%40ss%3Aw%2Frd%231%3Fx%3D%25"
-        );
-        assert_eq!(encode_url_component(""), "");
-        // Unicode passwords are encoded byte-wise and decode back unchanged.
-        assert_eq!(encode_url_component("密码"), "%E5%AF%86%E7%A0%81");
-    }
 }

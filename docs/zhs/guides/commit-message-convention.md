@@ -1,8 +1,6 @@
 # 提交规范（gitmoji）
 
-> [← 返回索引](../README.md) · 钩子由
-> [celestia-devtools](https://github.com/celestia-island/celestia-devtools) 提供
-> （安装：`pip install git+https://github.com/celestia-island/celestia-devtools.git`）
+> [← 返回索引](../README.md) · 钩子由 `celestia-devtools` 提供
 
 本项目遵循 celestia-island 组织的 [gitmoji](https://gitmoji.dev) 提交规范。
 `just hooks`（底层 `celestia-devtools hook install --force`）会在 `.git/hooks/`

@@ -82,7 +82,7 @@
 | 冷启动 | cold start | 客户端首次加载，需下载全部点位 / 物品数据 |
 | 增量同步 | incremental sync | 客户端比对 MD5 列表，仅获取变更的数据页 |
 | Caffeine 缓存 | （Java 侧 `neverRefreshCacheManager`） | Java 用 Caffeine 做永不过期的进程内缓存；Rust 侧对应缓存层待加（候选 `moka` / Redis） |
-| Java 参考实现 | `genshin-map-cloud` | 本 Rust 项目的对照源，功能需与之对齐，见 [Java 同步路线图](./sync-with-java-roadmap.md) |
+| Java 参考实现 | `java-genshin-map-cloud` | 本 Rust 项目的对照源，功能需与之对齐，见 [Java 同步路线图](./sync-with-java-roadmap.md) |
 | 四包分层 | `utils / database / functions / router` | 工作区自底向上分层，详见 [架构概览](./architecture.md#四包分层) |
 
 ## 五、原神地区速查

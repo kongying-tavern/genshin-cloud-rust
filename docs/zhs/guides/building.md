@@ -10,11 +10,7 @@
 
 - **[`just`](https://github.com/casey/just)**：所有构建/测试/钩子命令的统一入口。
 - **Docker**（仅本地调试需要）：用于一键拉起 Postgres、Redis、MinIO。
-- **`celestia-devtools`**：提交规范与缓存守护工具，来自
-  [celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools)，
-  安装：`pip install git+https://github.com/celestia-island/celestia-devtools.git`
-  （也可 clone 后 `pip install -e .`）。仓库根的 `celestia-devtools.just` 是
-  vendored 裁剪版，用 `celestia-devtools init --force` 刷新。
+- **`celestia-devtools`**：提交规范与缓存守护工具，由 `just init` 引导安装。
 
 ## 常用命令
 
@@ -40,15 +36,11 @@ just fmt           # cargo fmt + Markdown 格式化
 ```env
 DB_HOST=127.0.0.1
 DB_PORT=5432
-DB_USERNAME=genshin_map
 DB_PASSWORD=genshin_map
-DB_DATABASE=genshin_map
-JWT_SECRET=<openssl rand -base64 48>
+# 可选：DB_USER / DB_NAME 默认为 genshin_map
 ```
 
-> `JWT_SECRET` 为必填项（进程启动时校验，缺失即拒绝启动）；其余 DB 项在
-> 本地 docker-compose 环境下有合理默认值。完整变量清单与默认值见根
-> `README.md` 的「环境变量」章节与 `.env.example`。
+> `DB_PASSWORD` 是必填项；其余在本地 docker-compose 环境下有合理默认值。
 
 ## 本地依赖（docker-compose）
 

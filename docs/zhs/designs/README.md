@@ -11,7 +11,7 @@
 语境下要这么做，而不是把通用后端模板照搬过来。
 
 每篇文档大致包含三部分：背景与动机（这个数据结构 / 管线为何存在）、对 Java
-参考实现的对齐情况（`genshin-map-cloud`）、以及 Rust 侧当前的落地状态
+参考实现的对齐情况（`java-genshin-map-cloud`）、以及 Rust 侧当前的落地状态
 （含已知简化与后续待办）。
 
 ## 文档列表
@@ -40,7 +40,7 @@
 
 ## 相关资料
 
-- Java 参考实现：[`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)
+- Java 参考实现：[`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)
 - Rust 包结构：见 [架构概览](../guides/architecture.md#四包分层) 的四包分层
 - 领域术语对照（神瞳 / 宝箱 / 锄地等）：见 [领域术语表](../guides/glossary.md)
 - Java → Rust 同步进度：见 [Java 同步路线图](../guides/sync-with-java-roadmap.md)

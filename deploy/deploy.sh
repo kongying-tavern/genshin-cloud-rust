@@ -35,8 +35,8 @@ docker pull "$IMAGE"
 
 echo "[INFO] 部署 ${IMAGE} ..."
 if docker compose ps -q gcs-backend >/dev/null 2>&1 && [[ "$TAG" != "latest" ]]; then
-  # 显式指定非 latest 镜像：改用 compose run 前先更新编排里的镜像名
-  TAG="$TAG" IMAGE_OVERRIDE="$IMAGE" docker compose up -d --no-deps gcs-backend
+  # 显式指定非 latest 镜像：通过 IMAGE_TAG 覆盖 compose 默认的 latest
+  IMAGE_TAG="$TAG" docker compose up -d --no-deps gcs-backend
 else
   docker compose up -d
 fi

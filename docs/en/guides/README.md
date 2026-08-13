@@ -2,7 +2,7 @@
 
 The Rust rewrite of the "空荧酒馆 Genshin Map" backend. The goal is **feature
 parity** with the Java reference implementation
-([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud))
+([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
 while improving performance, deployment ergonomics, and type safety. The Rust
 and Java sides share the same PostgreSQL schema (`genshin_map`) during the
 migration, so they can run against the same database.
