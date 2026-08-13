@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::item_type::ItemTypeAddRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::item_type::ItemTypeAddRequest;
 
 /// 添加物品类型
 /// 成功后返回新的类型ID

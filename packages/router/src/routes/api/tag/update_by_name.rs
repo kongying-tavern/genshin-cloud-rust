@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 /// 按标签名更新图标绑定（前端兼容路由）
 /// POST /tag/{tagName}/{iconId}

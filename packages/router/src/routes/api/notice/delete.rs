@@ -1,9 +1,8 @@
 use anyhow::Result;
 
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
-use crate::middlewares::{ApiError, ExtractAuthInfo};
-
 
 /// 删除公告
 #[tracing::instrument(skip(auth))]

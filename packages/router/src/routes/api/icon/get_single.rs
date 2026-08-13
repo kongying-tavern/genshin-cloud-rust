@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 /// 获取单个图标信息
 /// POST /icon/get/single/{iconId}

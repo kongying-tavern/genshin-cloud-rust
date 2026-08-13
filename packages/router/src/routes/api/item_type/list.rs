@@ -6,8 +6,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use _utils::models::item_type::ItemTypeListRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::item_type::ItemTypeListRequest;
 
 /// 列出某一层级的物品类型
 /// 不递归遍历，只遍历子级

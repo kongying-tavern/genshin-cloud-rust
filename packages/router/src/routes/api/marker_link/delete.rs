@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::marker_link::MarkerLinkDeleteRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::marker_link::MarkerLinkDeleteRequest;
 
 /// 删除点位关联
 /// DELETE /marker_link/delete

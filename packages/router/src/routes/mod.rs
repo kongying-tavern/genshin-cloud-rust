@@ -2,8 +2,8 @@ mod api;
 mod system;
 mod ws;
 
-use anyhow::Result;
 use crate::middlewares::{ApiError, api_error};
+use anyhow::Result;
 
 use axum::{
     Router,

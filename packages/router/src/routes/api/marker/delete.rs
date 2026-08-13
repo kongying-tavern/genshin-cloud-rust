@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-
 
 /// 删除点位
 /// DELETE /marker/{markerId}

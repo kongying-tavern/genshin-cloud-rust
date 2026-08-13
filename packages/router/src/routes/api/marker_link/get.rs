@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::marker_link::{MarkerLinkGraphRequest, MarkerLinkListRequest};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::marker_link::{MarkerLinkGraphRequest, MarkerLinkListRequest};
 
 /// 点位关联列表
 /// POST /marker_link/get/list

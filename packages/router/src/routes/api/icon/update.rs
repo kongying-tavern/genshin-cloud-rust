@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::icon::IconUpdateRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::icon::IconUpdateRequest;
 
 /// 修改图标信息
 /// 由icon_id定位修改一个icon

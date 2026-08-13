@@ -6,8 +6,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 批量移动类型为目标类型的子类型
 /// 将类型批量移动到某个类型下作为其子类型

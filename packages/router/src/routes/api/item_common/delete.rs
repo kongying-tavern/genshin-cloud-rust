@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-
 
 /// 删除地区公用物品
 /// DELETE /item_common/delete/{itemId}

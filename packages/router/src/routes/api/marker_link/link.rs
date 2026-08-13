@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::marker_link::MarkerLinkage;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::marker_link::MarkerLinkage;
 
 /// 关联点位
 /// POST /marker_link/link

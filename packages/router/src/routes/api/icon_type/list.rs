@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::icon_type::IconTypeListRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::icon_type::IconTypeListRequest;
 
 /// 列出分类
 /// 列出图标的分类，typeId为-1的时候为列出所有的根分类

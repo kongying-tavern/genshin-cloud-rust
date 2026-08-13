@@ -1,7 +1,7 @@
 use anyhow::Result;
 
+use crate::middlewares::ApiError;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
-use crate::middlewares::{ApiError};
 
 /// 获取资源信息
 /// GET /res/get

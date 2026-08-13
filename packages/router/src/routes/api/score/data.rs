@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::score::ScoreDataRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::score::ScoreDataRequest;
 
 /// 获取评分数据
 #[tracing::instrument(skip(auth))]

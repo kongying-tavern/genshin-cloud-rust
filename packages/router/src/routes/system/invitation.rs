@@ -1,6 +1,6 @@
+use crate::middlewares::{ApiError, AppJson, ExtractAdmin, ExtractAuthInfo};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use crate::middlewares::{ApiError, AppJson, ExtractAdmin, ExtractAuthInfo};
 
 use axum::{
     extract::{Json, Path},

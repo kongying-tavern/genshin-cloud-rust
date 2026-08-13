@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-
 
 /// 软删除标签类型
 /// DELETE /tag_type/delete/{typeId}

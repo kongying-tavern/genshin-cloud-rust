@@ -3,8 +3,8 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
-use _functions::functions::api::res::UploadedFile;
 use crate::middlewares::{ApiError, ExtractAuthInfo, api_error};
+use _functions::functions::api::res::UploadedFile;
 
 /// 允许上传的内容类型白名单。
 const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];

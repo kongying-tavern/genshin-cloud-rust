@@ -6,15 +6,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use axum::http::header;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use axum::http::header;
 
 /// 获取所有标签信息的压缩数据
 /// GET /tag_doc/all_bin
 #[tracing::instrument(skip(auth))]
-pub async fn all_bin(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, ApiError> {
+pub async fn all_bin(ExtractAuthInfo(auth): ExtractAuthInfo) -> Result<Response, ApiError> {
     match _functions::functions::api::tag_doc::do_all_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 
 use axum::{
     body::Bytes,
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-
 
 /// GET /marker_doc/list_diff_snapshot
 #[tracing::instrument(skip(auth))]

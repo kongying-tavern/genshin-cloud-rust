@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::notice::NoticeUpdateRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::notice::NoticeUpdateRequest;
 
 /// 更新公告
 #[tracing::instrument(skip(auth))]
