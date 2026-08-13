@@ -126,7 +126,7 @@ fn model_to_vo(
         marker_title: it.marker_title,
         position: it.position,
         content: it.content,
-        picture: it.picture,
+        picture: it.picture.map(|p| super::res::minio_public_url(&p)),
         marker_creator_id: it.marker_creator_id,
         picture_creator_id: it.picture_creator_id,
         video_path: it.video_path,

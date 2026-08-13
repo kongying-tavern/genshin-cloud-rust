@@ -104,7 +104,7 @@ pub async fn do_list(
             id: it.id,
             version: it.version,
             name: it.tag,
-            url: it.url,
+            url: super::res::minio_public_url(&it.url),
         });
     }
     let payload = IconListResponse {
@@ -124,7 +124,7 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
         id: item.id,
         version: item.version,
         name: item.tag,
-        url: item.url,
+        url: super::res::minio_public_url(&item.url),
     })))
 }
 
