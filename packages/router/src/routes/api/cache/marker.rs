@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 /// 删除全部点位缓存
 #[tracing::instrument(skip(auth))]

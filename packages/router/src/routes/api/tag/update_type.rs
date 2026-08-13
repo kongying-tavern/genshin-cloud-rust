@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::tag::TagUpdateTypeRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::tag::TagUpdateTypeRequest;
 
 /// 修改标签的分类信息（后台接口）
 /// POST /tag/updateType

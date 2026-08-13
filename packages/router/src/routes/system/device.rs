@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
+use crate::middlewares::{ApiError, AppJson, ExtractAdmin, api_error};
 use _utils::models::wrapper::Pagination;
 use _utils::types::DeviceSort;
-use crate::middlewares::{ApiError, AppJson, ExtractAdmin, api_error};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::TagTypeAddRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::TagTypeAddRequest;
 
 /// 新增标签类型
 /// PUT /tag_type/add

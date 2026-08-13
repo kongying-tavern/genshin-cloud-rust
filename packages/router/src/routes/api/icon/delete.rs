@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 /// 删除图标
 /// DELETE /icon/delete/{iconId}

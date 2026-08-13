@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 /// 删除分类
 /// 这个操作会递归删除，请在前端做二次确认

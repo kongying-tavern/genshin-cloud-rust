@@ -3,8 +3,8 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除地区
 /// DELETE /area/{areaId}

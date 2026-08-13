@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::{AreaUpdateRequest, common::EmptyResponse, wrapper::CommonResponse};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::{AreaUpdateRequest, common::EmptyResponse, wrapper::CommonResponse};
 
 /// 修改地区
 /// POST /area/update

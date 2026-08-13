@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::score::ScoreGenerateRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAdmin};
+use _utils::models::score::ScoreGenerateRequest;
 
 /// 生成评分数据（管理员专用：全表扫描 + 写 score_stat，任意登录用户可触发
 /// 即 DoS 面，权限在路由层收口；functions 层保留 require_non_anonymous 兜底）。

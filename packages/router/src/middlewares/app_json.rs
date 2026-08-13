@@ -1,14 +1,13 @@
 //! 与 axum::Json 相同的请求体提取，但反序列化失败（422）时
 //! 返回标准 JSON 错误体，而不是 axum 默认的纯文本。
 
+use crate::middlewares::{ApiError, api_error};
 use axum::{
-    extract::{rejection::JsonRejection, FromRequest, Request},
-    http::StatusCode,
     Json,
+    extract::{FromRequest, Request, rejection::JsonRejection},
+    http::StatusCode,
 };
 use serde::de::DeserializeOwned;
-use crate::middlewares::{ApiError, api_error};
-
 
 /// JSON 请求体提取器（错误统一 JSON 化）。
 pub struct AppJson<T>(pub T);
@@ -26,7 +25,7 @@ where
             Err(rejection) => {
                 let message = rejection.body_text();
                 Err(api_error(StatusCode::UNPROCESSABLE_ENTITY, &message))
-            }
+            },
         }
     }
 }

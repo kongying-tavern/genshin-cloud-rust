@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::history::HistoryListRequest;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::history::HistoryListRequest;
 
 /// 历史记录分页查询
 /// POST /history/get/list

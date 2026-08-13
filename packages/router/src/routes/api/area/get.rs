@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-
 
 /// 获取单个地区信息
 /// POST /area/get/{areaId}

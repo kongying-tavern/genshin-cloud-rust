@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
-
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 /// 删除标签缓存
 /// DELETE /cache/icon_tag

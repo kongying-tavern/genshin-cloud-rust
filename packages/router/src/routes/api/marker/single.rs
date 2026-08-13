@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use _utils::models::marker::{MarkerAddRequest, MarkerUpdateData};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
+use _utils::models::marker::{MarkerAddRequest, MarkerUpdateData};
 
 /// 新增点位
 /// PUT /marker/single

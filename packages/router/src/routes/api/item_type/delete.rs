@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, extract::Path, http::StatusCode, response::IntoResponse};
 
-use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除物品类型
 /// 批量递归删除物品类型，需在前端做二次确认

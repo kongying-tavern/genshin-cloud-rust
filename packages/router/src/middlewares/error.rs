@@ -3,7 +3,11 @@
 //! 所有 handler 与中间件的失败路径都返回与 CommonResponse 序列化一致
 //! 的 JSON 错误体，前端才能稳定解析并呈现错误信息。
 
-use axum::{http::StatusCode, response::{IntoResponse, Response}, Json};
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde_json::Value;
 
 use _utils::models::CommonResponse;

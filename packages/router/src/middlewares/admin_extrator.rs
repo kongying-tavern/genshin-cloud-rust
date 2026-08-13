@@ -7,7 +7,7 @@ use axum::{
 use _utils::{jwt::AuthInfo, types::SystemUserRole};
 
 use super::auth_extrator::ExtractAuthInfo;
-use crate::middlewares::{api_error};
+use crate::middlewares::api_error;
 
 /// Admin-only auth extractor: authenticates like `ExtractAuthInfo` and rejects
 /// any non-Admin role with 403. Replaces the repetitive

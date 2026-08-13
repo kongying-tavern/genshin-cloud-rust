@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 /// 获取所有图标信息的 MD5
 /// GET /icon_doc/all_bin_md5

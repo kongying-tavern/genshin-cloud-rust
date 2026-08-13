@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
 /// 新增标签（前端兼容路由，仅传标签名）
 /// PUT /tag/{tagName}

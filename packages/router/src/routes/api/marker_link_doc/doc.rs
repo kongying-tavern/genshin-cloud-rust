@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use anyhow::Result;
 use axum::{
     body::Bytes,
     extract::Json,
@@ -27,9 +27,7 @@ pub async fn all_bin_md5(
 /// 获取所有 marker_link 的二进制文件（GZIP 压缩）
 /// GET /marker_link_doc/all-bin
 #[tracing::instrument(skip(auth))]
-pub async fn all_bin(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, ApiError> {
+pub async fn all_bin(ExtractAuthInfo(auth): ExtractAuthInfo) -> Result<Response, ApiError> {
     match _functions::functions::api::marker_link_doc::do_all_list_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
@@ -64,9 +62,7 @@ pub async fn all_graph_bin_md5(
 /// 获取所有 marker_link 的图谱二进制文件（GZIP 压缩）
 /// GET /marker_link_doc/all-graph-bin
 #[tracing::instrument(skip(auth))]
-pub async fn all_graph_bin(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, ApiError> {
+pub async fn all_graph_bin(ExtractAuthInfo(auth): ExtractAuthInfo) -> Result<Response, ApiError> {
     match _functions::functions::api::marker_link_doc::do_all_graph_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

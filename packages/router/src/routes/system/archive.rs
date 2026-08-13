@@ -1,12 +1,11 @@
-use anyhow::Result;
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo, api_error};
+use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
     http::StatusCode,
     response::IntoResponse,
 };
-
 
 /// 槽位范围校验（route 层收口）：前端契约固定 5 个存档槽位（0..=4），
 /// 超限直接返回 400。校验通过后 i64 原值透传 do_*，不做 `as i32` 截断。

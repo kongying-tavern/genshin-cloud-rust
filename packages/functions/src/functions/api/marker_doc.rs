@@ -157,7 +157,6 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
     .await
 }
 
-
 /// Protobuf wire helpers (no prost dependency, hand-rolled encoding).
 fn pb_varint(mut v: u64, out: &mut Vec<u8>) {
     while v >= 0x80 {

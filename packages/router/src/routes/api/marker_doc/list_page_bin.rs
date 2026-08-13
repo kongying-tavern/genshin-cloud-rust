@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use axum::http::header;
 use crate::middlewares::{ApiError, ExtractAuthInfo};
+use axum::http::header;
 
 /// 点位分页数据（GZIP 压缩二进制）
 /// GET /marker_doc/list_page_bin/{md5}

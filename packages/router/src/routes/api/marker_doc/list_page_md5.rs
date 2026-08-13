@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, ExtractAuthInfo};
-
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 /// 点位分页的md5数组
 /// 返回点位分页bz2的md5数组

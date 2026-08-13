@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
-
+use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 /// 新增地区公用物品
 /// 通过ID列表批量添加地区公用物品
