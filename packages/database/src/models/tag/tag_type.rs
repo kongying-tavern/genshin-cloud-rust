@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use _utils::impl_safe_operation;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "tag_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "tag_type")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,

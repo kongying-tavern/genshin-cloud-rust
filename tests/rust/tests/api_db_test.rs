@@ -89,18 +89,19 @@ where
 }
 
 /// Drop (if present) and recreate the given entities' tables, FK-free, in the
-/// `genshin_map` schema. Order matters only for DROP CASCADE, not for CREATE
-/// (no FKs).
+/// configured schema (default `genshin_map`, see `DB_SCHEMA`). Order matters
+/// only for DROP CASCADE, not for CREATE (no FKs).
 async fn recreate_tables_fklless(
     db: &sea_orm::DatabaseConnection,
     table_names: &[&str],
     ddls: &[String],
 ) -> anyhow::Result<()> {
-    db.execute_unprepared("CREATE SCHEMA IF NOT EXISTS genshin_map")
+    let schema = _database::default_schema();
+    db.execute_unprepared(&format!(r#"CREATE SCHEMA IF NOT EXISTS "{schema}""#))
         .await?;
     for name in table_names {
         db.execute_unprepared(&format!(
-            r#"DROP TABLE IF EXISTS "genshin_map"."{name}" CASCADE"#
+            r#"DROP TABLE IF EXISTS "{schema}"."{name}" CASCADE"#
         ))
         .await?;
     }

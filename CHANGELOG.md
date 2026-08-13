@@ -7,6 +7,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `DB_SCHEMA` env var (PostgreSQL): all tables now resolve through the
+  connection `search_path` instead of a hard-coded `genshin_map` schema
+  qualifier, so the whole stack (queries, `init_db`, demo seed) runs against
+  a custom schema. The entity attributes dropped their `schema_name`; the
+  runtime validates `DB_SCHEMA` as a plain SQL identifier (default stays
+  `genshin_map`).
+- `LOG_DIR` env var: when set, logs are additionally appended to
+  `<LOG_DIR>/genshin-cloud.log` (stderr output stays on). Useful for
+  mounting a volume for persistent logs in Docker.
+- `MINIO_PUBLIC_BASE_URL` env var: URLs returned to clients (e.g. the
+  `/res` upload `fileUrl`) are built from this public/CDN address, while
+  uploads keep going through the internal `MINIO_BASE_URL`. Falls back to
+  `MINIO_BASE_URL` when unset.
+
+### Changed
+
+- Renamed the `HiddenFlag::Spy` variant to `HiddenFlag::Beta` (numeric value
+  `2` and the wire contract are unchanged; the legacy string `"Spy"` still
+  deserializes), and `SystemUserRole::MapNeigui` to `MapBeta` (role code
+  `MAP_NEIGUI` kept for frontend compatibility). All 内鬼 wording in docs is
+  replaced with 测试服 / 测试 (Beta).
+
+### Removed
+
+- Deprecated the punctuate workflow: deleted `punctuate-workflow.md` (zhs +
+  en) and its references, removed the unused `punctuate` / `punctuate_audit`
+  models and the commented-out route stubs. The `marker_punctuate` staging
+  table remains part of the schema.
+
 ### Fixed
 
 - Fix the role contract that gates the whole frontend data pipeline:

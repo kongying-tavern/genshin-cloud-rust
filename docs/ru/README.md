@@ -23,14 +23,13 @@ workspace из четырёх пакетов (`utils → database → functions 
 | [Glossary](../en/guides/glossary.md) | Китайско-английская терминология |
 | [Architecture](../en/guides/architecture.md) | Слои четырёх пакетов, поток запросов, паттерн `SafeEntityTrait` |
 | [Building](../en/guides/building.md) | Требования, команды `just`, файл `.env`, локальный docker-compose |
-| [API Reference](../en/guides/api-reference.md) | Домены API роутера (area/icon/item/marker/punctuate/score/system…) |
+| [API Reference](../en/guides/api-reference.md) | Домены API роутера (area/icon/item/marker/score/system…) |
 | [Commit Convention](../en/guides/commit-message-convention.md) | Соглашение о коммитах gitmoji |
 | [Java Sync Roadmap](../en/guides/sync-with-java-roadmap.md) | Приоритеты переноса из Java-реализации |
 | [Domain Sync Template](../en/guides/domain-sync-template.md) | Шаблон из пяти слоёв для переноса Java-домена в Rust |
 
 ### Дизайн
 
-- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](../en/designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](../en/designs/hidden-and-special-flags.md)
 

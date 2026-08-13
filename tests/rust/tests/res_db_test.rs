@@ -90,9 +90,13 @@ async fn res_upload_stores_image_in_minio() {
         .and_then(|v| v.as_str())
         .expect("filePath field present");
 
-    // URL shape: {base}/images/uploads/{uuid}.png — extension derived from the
-    // content type, never from the client file name.
-    let base = std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into());
+    // URL shape: {public base}/images/uploads/{uuid}.png — extension derived
+    // from the content type, never from the client file name. The returned
+    // URL is built from MINIO_PUBLIC_BASE_URL (falling back to the internal
+    // MINIO_BASE_URL), mirroring `do_upload_image`.
+    let base = std::env::var("MINIO_PUBLIC_BASE_URL").unwrap_or_else(|_| {
+        std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into())
+    });
     assert!(file_url.starts_with(&format!("{}/images/uploads/", base.trim_end_matches('/'))));
     assert!(file_url.ends_with(".png"));
     assert_eq!(file_path, file_url, "filePath falls back to fileUrl");

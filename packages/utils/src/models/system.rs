@@ -31,7 +31,7 @@ where
         serde_json::Value::Number(n) => match n.as_i64() {
             Some(0) => Ok(SystemUserRole::Admin),
             Some(1) => Ok(SystemUserRole::MapManager),
-            Some(2) => Ok(SystemUserRole::MapNeigui),
+            Some(2) => Ok(SystemUserRole::MapBeta),
             Some(3) => Ok(SystemUserRole::MapPunctuate),
             Some(4) => Ok(SystemUserRole::MapUser),
             Some(5) => Ok(SystemUserRole::Visitor),

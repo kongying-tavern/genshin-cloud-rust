@@ -245,11 +245,12 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
 }
 
 /// SystemUserRole → Java `RoleEnum` code（前端 `RoleTypeEnum` 契约）。
+/// 契约代码保持 `MAP_NEIGUI`（前端按此字符串匹配），勿改。
 fn role_code(role: _utils::types::SystemUserRole) -> String {
     match role {
         _utils::types::SystemUserRole::Admin => "ADMIN",
         _utils::types::SystemUserRole::MapManager => "MAP_MANAGER",
-        _utils::types::SystemUserRole::MapNeigui => "MAP_NEIGUI",
+        _utils::types::SystemUserRole::MapBeta => "MAP_NEIGUI",
         _utils::types::SystemUserRole::MapPunctuate => "MAP_PUNCTUATE",
         _utils::types::SystemUserRole::MapUser => "MAP_USER",
         _utils::types::SystemUserRole::Visitor => "VISITOR",

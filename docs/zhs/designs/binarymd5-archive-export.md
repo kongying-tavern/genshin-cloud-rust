@@ -2,7 +2,7 @@
 
 # BinaryMD5 归档导出管线
 
-> [← 设计文档索引](./README.md) · 相关：[打点审批工作流](./punctuate-workflow.md) · [隐藏/特殊标记](./hidden-and-special-flags.md)
+> [← 设计文档索引](./README.md) · 相关：[隐藏/特殊标记](./hidden-and-special-flags.md)
 
 本文解释 Rust 后端的 `*_doc` 端点家族——为什么客户端冷启动要下载一大坨压缩
 字节流、为什么要按 MD5 寻址、为什么 marker 的正式组要按 `id / 3000` 切页，以及
@@ -71,7 +71,7 @@ marker 是数据量最大的域，切页策略在 `marker_doc.rs`：
 1. 查所有正式点位（`find_safety` 已过滤软删除）；
 1. **按 `hidden_flag` 分组**（`BTreeMap`，升序）——可见性隔离是第一优先级，详见
 
-[标记文档](./hidden-and-special-flags.md)。普通玩家只下 `Visible` 组，内鬼/测试
+[标记文档](./hidden-and-special-flags.md)。普通玩家只下 `Visible` 组，测试
 服玩家才下其他组；
 
 1. **正式组（`hidden_flag = Visible = 0`）再按 `id / 3000` 切页**——每个点位 id 落在
@@ -165,7 +165,7 @@ Rust 侧当前**每次都重新生成**——`item_doc.rs:44` 的注释明确写
 ## 6. 与 hidden_flag 的耦合（重要）
 
 切页策略把 `hidden_flag` 当成第一级分组键，意味着**可见性过滤下沉到了归档层**：
-普通玩家客户端根本不会看到 `Hidden`/`Spy`/`Suprise` 组的 MD5（前端按
+普通玩家客户端根本不会看到 `Hidden`/`Beta`/`Suprise` 组的 MD5（前端按
 `userDataLevel` 请求头只拉自己有权的那几组）。这是防剧透和测试服隔离的物理隔离——
 不只是查询时过滤，而是连数据分片都不下发。详见
 [隐藏/特殊标记文档](./hidden-and-special-flags.md#2-hidden_flag数据级可见性过滤)。

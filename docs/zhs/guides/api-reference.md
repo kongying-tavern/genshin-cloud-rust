@@ -35,12 +35,10 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 
 > `*_doc` 系列对应 Java 侧 BinaryMD5 压缩归档导出能力。
 
-## 打点审批与评分
+## 评分
 
 | 域 | 路径前缀 | 说明 |
 | --- | --- | --- |
-| punctuate | `/punctuate` | 用户提交打点（actions / get / manage） |
-| punctuate_audit | `/punctuate_audit` | 打点审批流（audit / delete / get） |
 | score | `/score` | 评分数据与生成 |
 
 ## 系统域
