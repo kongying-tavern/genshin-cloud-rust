@@ -1,6 +1,6 @@
 # Keep the build context small and free of local artifacts. The Dockerfile only
-# COPYs Cargo.toml, Cargo.lock, packages/, and tests/, so everything else is
-# excluded here.
+# COPYs Cargo.toml, Cargo.lock, packages/, tests/, and
+# scripts/indexes_dev.sql, so everything else is excluded here.
 
 # VCS & CI
 .git/
@@ -27,7 +27,10 @@ __pycache__/
 
 # Repo files not needed to build the binary
 docs/
-scripts/
+# scripts/ is excluded except indexes_dev.sql — init_db embeds it via
+# include_str!, so it must be present in the Docker build context.
+scripts/*
+!scripts/indexes_dev.sql
 tests/docker/
 _site/
 PLAN.md
