@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 use _utils::models::icon_type::IconTypeListRequest;

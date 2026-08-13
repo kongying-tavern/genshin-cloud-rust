@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::{ApiError, AppJson, ExtractAdmin};
 use _utils::{models::Pagination, types::ActionLogAction};
