@@ -2,15 +2,15 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::score::ScoreDataRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 获取评分数据
 #[tracing::instrument(skip(auth))]
 pub async fn get_score_data(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(request): Json<ScoreDataRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(request): AppJson<ScoreDataRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::score::do_get_score_data(auth, request).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

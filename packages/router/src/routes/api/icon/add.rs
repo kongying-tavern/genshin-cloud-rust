@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::icon::IconAddRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 新增图标
 /// 无需指定icon的id，id由系统自动生成并在响应中返回
@@ -12,8 +12,8 @@ use _utils::models::icon::IconAddRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<IconAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<IconAddRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::icon::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

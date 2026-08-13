@@ -156,3 +156,56 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
     })
     .await
 }
+
+
+/// Protobuf wire helpers (no prost dependency, hand-rolled encoding).
+fn pb_varint(mut v: u64, out: &mut Vec<u8>) {
+    while v >= 0x80 {
+        out.push((v as u8 & 0x7F) | 0x80);
+        v >>= 7;
+    }
+    out.push(v as u8);
+}
+
+fn pb_key(out: &mut Vec<u8>, field: u32, wire: u8) {
+    pb_varint(((field as u64) << 3) | wire as u64, out);
+}
+
+fn pb_u64(out: &mut Vec<u8>, field: u32, v: u64) {
+    pb_key(out, field, 0);
+    pb_varint(v, out);
+}
+
+fn pb_msg(out: &mut Vec<u8>, field: u32, msg: &[u8]) {
+    pb_key(out, field, 2);
+    pb_varint(msg.len() as u64, out);
+    out.extend_from_slice(msg);
+}
+
+/// GET /marker_doc/list_diff_snapshot - frontend diff sync snapshot.
+///
+/// Response is protobuf MarkerDiffSnapshotVoList (snapshots = 1):
+/// each MarkerDiffSnapshotVo has version = 1, id = 2.
+/// The marker table has no linkage_id column, so it is omitted (optional).
+pub async fn do_list_diff_snapshot(_auth: AuthInfo) -> Result<Vec<u8>> {
+    super::binary_doc::get_diff_snapshot_cached("marker:diff-snapshot".into(), async {
+        let db = &DB_CONN.wait().pg_conn;
+        let markers = marker_model::Entity::find()
+            .select_only()
+            .column(marker_model::Column::Version)
+            .column(marker_model::Column::Id)
+            .filter(marker_model::Column::DelFlag.eq(false))
+            .into_tuple::<(i64, i64)>()
+            .all(db)
+            .await?;
+        let mut out = Vec::with_capacity(markers.len() * 20);
+        for (version, id) in markers {
+            let mut msg = Vec::with_capacity(16);
+            pb_u64(&mut msg, 1, version as u64);
+            pb_u64(&mut msg, 2, id as u64);
+            pb_msg(&mut out, 1, &msg);
+        }
+        Ok(out)
+    })
+    .await
+}

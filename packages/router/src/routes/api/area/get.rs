@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 
 use axum::{
     extract::{Json, Path},
@@ -6,7 +7,6 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 
 /// 获取单个地区信息
 /// POST /area/get/{areaId}
@@ -14,7 +14,7 @@ use crate::middlewares::ExtractAuthInfo;
 pub async fn get(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(area_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::area::do_get(auth, area_id).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

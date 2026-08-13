@@ -6,8 +6,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 批量移动类型为目标类型的子类型
 /// 将类型批量移动到某个类型下作为其子类型
@@ -16,8 +16,8 @@ use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 pub async fn move_to_target(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(target_type_id): Path<i64>,
-    Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<Vec<i64>>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::item_type::do_move_to_target(auth, target_type_id, payload)
         .await
     {

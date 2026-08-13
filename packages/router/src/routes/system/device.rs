@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAdmin;
 use _utils::models::wrapper::Pagination;
 use _utils::types::DeviceSort;
+use crate::middlewares::{ApiError, AppJson, ExtractAdmin, api_error};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,8 +29,8 @@ pub struct DeviceListParams {
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(payload): Json<DeviceListParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<DeviceListParams>,
+) -> Result<impl IntoResponse, ApiError> {
     let size_raw = payload
         .pagination
         .as_ref()
@@ -72,11 +72,11 @@ pub struct DeviceUpdateParams {
 #[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(payload): Json<DeviceUpdateParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<DeviceUpdateParams>,
+) -> Result<impl IntoResponse, ApiError> {
     let status = payload
         .status
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
+        .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "status required"))?;
     match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

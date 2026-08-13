@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::middlewares::ExtractAuthInfo;
 use axum::http::header;
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 
 /// 点位分页数据（GZIP 压缩二进制）
 /// GET /marker_doc/list_page_bin/{md5}
@@ -16,7 +16,7 @@ use axum::http::header;
 pub async fn list_page_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(md5): Path<String>,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, ApiError> {
     match _functions::functions::api::marker_doc::do_list_page_bin(auth, md5).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

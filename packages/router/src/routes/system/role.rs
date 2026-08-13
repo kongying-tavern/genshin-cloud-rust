@@ -2,15 +2,15 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::SysRoleVo;
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 
 /// 角色列表（Java `SysRoleVo`；前端用 `code` 映射权限掩码）。
 /// GET /role/list
 #[tracing::instrument(skip(_auth))]
 pub async fn list(
     ExtractAuthInfo(_auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     let roles = vec![
         SysRoleVo {
             id: 0,

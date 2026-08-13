@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAdmin;
 use _utils::{models::Pagination, types::ActionLogAction};
+use crate::middlewares::{ApiError, AppJson, ExtractAdmin};
 
 /// 格式：字段+ 字段-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,8 +59,8 @@ pub struct ActionLogParams {
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
-    Json(query): Json<ActionLogParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(query): AppJson<ActionLogParams>,
+) -> Result<impl IntoResponse, ApiError> {
     let size_raw = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10);
     let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = query

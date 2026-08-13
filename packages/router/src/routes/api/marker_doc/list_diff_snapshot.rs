@@ -1,21 +1,19 @@
 use anyhow::Result;
+use crate::middlewares::{ApiError, ExtractAuthInfo};
 
 use axum::{
     body::Bytes,
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{IntoResponse, Response},
 };
 
-use axum::http::header;
-use crate::middlewares::{ApiError, ExtractAuthInfo};
 
-/// 获取所有图标信息的压缩数据
-/// GET /icon_doc/all_bin
+/// GET /marker_doc/list_diff_snapshot
 #[tracing::instrument(skip(auth))]
-pub async fn all_bin(
+pub async fn list_diff_snapshot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, ApiError> {
-    match _functions::functions::api::icon_doc::do_all_bin(auth).await {
+    match _functions::functions::api::marker_doc::do_list_diff_snapshot(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

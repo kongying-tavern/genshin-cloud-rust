@@ -135,14 +135,24 @@ pub async fn do_get_list(
     payload: MarkerLinkListRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
     // 与 Java 实现一致：未指定组 ID 时返回空 map
-    if payload.group_ids.is_empty() {
-        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
-    }
     let db = &DB_CONN.wait().pg_conn;
-    let items = linkage_model::Entity::find_safety()
-        .filter(linkage_model::Column::GroupId.is_in(payload.group_ids))
-        .all(db)
-        .await?;
+    // 与 Java 实现一致：未指定组 ID 且非遍历模式时返回空 map
+    let Some(groups) = payload
+        .group_ids
+        .as_ref()
+        .filter(|g| !g.is_empty())
+        .filter(|_| payload.is_traverse != Some(true))
+    else {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
+    let items = if payload.is_traverse == Some(true) {
+        linkage_model::Entity::find_safety().all(db).await?
+    } else {
+        linkage_model::Entity::find_safety()
+            .filter(linkage_model::Column::GroupId.is_in(groups.clone()))
+            .all(db)
+            .await?
+    };
     // 按 group_id 分组返回，前端期望 `Record<string, MarkerLinkageVo[]>`
     let mut map: std::collections::HashMap<String, Vec<MarkerLinkVO>> =
         std::collections::HashMap::new();
@@ -159,16 +169,22 @@ pub async fn do_get_graph(
     payload: MarkerLinkGraphRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
     // 与 Java 实现一致：未指定组 ID 时返回空 map
-    if payload.group_ids.is_empty() {
-        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
-    }
     let db = &DB_CONN.wait().pg_conn;
+    // 与 Java 实现一致：未指定组 ID 且非遍历模式时返回空 map
+    let Some(groups) = payload
+        .group_ids
+        .as_ref()
+        .filter(|g| !g.is_empty())
+        .filter(|_| payload.is_traverse != Some(true))
+    else {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
     // 每个 groupId 返回一个 GraphVo 结构。前端类型（markerLink.ts GraphVo）声明
     // relations 为 `Record<string, string[]>`，但该接口前端无调用方；做最小对齐：
     // relations 改为该组 link 的 id 字符串列表，relRefs/pathRefs 无更丰富的图数据，置空数组。
     let mut map: std::collections::HashMap<String, serde_json::Value> =
         std::collections::HashMap::new();
-    for g in payload.group_ids {
+    for g in groups.clone() {
         let items = linkage_model::Entity::find_safety()
             .filter(linkage_model::Column::GroupId.eq(g.clone()))
             .all(db)

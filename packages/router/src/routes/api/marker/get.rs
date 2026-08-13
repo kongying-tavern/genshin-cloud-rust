@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::{marker::MarkerFilterRequest, wrapper::Pagination};
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 根据各种条件筛选查询点位ID
 /// 支持根据末端地区、末端类型、物品来进行查询，三种查询不能同时生效，同时存在时报错
@@ -11,8 +11,8 @@ use _utils::models::{marker::MarkerFilterRequest, wrapper::Pagination};
 #[tracing::instrument(skip(auth))]
 pub async fn get_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<MarkerFilterRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<MarkerFilterRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::marker::do_get_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -25,8 +25,8 @@ pub async fn get_id(
 #[tracing::instrument(skip(auth))]
 pub async fn get_list_by_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<MarkerFilterRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<MarkerFilterRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::marker::do_get_list_by_info(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -39,8 +39,8 @@ pub async fn get_list_by_info(
 #[tracing::instrument(skip(auth))]
 pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<Vec<i64>>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::marker::do_get_list_by_id(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -52,8 +52,8 @@ pub async fn get_list_by_id(
 #[tracing::instrument(skip(auth))]
 pub async fn get_page(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<Pagination>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<Pagination>,
+) -> Result<impl IntoResponse, ApiError> {
     // use axum::Json as AxumJson; (removed duplicate alias)
     match _functions::functions::api::marker::do_get_page(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),

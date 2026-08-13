@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo, api_error};
 
 use axum::{
     extract::{Json, Path},
@@ -6,15 +7,14 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 
 /// 槽位范围校验（route 层收口）：前端契约固定 5 个存档槽位（0..=4），
 /// 超限直接返回 400。校验通过后 i64 原值透传 do_*，不做 `as i32` 截断。
-fn check_slot_index(slot_index: i64) -> Result<(), (StatusCode, String)> {
+fn check_slot_index(slot_index: i64) -> Result<(), ApiError> {
     if !(0..=4).contains(&slot_index) {
-        return Err((
+        return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "slot_index must be in range 0..=4".to_string(),
+            "slot_index must be in range 0..=4",
         ));
     }
     Ok(())
@@ -26,7 +26,7 @@ fn check_slot_index(slot_index: i64) -> Result<(), (StatusCode, String)> {
 pub async fn get_last(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index).await {
@@ -41,7 +41,7 @@ pub async fn get_last(
 pub async fn get_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index).await {
@@ -55,7 +55,7 @@ pub async fn get_history(
 #[tracing::instrument(skip(auth))]
 pub async fn get_all_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
         Ok(v) => Ok(Json(v).into_response()),
@@ -70,8 +70,8 @@ pub async fn get_all_history(
 pub async fn put(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, name)): Path<(i64, String)>,
-    Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<serde_json::Value>,
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
@@ -94,8 +94,8 @@ pub async fn put(
 pub async fn save(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-    Json(payload): Json<serde_json::Value>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<serde_json::Value>,
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(auth, user_id, slot_index, None, payload)
@@ -112,7 +112,7 @@ pub async fn save(
 pub async fn rename(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path((slot_index, new_name)): Path<(i64, String)>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_rename_by_slot(
@@ -131,7 +131,7 @@ pub async fn rename(
 pub async fn restore(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_restore_slot(auth, user_id, slot_index).await {
@@ -146,7 +146,7 @@ pub async fn restore(
 pub async fn delete_slot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(slot_index): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_delete_slot(auth, user_id, slot_index).await {

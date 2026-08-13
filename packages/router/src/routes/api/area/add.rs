@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::AreaAddRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 新增地区
 /// PUT /area/add
@@ -11,8 +11,8 @@ use _utils::models::AreaAddRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<AreaAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<AreaAddRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match _functions::functions::api::area::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

@@ -906,7 +906,7 @@ pub async fn do_get_page(
 ) -> Result<CommonResponse<MarkerListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
 
-    let size = payload.size.unwrap_or(10).min(200) as u64;
+    let size = payload.size.unwrap_or(10).min(500) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

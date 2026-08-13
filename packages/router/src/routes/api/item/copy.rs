@@ -1,4 +1,5 @@
 use anyhow::Result;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 use axum::{
     extract::{Json, Path},
@@ -6,7 +7,6 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 
 /// 复制物品到地区
 /// 根据物品ID列表复制物品到新地区，此操作会递归复制类型及父级类型。
@@ -16,8 +16,8 @@ use crate::middlewares::ExtractAuthInfo;
 pub async fn copy_to_area(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(area_id): Path<i64>,
-    Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<Vec<i64>>,
+) -> Result<impl IntoResponse, ApiError> {
     match crate::functions::api::item::do_copy_to_area(auth, area_id, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),

@@ -92,7 +92,7 @@ pub async fn do_list(
     if let Some(current) = payload.page.current
         && let Some(size) = payload.page.size
     {
-        let size = size.min(200);
+        let size = size.min(500);
         let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
         select = select.limit(size as u64).offset(offset);
     }

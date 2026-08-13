@@ -6,8 +6,8 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::item_type::ItemTypeListRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 列出某一层级的物品类型
 /// 不递归遍历，只遍历子级
@@ -16,8 +16,8 @@ use _utils::models::item_type::ItemTypeListRequest;
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(self_flag): Path<i64>,
-    Json(payload): Json<ItemTypeListRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<ItemTypeListRequest>,
+) -> Result<impl IntoResponse, ApiError> {
     match crate::functions::api::item_type::do_get_list(auth, self_flag != 0, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -30,7 +30,7 @@ pub async fn get_list(
 #[tracing::instrument(skip(auth))]
 pub async fn get_list_all(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, ApiError> {
     match crate::functions::api::item_type::do_get_list_all(auth).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

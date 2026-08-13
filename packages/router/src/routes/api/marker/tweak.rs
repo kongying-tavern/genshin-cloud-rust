@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
 use _utils::models::marker::MarkerTweakRequest;
+use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 
 /// 点位调整
 /// 批量调整点位数据，支持多种调整类型和字段
@@ -21,8 +21,8 @@ use _utils::models::marker::MarkerTweakRequest;
 #[tracing::instrument(skip(auth))]
 pub async fn tweak(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<Vec<MarkerTweakRequest>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+    AppJson(payload): AppJson<Vec<MarkerTweakRequest>>,
+) -> Result<impl IntoResponse, ApiError> {
     match crate::functions::api::marker::do_tweak(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

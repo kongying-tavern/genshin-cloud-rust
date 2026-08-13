@@ -7,6 +7,7 @@ use axum::{
 use _utils::{jwt::AuthInfo, types::SystemUserRole};
 
 use super::auth_extrator::ExtractAuthInfo;
+use crate::middlewares::{api_error};
 
 /// Admin-only auth extractor: authenticates like `ExtractAuthInfo` and rejects
 /// any non-Admin role with 403. Replaces the repetitive
@@ -23,7 +24,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let ExtractAuthInfo(auth) = ExtractAuthInfo::from_request_parts(parts, state).await?;
         if auth.info.role_id != SystemUserRole::Admin {
-            return Err((StatusCode::FORBIDDEN, "Forbidden".to_string()).into_response());
+            return Err(api_error(StatusCode::FORBIDDEN, "Forbidden").into_response());
         }
         Ok(Self(auth))
     }
