@@ -1,5 +1,10 @@
 # celestia-devtools common.just — vendored build recipes (trimmed for this repo).
 #
+# Upstream project: https://github.com/celestia-island/celestia-devtools
+# Install once per machine:
+#   pip install git+https://github.com/celestia-island/celestia-devtools.git
+# (or clone the repo and run: pip install -e .)
+#
 # This file is COPIED into your repo by `celestia-devtools init`.
 # Commit it to git so every clone gets it — no package install needed
 # to parse the justfile, only to run the recipes.
