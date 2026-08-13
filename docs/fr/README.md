@@ -2,7 +2,7 @@
 
 > La réécriture en Rust du backend « 空荧酒馆 Genshin Map », synchronisée avec
 > l'implémentation de référence Java
-> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
+> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)).
 
 Ceci est la section documentaire en français. Le backend est un workspace Cargo
 de quatre paquets (`utils → database → functions → router`) construit sur

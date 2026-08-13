@@ -1,7 +1,7 @@
 # Genshin Map Cloud — Rust 백엔드
 
 > 「공영주점·원신 지도」백엔드의 Rust 재구현으로, Java 참조 구현
-> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
+> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud))
 > 과 기능을 맞춥니다.
 
 한국어 문서 섹션입니다. 백엔드는 `axum`·`sea-orm`(PostgreSQL)·`redis`·`minio`·

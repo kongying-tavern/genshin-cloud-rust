@@ -1,7 +1,7 @@
 # Java Sync Roadmap
 
 This roadmap tracks the port of features from the Java reference backend
-([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud))
+([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud))
 into this Rust rewrite. The Rust and Java sides share the same PostgreSQL
 schema (`genshin_map`), verified by the table-name parity tests in
 `tests/rust/tests/`, so the two backends can run against the same database

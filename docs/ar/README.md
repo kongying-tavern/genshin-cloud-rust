@@ -2,7 +2,7 @@
 
 > إعادة كتابة الخادم الخلفي «空荧酒馆 Genshin Map» بلغة Rust، بميزات متزامنة
 > مع التنفيذ المرجعي بلغة Java
-> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
+> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)).
 
 هذا هو قسم التوثيق باللغة العربية. الخادم الخلفي هو مساحة عمل Cargo من أربع
 حزم (`utils → database → functions → router`) مبنية على `axum` و`sea-orm`
