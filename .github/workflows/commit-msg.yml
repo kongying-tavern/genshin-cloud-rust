@@ -1,0 +1,93 @@
+name: Commit Message Lint
+
+# Lints the PR title (the squash-merge subject), every commit in the PR,
+# new commits pushed to master, and merge-group commits. Runs on
+# GitHub-hosted runners so it works for every PR - including forks - and
+# never depends on the org self-hosted runner pool.
+#
+# Replaces the org reusable workflow (celestia-island/celestia-devtools),
+# which (a) skipped fork PRs entirely via a job-level guard and (b) required
+# a self-hosted runner that is not always available, leaving same-repo PR
+# checks queued indefinitely. The check name below matches the previous
+# delegated job so required-check wiring stays the same.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint commit messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # PEP 668 (Debian 12 / Ubuntu 24.04): pip refuses system installs, so
+      # use --user + --break-system-packages, matching the org workflow.
+      - name: Install celestia-devtools
+        run: pip install --user --break-system-packages git+https://github.com/celestia-island/celestia-devtools.git@master
+
+      - name: Lint PR title (squash merge subject)
+        if: github.event.pull_request && github.actor != 'dependabot[bot]'
+        env:
+          # Via env so a user-controlled title is never interpolated into
+          # shell syntax (quotes, $() and backticks are inert in env).
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -o pipefail
+          [ -n "$(printf '%s' "$PR_TITLE" | tr -d '[:space:]')" ] || { echo "empty PR title"; exit 1; }
+          echo "PR title: $PR_TITLE"
+          printf '%s\n' "$PR_TITLE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
+
+      - name: Lint all commits in the PR
+        if: github.event.pull_request && github.actor != 'dependabot[bot]'
+        env:
+          BASE_NAME: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -o pipefail
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          # The event snapshot of base.sha can go stale after squash merges
+          # advance the base branch. Resolve the real fork point against the
+          # checked-out BASE branch, falling back to the event snapshot.
+          BASE_REF="$(git rev-parse --verify -q "origin/${BASE_NAME}" || echo "${{ github.event.pull_request.base.sha }}")"
+          MERGE_BASE="$(git merge-base "$BASE_REF" "$HEAD_SHA" 2>/dev/null || echo "$BASE_REF")"
+          RANGE="${MERGE_BASE}..${HEAD_SHA}"
+          echo "Linting commits in range: $RANGE"
+          git log --format='%s' "$RANGE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
+
+      - name: Lint new commits on push
+        if: github.event.before
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.event.after }}
+        run: |
+          set -o pipefail
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            RANGE="$AFTER_SHA"
+          else
+            RANGE="${BEFORE_SHA}..${AFTER_SHA}"
+          fi
+          echo "Linting commits in range: $RANGE"
+          git log --format='%s' "$RANGE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
+
+      - name: Lint merge group commits
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -o pipefail
+          git fetch --quiet origin "$BASE_SHA" || true
+          RANGE="${BASE_SHA}..${HEAD_SHA}"
+          echo "Linting commits in range: $RANGE"
+          git log --format='%s' "$RANGE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
