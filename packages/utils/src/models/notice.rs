@@ -49,12 +49,6 @@ pub enum NoticeSort {
     ValidTypeDesc,
 }
 
-/// 转换器名称枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum NoticeTransformer {
-    Unity,
-}
-
 use crate::models::wrapper::Pagination;
 
 /// 公告添加请求
@@ -80,7 +74,6 @@ pub struct NoticeListRequest {
     pub get_valid: Option<bool>,
     pub sort: Option<Vec<NoticeSort>>,
     pub title: Option<String>,
-    pub transformer: Option<NoticeTransformer>,
     #[serde(flatten)]
     pub page: Pagination,
 }
