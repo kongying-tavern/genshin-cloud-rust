@@ -3,6 +3,13 @@
 //! Images are stored in MinIO (`images` bucket, `uploads/` prefix) and served
 //! back as public URLs — the bucket is provisioned with an anonymous-read
 //! policy at startup (see `build_minio_conn` in the database crate).
+//!
+//! Two MinIO addresses are involved: `MINIO_BASE_URL` is the *internal*
+//! endpoint the backend talks to for uploads, while the URLs returned to
+//! clients are built from `MINIO_PUBLIC_BASE_URL` (the CDN/public endpoint;
+//! falls back to `MINIO_BASE_URL` when unset). The two differ whenever a
+//! CDN or reverse proxy rewrites the address between the backend and the
+//! public internet.
 
 use anyhow::{Context, Result, anyhow};
 
@@ -83,8 +90,12 @@ pub async fn do_upload_image(
     let client = DB_CONN.wait().minio_conn.clone().ok_or_else(|| {
         anyhow!("MinIO is not configured (set MINIO_BASE_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)")
     })?;
-    let base_url =
-        std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into());
+    // Public base for the URLs returned to clients. Distinct from the
+    // internal `MINIO_BASE_URL` used for the upload itself: a CDN may
+    // rewrite the address between the backend and the public internet.
+    let public_base = std::env::var("MINIO_PUBLIC_BASE_URL").unwrap_or_else(|_| {
+        std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into())
+    });
 
     let f = payload
         .into_iter()
@@ -112,7 +123,7 @@ pub async fn do_upload_image(
         .await
         .context("upload to MinIO failed")?;
 
-    let file_url = format!("{}/images/{}", base_url.trim_end_matches('/'), key);
+    let file_url = format!("{}/images/{}", public_base.trim_end_matches('/'), key);
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "filePath": file_path.unwrap_or_else(|| file_url.clone()),
         "fileUrl": file_url,

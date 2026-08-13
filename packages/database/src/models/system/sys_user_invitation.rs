@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use _utils::{impl_safe_operation, types::SystemUserRole};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "sys_user_invitation", schema_name = "genshin_map")]
+#[sea_orm(table_name = "sys_user_invitation")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,

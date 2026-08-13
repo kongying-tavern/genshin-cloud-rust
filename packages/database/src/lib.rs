@@ -29,6 +29,30 @@ pub async fn init_db_conn() -> anyhow::Result<()> {
         .map_err(|_| anyhow!("DB_CONN already initialized"))
 }
 
+/// Resolve the PostgreSQL schema name from the `DB_SCHEMA` env var
+/// (default: `genshin_map`). The value must be a bare SQL identifier —
+/// anything else falls back to the default with a warning so a hostile
+/// env value can never smuggle SQL through the connection `search_path`.
+pub fn default_schema() -> String {
+    match std::env::var("DB_SCHEMA") {
+        Ok(s) if is_valid_schema_name(&s) => s,
+        Ok(s) => {
+            warn!("DB_SCHEMA '{s}' is not a valid SQL identifier, falling back to 'genshin_map'");
+            "genshin_map".into()
+        },
+        Err(_) => "genshin_map".into(),
+    }
+}
+
+fn is_valid_schema_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {},
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
 async fn build_db_map() -> Result<DatabaseConnectionMap> {
     // ── Postgres (required — startup fails if unreachable) ─────────────────
     let pg_conn = {
@@ -56,7 +80,11 @@ async fn build_db_map() -> Result<DatabaseConnectionMap> {
             .max_lifetime(Duration::from_secs(30 * 60))
             .sqlx_logging(true)
             // Info 而非 Trace：Trace 会把绑定参数值（可能含敏感数据）打进日志。
-            .sqlx_logging_level(log::LevelFilter::Info);
+            .sqlx_logging_level(log::LevelFilter::Info)
+            // Entities carry no schema qualifier; the schema is resolved at
+            // runtime through the Postgres `search_path` (DB_SCHEMA env var,
+            // default `genshin_map`), applied per pooled connection.
+            .set_schema_search_path(default_schema());
         Database::connect(opt).await?
     };
     info!("Postgres is ready");
