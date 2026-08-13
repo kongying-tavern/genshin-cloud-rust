@@ -22,9 +22,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `/res` upload `fileUrl`) are built from this public/CDN address, while
   uploads keep going through the internal `MINIO_BASE_URL`. Falls back to
   `MINIO_BASE_URL` when unset.
+- Connection-URL hardening: usernames, passwords, and database names are
+  percent-encoded before building the `postgres://` / `redis://` URLs, so
+  reserved characters in credentials can't break or smuggle extra components
+  into the connection URL (both sqlx and the redis crate decode them while
+  parsing; already-safe values are unchanged).
+- Fail-fast startup validation: the process now refuses to start with a clear
+  error when `JWT_SECRET` is missing. Previously the lazy JWT key statics
+  panicked on the first authenticated request, which under the release
+  profile's `panic = "abort"` would take the whole process down mid-traffic.
+- `LOG_DIR` creates its directory automatically when missing (e.g. an empty
+  mounted volume) instead of silently falling back to stderr-only logging.
 
 ### Changed
 
+- The `/cdn/img-proxy` client now validates every redirect hop against the
+  image-proxy host allowlist (`ddns.minemc.top`, `assets.yuanshen.site`,
+  `tiles.yuanshen.site`, `v3.yuanshen.site`, plus the configured
+  `CDN_UPSTREAM` host) with a 10-hop cap. This closes a redirect-based SSRF
+  gap: a whitelisted host could previously 30x the proxy into internal
+  addresses.
+- `init_db` now embeds `scripts/indexes_dev.sql` via `include_str!` instead
+  of a duplicated inline literal, so the ops copy and the binary can never
+  drift apart.
+- Docs: the README now documents every environment variable (purpose, default,
+  required-ness), the `celestia-devtools` toolchain with its repo link and
+  install instructions, and the frontend integration (`map_front_v3` = the
+  production map frontend, `map_register_v3` = the admin app used by
+  `just dev`). Stale links to the renamed upstream repos were fixed across
+  all docs (`java-genshin-map-cloud` → `genshin-map-cloud`,
+  `vue_map_register_v3` → `map_register_v3`), and the `just init` /
+  `just hooks` recipes now fail with install instructions when
+  `celestia-devtools` is missing.
 - Renamed the `HiddenFlag::Spy` variant to `HiddenFlag::Beta` (numeric value
   `2` and the wire contract are unchanged; the legacy string `"Spy"` still
   deserializes), and `SystemUserRole::MapNeigui` to `MapBeta` (role code

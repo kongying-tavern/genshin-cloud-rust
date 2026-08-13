@@ -162,6 +162,17 @@ fn cdn_proxy() -> axum::Router {
     use axum::response::{IntoResponse, Response};
     use std::time::Duration;
 
+    // Whitelist for the `u=` image proxy. The initial URL AND every redirect
+    // hop must stay on this list (or the configured CDN upstream host) —
+    // otherwise a 30x from a whitelisted host could drag the proxy into
+    // internal addresses (redirect-based SSRF).
+    const IMG_PROXY_ALLOWED_HOSTS: [&str; 4] = [
+        "ddns.minemc.top",
+        "assets.yuanshen.site",
+        "tiles.yuanshen.site",
+        "v3.yuanshen.site",
+    ];
+
     // 上游挂起时不能无限等待：连接 5s、整体 15s 超时。
     let client = std::sync::Arc::new(
         reqwest::Client::builder()
@@ -170,6 +181,33 @@ fn cdn_proxy() -> axum::Router {
             .build()
             .expect("build cdn client"),
     );
+    // Strict client for the user-influenced img-proxy only: every redirect
+    // hop is re-validated against the whitelist. The generic CDN client above
+    // keeps default redirect handling for its operator-configured upstream,
+    // which may legitimately bounce across domains.
+    let img_client = {
+        let allowed: std::sync::Arc<[String]> =
+            std::sync::Arc::new(IMG_PROXY_ALLOWED_HOSTS.map(String::from));
+        let upstream = cdn_upstream();
+        let upstream_host = url_host(&upstream);
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                // Custom policies get no automatic loop cap — enforce one.
+                if attempt.previous().len() >= 10 {
+                    return attempt.error("too many redirects");
+                }
+                let host = attempt.url().host_str().unwrap_or_default();
+                if allowed.iter().any(|a| a == host) || upstream_host.as_deref() == Some(host) {
+                    attempt.follow()
+                } else {
+                    attempt.stop()
+                }
+            }))
+            .build()
+            .expect("build img proxy client")
+    };
     let upstream = cdn_upstream();
     let dadian_override = dadian_config_file();
 
@@ -178,6 +216,7 @@ fn cdn_proxy() -> axum::Router {
             move |State(client): State<std::sync::Arc<reqwest::Client>>,
                   req: Request<axum::body::Body>| {
                 let client = client.clone();
+                let img_client = img_client.clone();
                 let upstream = upstream.clone();
                 let dadian_override = dadian_override.clone();
                 async move {
@@ -224,12 +263,7 @@ fn cdn_proxy() -> axum::Router {
                         let decoded = urlencoding::decode(u).unwrap_or_default().into_owned();
                         let host = url_host(&decoded);
                         let upstream_host = url_host(&upstream);
-                        let allowed: [&str; 4] = [
-                            "ddns.minemc.top",
-                            "assets.yuanshen.site",
-                            "tiles.yuanshen.site",
-                            "v3.yuanshen.site",
-                        ];
+                        let allowed: [&str; 4] = IMG_PROXY_ALLOWED_HOSTS;
                         let host_allowed = host.as_deref().is_some_and(|h| {
                             allowed.contains(&h) || upstream_host.as_deref() == Some(h)
                         });
@@ -241,7 +275,7 @@ fn cdn_proxy() -> axum::Router {
                                 .unwrap()
                                 .into_response();
                         }
-                        match client.get(&decoded).send().await {
+                        match img_client.get(&decoded).send().await {
                             Ok(resp) => {
                                 let body = resp.bytes().await.unwrap_or_default();
                                 return Response::builder()
