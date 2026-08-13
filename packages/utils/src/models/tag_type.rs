@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::models::Pagination;
 
 /// 标签类型基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeBaseRequest {
     /// 分类名称
@@ -19,7 +20,7 @@ pub struct TagTypeBaseRequest {
 pub type TagTypeAddRequest = TagTypeBaseRequest;
 
 /// 更新标签类型请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeUpdateRequest {
     /// 标签类型 ID
@@ -32,7 +33,7 @@ pub struct TagTypeUpdateRequest {
 }
 
 /// 标签类型列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeListRequest {
     /// 分类名称（模糊搜索）
@@ -49,7 +50,7 @@ pub struct TagTypeListRequest {
 }
 
 /// 标签类型返回值 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeVO {
     /// 乐观锁版本号（前端编辑时随行提交，用于乐观锁校验）
@@ -65,7 +66,7 @@ pub struct TagTypeVO {
 }
 
 /// 标签类型列表响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagTypeListResponse {
     pub total: i64,

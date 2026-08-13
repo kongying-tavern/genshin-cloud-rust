@@ -101,6 +101,14 @@ rustls = { version = "^0.23", default-features = false, features = [
 ] }
 tower-http = { version = "^0.7", features = ["fs", "trace", "cors"] }
 
+# utoipa: compile-time OpenAPI 3.1 generation. The spec is only served and
+# exported in DEBUG mode (off by default) — see packages/router/src/openapi.rs.
+# `chrono`/`uuid` map NaiveDateTime / Uuid fields in the shared DTOs.
+utoipa = { version = "^5.5", features = ["chrono", "uuid"] }
+# Swagger UI for the DEV-only docs route (router package). The `axum`
+# integration is an implicit feature of the optional axum dep.
+utoipa-swagger-ui = { version = "^9", features = ["axum"] }
+
 # sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
 # have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"
 # once 2.0 stable ships.

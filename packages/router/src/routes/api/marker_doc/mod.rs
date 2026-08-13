@@ -1,6 +1,6 @@
-mod list_diff_snapshot;
-mod list_page_bin;
-mod list_page_md5;
+pub(crate) mod list_diff_snapshot;
+pub(crate) mod list_page_bin;
+pub(crate) mod list_page_md5;
 
 use anyhow::Result;
 

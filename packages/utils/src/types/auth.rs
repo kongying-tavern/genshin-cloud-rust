@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct OauthLoginResponse {
     /// 访问令牌
@@ -31,7 +32,7 @@ pub struct OauthLoginResponse {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct OauthAnonymousResponse {
     /// 访问令牌
@@ -47,7 +48,17 @@ pub struct OauthAnonymousResponse {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Default, EnumIter, Display, AsRefStr, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Default,
+    EnumIter,
+    Display,
+    AsRefStr,
+    Serialize,
+    Deserialize,
+    ToSchema,
 )]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -58,7 +69,17 @@ pub enum OauthTokenType {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Default, EnumIter, Display, AsRefStr, Serialize, Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Default,
+    EnumIter,
+    Display,
+    AsRefStr,
+    Serialize,
+    Deserialize,
+    ToSchema,
 )]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]

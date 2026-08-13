@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
+use utoipa::ToSchema;
 
 use sea_orm::prelude::*;
 
@@ -44,7 +45,7 @@ impl<'de> Deserialize<'de> for HiddenFlag {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum, ToSchema)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 /// 权限可见层级
 pub enum HiddenFlag {
@@ -63,7 +64,7 @@ pub enum HiddenFlag {
     Suprise = 3,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum, ToSchema)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum HistoryEditType {
     /// 未知
@@ -125,7 +126,7 @@ impl<'de> Deserialize<'de> for HistoryEditType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum, ToSchema)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum HistoryOperationType {
     /// 地区

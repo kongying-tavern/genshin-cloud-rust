@@ -12,6 +12,7 @@ use axum::{
 use _functions::functions::system::oauth::{
     oauth_client_credentials, oauth_password_login, oauth_refresh,
 };
+use _utils::types::auth::OauthLoginResponse;
 
 #[derive(Debug, Deserialize)]
 pub struct LoginQuery {
@@ -31,6 +32,41 @@ pub enum LoginQueryType {
     RefreshToken,
 }
 
+/// OAuth2 令牌颁发。password 模式走 multipart 表单，
+/// client_credentials / refresh_token 模式走 query 参数。
+#[utoipa::path(
+    post,
+    path = "/oauth/token",
+    tag = "auth",
+    summary = "OAuth2 令牌颁发",
+    params(
+        (
+            "grant_type" = String,
+            Query,
+            description = "password / client_credentials / refresh_token",
+        ),
+        ("scope" = Option<String>, Query, description = "client_credentials 模式的作用域"),
+        (
+            "refresh_token" = Option<String>,
+            Query,
+            description = "refresh_token 模式的刷新令牌",
+        ),
+    ),
+    request_body(
+        content_type = "multipart/form-data",
+        content = Object,
+        description = "password 模式表单：grant_type=password、username、password",
+    ),
+    responses(
+        (
+            status = 200,
+            description = "令牌响应（password / refresh_token → OauthLoginResponse；client_credentials → OauthAnonymousResponse）",
+            body = inline(OauthLoginResponse),
+        ),
+        (status = 400, description = "参数错误", body = String),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(form))]
 pub async fn oauth(
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,

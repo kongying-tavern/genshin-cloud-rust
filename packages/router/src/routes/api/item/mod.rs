@@ -1,10 +1,10 @@
-mod add;
-mod copy;
-mod delete;
-mod get_by_id;
-mod join;
-mod list;
-mod update;
+pub(crate) mod add;
+pub(crate) mod copy;
+pub(crate) mod delete;
+pub(crate) mod get_by_id;
+pub(crate) mod join;
+pub(crate) mod list;
+pub(crate) mod update;
 
 use anyhow::Result;
 

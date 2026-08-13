@@ -1,3 +1,4 @@
+use _utils::models::CommonResponse;
 use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
@@ -8,6 +9,18 @@ use _utils::models::item::ItemAddRequest;
 /// 新增物品
 /// 新建成功后会返回新物品ID
 /// PUT /item/add
+#[utoipa::path(
+    put,
+    path = "/api/item/add",
+    tag = "item",
+    summary = "新增物品",
+    request_body = ItemAddRequest,
+    responses(
+        (status = 200, description = "新物品 ID", body = inline(CommonResponse<i64>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn add(
     ExtractAuthInfo(auth): ExtractAuthInfo,

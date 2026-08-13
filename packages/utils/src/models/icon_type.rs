@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::models::wrapper::Pagination;
 
 /// 图标类型基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeBaseRequest {
     /// 分类名
@@ -19,7 +20,7 @@ pub struct IconTypeBaseRequest {
 pub type IconTypeAddRequest = IconTypeBaseRequest;
 
 /// 更新图标类型请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeUpdateRequest {
     /// 图标类型 ID
@@ -32,7 +33,7 @@ pub struct IconTypeUpdateRequest {
 }
 
 /// 图标类型 VO（返回给前端的结构）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeVO {
     pub version: i64,
@@ -49,7 +50,7 @@ pub struct IconTypeVO {
 }
 
 /// 图标类型列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeListRequest {
     /// 父级类型 ID 列表（-1 为根分类）
@@ -60,7 +61,7 @@ pub struct IconTypeListRequest {
 }
 
 /// 图标类型列表响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconTypeListResponse {
     pub total: i64,

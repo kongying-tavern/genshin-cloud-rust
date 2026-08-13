@@ -9,6 +9,18 @@ use _utils::models::{
 
 /// 修改物品类型
 /// POST /item_type/update
+#[utoipa::path(
+    post,
+    path = "/api/item_type/update",
+    tag = "item-type",
+    summary = "修改物品类型",
+    request_body = ItemTypeUpdateData,
+    responses(
+        (status = 200, description = "更新结果", body = inline(CommonResponse<EmptyResponse>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,

@@ -12,6 +12,18 @@ use axum::http::header;
 
 /// 物品分页数据（GZIP 压缩二进制）
 /// GET /item_doc/list_page_bin/{md5}
+#[utoipa::path(
+    get,
+    path = "/api/item_doc/list_page_bin/{md5}",
+    tag = "item-doc",
+    summary = "物品分页数据（GZIP 压缩二进制）",
+    params(("md5" = String, Path, description = "页数据 MD5")),
+    responses(
+        (status = 200, description = "GZIP 压缩二进制", content_type = "application/octet-stream", body = Vec<u8>),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn list_page_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,

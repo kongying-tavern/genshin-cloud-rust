@@ -1,13 +1,14 @@
 use anyhow::Result;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// users 字段的序列化默认值：空对象（前端 `Record<string, SysUserSmallVo>`）
 fn default_users() -> serde_json::Value {
     serde_json::json!({})
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommonResponse<T> {
     pub error: bool,
@@ -72,7 +73,7 @@ impl<T> Default for CommonResponse<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Pagination {
     pub current: Option<u32>,
