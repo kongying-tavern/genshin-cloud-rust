@@ -17,13 +17,14 @@ use flate2::{Compression, write::GzEncoder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, time::Duration};
+use utoipa::ToSchema;
 
 use _database::DB_CONN;
 use redis::AsyncCommands;
 
 /// A single MD5 entry in the `list_page_bin_md5` response.
 /// Mirrors Java `BinaryMD5Vo { md5, time }`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryMd5Vo {
     pub md5: String,

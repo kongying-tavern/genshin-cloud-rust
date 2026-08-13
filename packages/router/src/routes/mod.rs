@@ -1,6 +1,6 @@
-mod api;
-mod system;
-mod ws;
+pub mod api;
+pub(crate) mod system;
+pub(crate) mod ws;
 
 use crate::middlewares::{ApiError, api_error};
 use anyhow::Result;
@@ -68,6 +68,13 @@ pub async fn router() -> Result<Router> {
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
         .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
 
+    // DEV-only：DEBUG 环境变量开启时才挂载 OpenAPI 文档路由（默认关闭）。
+    let ret = if crate::openapi::debug_enabled() {
+        ret.merge(crate::openapi::router())
+    } else {
+        ret
+    };
+
     Ok(ret)
 }
 
@@ -113,7 +120,17 @@ fn cors_layer() -> tower_http::cors::CorsLayer {
 }
 
 /// JWKS 公钥分发端点（`GET /.well-known/jwks.json`），无鉴权。
-async fn jwks() -> axum::response::Response {
+#[utoipa::path(
+    get,
+    path = "/.well-known/jwks.json",
+    tag = "auth",
+    summary = "JWKS 公钥分发",
+    responses(
+        (status = 200, description = "RSA 公钥 JWKS（HS256 模式下为空 keys）", body = Object),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
+pub(crate) async fn jwks() -> axum::response::Response {
     match _functions::functions::system::oauth::do_jwks().await {
         Ok(v) => axum::Json(v).into_response(),
         Err(e) => (

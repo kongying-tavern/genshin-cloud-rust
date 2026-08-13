@@ -76,6 +76,25 @@ just dev stop      # 停止 / stop
 just dev status    # 状态 / check status
 ```
 
+### OpenAPI 文档（仅开发模式）/ OpenAPI docs (dev only)
+
+设置 `DEBUG=1`（`true`/`yes`/`on` 均可，大小写不敏感）后，后端会用
+[utoipa](https://github.com/juhaku/utoipa) 在编译期生成 OpenAPI 3.1 文档并：
+
+- 在 `/openapi.json` 提供规范 JSON、`/swagger-ui` 提供 Swagger UI；
+- 启动时把规范落盘为 `./openapi.json`。
+
+默认关闭，生产环境不暴露这些路由。
+
+With `DEBUG=1` (`true`/`yes`/`on`, case-insensitive), the backend generates
+OpenAPI 3.1 docs at compile time with
+[utoipa](https://github.com/juhaku/utoipa) and:
+
+- serves the spec JSON at `/openapi.json` and Swagger UI at `/swagger-ui`;
+- writes the spec to `./openapi.json` at startup.
+
+Off by default — production never exposes these routes.
+
 ## 工作区结构 / Workspace Layout
 
 ```text

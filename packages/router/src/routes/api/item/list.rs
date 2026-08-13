@@ -4,10 +4,23 @@ use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::{ApiError, AppJson, ExtractAuthInfo};
 use _utils::models::item::ItemFilterRequest;
+use _utils::models::{CommonResponse, ItemListResponse};
 
 /// 根据筛选条件列出物品信息
 /// 传入的物品类型ID和地区ID列表，必须为末端的类型或地区
 /// POST /item/get/list
+#[utoipa::path(
+    post,
+    path = "/api/item/get/list",
+    tag = "item",
+    summary = "根据筛选条件列出物品",
+    request_body = ItemFilterRequest,
+    responses(
+        (status = 200, description = "物品分页列表", body = inline(CommonResponse<ItemListResponse>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,

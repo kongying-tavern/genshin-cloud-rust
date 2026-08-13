@@ -15,6 +15,17 @@ use axum::{
 use serde_json::Value;
 
 /// `GET /ws/{userId}` 升级握手。
+#[utoipa::path(
+    get,
+    path = "/ws/{user_id}",
+    tag = "ws",
+    summary = "WebSocket 连接（心跳 Ping/Pong 与业务事件推送）",
+    params(("user_id" = String, Path, description = "用户 ID")),
+    responses(
+        (status = 101, description = "WebSocket 升级成功"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 pub async fn ws_handler(ws: WebSocketUpgrade, Path(user_id): Path<String>) -> Response {
     ws.on_upgrade(move |socket| handle_socket(socket, user_id))
 }
@@ -27,6 +38,17 @@ pub struct WsQuery {
 }
 
 /// 兼容前端 wss://.../ws?userId=xxx 形式的连接。
+#[utoipa::path(
+    get,
+    path = "/ws",
+    tag = "ws",
+    summary = "WebSocket 连接（userId 走 query 的兼容入口）",
+    params(("userId" = Option<String>, Query, description = "用户 ID")),
+    responses(
+        (status = 101, description = "WebSocket 升级成功"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 pub async fn ws_handler_query(ws: WebSocketUpgrade, Query(q): Query<WsQuery>) -> Response {
     let user_id = q.user_id.unwrap_or_default();
     ws.on_upgrade(move |socket| handle_socket(socket, user_id))

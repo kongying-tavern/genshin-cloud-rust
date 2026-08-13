@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use axum::{
     extract::{Json, Path},
@@ -9,9 +10,10 @@ use axum::{
 
 use crate::middlewares::{ApiError, AppJson, ExtractAdmin, ExtractAuthInfo, api_error};
 use _functions::functions::system::user::*;
+use _utils::models::CommonResponse;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegisterParams {
     /// 权限策略
@@ -28,7 +30,7 @@ pub struct UserRegisterParams {
     pub password: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserRegisterQQParams {
     /// 权限策略
@@ -46,7 +48,7 @@ pub struct UserRegisterQQParams {
     pub qq: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdateParams {
     /// 用户 ID
@@ -69,7 +71,7 @@ pub struct UserUpdateParams {
     pub role_id: Option<SystemUserRole>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdatePasswordParams {
     /// 权限策略
@@ -90,7 +92,7 @@ pub struct UserUpdatePasswordParams {
     pub role_id: Option<SystemUserRole>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserUpdatePasswordByAdminParams {
     /// 新密码
@@ -99,7 +101,7 @@ pub struct UserUpdatePasswordByAdminParams {
     pub user_id: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserListParams {
     #[serde(flatten)]
@@ -123,6 +125,18 @@ pub struct UserKickOutParams {
 
 /// 注册用户（仅管理员）
 /// POST /user/register
+#[utoipa::path(
+    post,
+    path = "/system/user/register",
+    tag = "system",
+    summary = "注册用户（仅管理员）",
+    request_body = UserRegisterParams,
+    responses(
+        (status = 200, description = "新用户 ID", body = inline(CommonResponse<i64>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth, payload))]
 pub async fn register(
     ExtractAdmin(auth): ExtractAdmin,
@@ -146,6 +160,17 @@ pub async fn register(
 
 /// 用QQ注册用户（公开接口：QQ 授权后未登录调用）
 /// POST /user/register/qq
+#[utoipa::path(
+    post,
+    path = "/system/user/register/qq",
+    tag = "system",
+    summary = "QQ 注册用户（公开接口）",
+    request_body = UserRegisterQQParams,
+    responses(
+        (status = 200, description = "新用户 ID", body = inline(CommonResponse<i64>)),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(payload))]
 pub async fn register_qq(
     AppJson(payload): AppJson<UserRegisterQQParams>,
@@ -167,6 +192,18 @@ pub async fn register_qq(
 
 /// 获取用户信息
 /// GET /user/info/{userId}
+#[utoipa::path(
+    get,
+    path = "/system/user/info/{user_id}",
+    tag = "system",
+    summary = "获取用户信息",
+    params(("user_id" = i64, Path, description = "用户 ID")),
+    responses(
+        (status = 200, description = "用户信息", body = inline(CommonResponse<_utils::models::SysUserVO>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn get_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
@@ -180,6 +217,18 @@ pub async fn get_info(
 
 /// 更新用户信息
 /// POST /user/update
+#[utoipa::path(
+    post,
+    path = "/system/user/update",
+    tag = "system",
+    summary = "更新用户信息",
+    request_body = UserUpdateParams,
+    responses(
+        (status = 200, description = "更新成功", body = inline(CommonResponse<utoipa::TupleUnit>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAuthInfo(auth): ExtractAuthInfo,
@@ -214,6 +263,18 @@ pub async fn update(
 
 /// 更新用户密码
 /// POST /user/update_password
+#[utoipa::path(
+    post,
+    path = "/system/user/update_password",
+    tag = "system",
+    summary = "更新用户密码",
+    request_body = UserUpdatePasswordParams,
+    responses(
+        (status = 200, description = "更新成功", body = inline(CommonResponse<utoipa::TupleUnit>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password(
     ExtractAuthInfo(auth): ExtractAuthInfo,
@@ -241,6 +302,18 @@ pub async fn update_password(
 
 /// 更新用户密码（管理员）
 /// POST /user/update_password_by_admin
+#[utoipa::path(
+    post,
+    path = "/system/user/update_password_by_admin",
+    tag = "system",
+    summary = "更新用户密码（管理员）",
+    request_body = UserUpdatePasswordByAdminParams,
+    responses(
+        (status = 200, description = "更新成功", body = inline(CommonResponse<utoipa::TupleUnit>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth, payload))]
 pub async fn update_password_by_admin(
     ExtractAdmin(auth): ExtractAdmin,
@@ -256,6 +329,18 @@ pub async fn update_password_by_admin(
 
 /// 删除用户
 /// DELETE /user/{workId}
+#[utoipa::path(
+    delete,
+    path = "/system/user/{work_id}",
+    tag = "system",
+    summary = "删除用户",
+    params(("work_id" = i64, Path, description = "用户 ID")),
+    responses(
+        (status = 200, description = "删除成功", body = inline(CommonResponse<utoipa::TupleUnit>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
     ExtractAdmin(auth): ExtractAdmin,
@@ -269,6 +354,18 @@ pub async fn delete(
 
 /// 用户信息(批量查询)
 /// POST /user/info/list
+#[utoipa::path(
+    post,
+    path = "/system/user/info/userList",
+    tag = "system",
+    summary = "批量查询用户信息",
+    request_body = UserListParams,
+    responses(
+        (status = 200, description = "用户分页列表", body = inline(CommonResponse<serde_json::Value>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
@@ -291,6 +388,18 @@ pub async fn list(
 
 /// 踢出用户
 /// DELETE /user/kick_out/{workId}
+#[utoipa::path(
+    delete,
+    path = "/system/user/kick_out/{work_id}",
+    tag = "system",
+    summary = "踢出用户",
+    params(("work_id" = String, Path, description = "用户 ID")),
+    responses(
+        (status = 200, description = "操作成功", body = inline(CommonResponse<utoipa::TupleUnit>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn kick_out(
     ExtractAdmin(auth): ExtractAdmin,

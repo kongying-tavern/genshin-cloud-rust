@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::{
     models::wrapper::Pagination,
@@ -42,7 +43,7 @@ pub struct ItemRequest {
 }
 
 /// 物品添加请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemAddRequest {
     /// 地区 ID
@@ -81,7 +82,7 @@ pub struct ItemAddRequest {
 }
 
 /// 物品更新数据结构
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemUpdateData {
     /// 地区 ID
@@ -125,7 +126,7 @@ pub struct ItemUpdateData {
 }
 
 /// 物品列表查询排序枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub enum ItemSort {
     #[serde(rename = "sortIndex-")]
     SortIndexDesc,
@@ -134,7 +135,7 @@ pub enum ItemSort {
 }
 
 /// 物品筛选请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemFilterRequest {
     /// 末端地区 ID 列表
@@ -182,7 +183,7 @@ pub struct ItemListRequest {
 }
 
 /// 物品返回值 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemVO {
     pub version: i64,
@@ -215,7 +216,7 @@ pub struct ItemVO {
     pub count_split: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemListResponse {
     pub total: i64,
@@ -225,7 +226,7 @@ pub struct ItemListResponse {
 
 /// 公用物品 VO（`item_common` 列表）：ItemVO + itemId。
 /// 前端按 `itemId` 关联/操作公用物品，而 ItemVO 主键是 `id`。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemAreaPublicVo {
     /// 物品 ID（与 ItemVO.id 一致）
@@ -235,7 +236,7 @@ pub struct ItemAreaPublicVo {
 }
 
 /// 公用物品列表响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemAreaPublicListResponse {
     pub total: i64,

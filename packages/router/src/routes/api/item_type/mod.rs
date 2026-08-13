@@ -1,8 +1,8 @@
-mod add;
-mod delete;
-mod list;
-mod move_type;
-mod update;
+pub(crate) mod add;
+pub(crate) mod delete;
+pub(crate) mod list;
+pub(crate) mod move_type;
+pub(crate) mod update;
 
 use anyhow::Result;
 

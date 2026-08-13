@@ -1,5 +1,7 @@
+use _utils::models::CommonResponse;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use axum::{extract::Json, response::IntoResponse};
 
@@ -7,7 +9,7 @@ use crate::middlewares::{ApiError, AppJson, ExtractAdmin};
 use _utils::{models::Pagination, types::ActionLogAction};
 
 /// 格式：字段+ 字段-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub enum ActionLogSort {
     #[serde(rename = "createTime+")]
     CreateTime,
@@ -35,7 +37,7 @@ pub enum ActionLogSort {
     UpdateTimeReverse,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionLogParams {
     /// 设备状态
@@ -56,6 +58,18 @@ pub struct ActionLogParams {
 
 /// 获取操作日志
 /// POST /action_log/list
+#[utoipa::path(
+    post,
+    path = "/system/action_log/list",
+    tag = "system",
+    summary = "获取操作日志",
+    request_body = ActionLogParams,
+    responses(
+        (status = 200, description = "日志分页列表", body = inline(CommonResponse<serde_json::Value>)),
+        (status = 401, description = "未登录或无权访问"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,

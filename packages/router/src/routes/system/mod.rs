@@ -1,10 +1,10 @@
-mod action_log;
-mod archive;
-mod device;
-mod invitation;
+pub(crate) mod action_log;
+pub(crate) mod archive;
+pub(crate) mod device;
+pub(crate) mod invitation;
 pub mod oauth;
-mod role;
-mod user;
+pub(crate) mod role;
+pub(crate) mod user;
 
 use anyhow::Result;
 

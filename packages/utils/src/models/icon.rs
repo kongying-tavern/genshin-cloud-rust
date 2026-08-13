@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::models::Pagination;
 
 /// 图标基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconBaseRequest {
     /// 图标名称
@@ -16,7 +17,7 @@ pub struct IconBaseRequest {
 pub type IconAddRequest = IconBaseRequest;
 
 /// 更新图标请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconUpdateRequest {
     /// 图标 ID
@@ -29,7 +30,7 @@ pub struct IconUpdateRequest {
 }
 
 /// 图标列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconListRequest {
     /// 上传者
@@ -48,7 +49,7 @@ pub struct IconListRequest {
 }
 
 /// 图标返回值（用于 API 响应）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconVO {
     pub id: i64,
@@ -58,7 +59,7 @@ pub struct IconVO {
     pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IconListResponse {
     pub total: i64,

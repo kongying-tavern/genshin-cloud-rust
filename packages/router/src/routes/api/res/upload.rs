@@ -5,6 +5,7 @@ use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::{ApiError, ExtractAuthInfo, api_error};
 use _functions::functions::api::res::UploadedFile;
+use _utils::models::CommonResponse;
 
 /// 允许上传的内容类型白名单。
 const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -12,6 +13,22 @@ const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "
 const MAX_FIELD_BYTES: usize = 16 * 1024 * 1024;
 
 /// 上传图片
+#[utoipa::path(
+    put,
+    path = "/api/res/upload/image",
+    tag = "res",
+    summary = "上传图片",
+    request_body(
+        content_type = "multipart/form-data",
+        content = Object,
+        description = "图片文件（image/png、image/jpeg、image/gif、image/webp，单字段 ≤ 16 MiB，可多文件）+ 可选文本字段 filePath",
+    ),
+    responses(
+        (status = 200, description = "上传结果", body = inline(CommonResponse<serde_json::Value>)),
+        (status = 401, description = "未登录或令牌无效"),
+        (status = 500, description = "服务器内部错误", body = String),
+    ),
+)]
 #[tracing::instrument(skip(auth))]
 pub async fn upload_image(
     ExtractAuthInfo(auth): ExtractAuthInfo,

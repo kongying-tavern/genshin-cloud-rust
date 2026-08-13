@@ -40,3 +40,10 @@ tower-http = { workspace = true }
 md5 = { workspace = true }
 bzip2 = { workspace = true }
 sea-orm = { workspace = true }
+
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+[dev-dependencies]
+http-body-util = "^0.1"
+tower = { version = "^0.5", features = ["util"] }

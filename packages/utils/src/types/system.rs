@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumIter, EnumString};
+use utoipa::ToSchema;
 
 use sea_orm::{FromJsonQueryResult, prelude::*};
 
@@ -19,7 +20,9 @@ pub struct SysActionLogExtra {
     pub access_paths: Vec<AccessPolicyItem>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, FromJsonQueryResult)]
+#[derive(
+    Debug, Clone, PartialEq, Default, Serialize, Deserialize, FromJsonQueryResult, ToSchema,
+)]
 pub struct AccessPolicyList(pub Vec<AccessPolicyItemEnum>);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, FromJsonQueryResult)]
@@ -29,7 +32,9 @@ pub struct AccessPolicyItem {
     pub policy: AccessPolicyItemEnum,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, EnumIter, AsRefStr, EnumString, Display)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Serialize, EnumIter, AsRefStr, EnumString, Display, ToSchema,
+)]
 pub enum AccessPolicyItemEnum {
     /// 与最后一次登录 IP 相同
     #[strum(serialize = "ip:same_last_ip")]
@@ -104,7 +109,7 @@ impl<'de> Deserialize<'de> for AccessPolicyItemEnum {
 /// ("createTime+", "createTime-", "id+", "id-", "nickname+", "nickname-") —
 /// the business layer matches the enum variants directly, so renaming a
 /// variant is a compile error instead of a silently-ignored sort key.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, ToSchema)]
 pub enum UserSort {
     #[serde(rename = "createTime+")]
     CreateTime,
@@ -121,7 +126,7 @@ pub enum UserSort {
 }
 
 /// Sort keys for the user device list（wire 契约与 UserSort 一致：字段+ 升序 / 字段- 降序）。
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, ToSchema)]
 pub enum DeviceSort {
     #[serde(rename = "deviceId+")]
     DeviceId,
@@ -150,7 +155,7 @@ pub enum DeviceSort {
 }
 
 /// Sort keys for the user invitation list（wire 契约：createTime± / id± / updateTime± / username±）。
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, ToSchema)]
 pub enum InvitationSort {
     #[serde(rename = "createTime+")]
     CreateTime,
@@ -170,7 +175,7 @@ pub enum InvitationSort {
     UsernameReverse,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, DeriveActiveEnum, ToSchema)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum SystemUserRole {
     /// 系统管理员

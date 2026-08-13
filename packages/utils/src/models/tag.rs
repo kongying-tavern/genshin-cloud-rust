@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::models::Pagination;
 
 /// 标签基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagBaseRequest {
     /// 标签名
@@ -16,7 +17,7 @@ pub struct TagBaseRequest {
 pub type TagAddRequest = TagBaseRequest;
 
 /// 更新标签请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagUpdateRequest {
     /// 标签 ID
@@ -29,7 +30,7 @@ pub struct TagUpdateRequest {
 }
 
 /// 更新标签类型关联请求（特殊接口用）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagUpdateTypeRequest {
     /// 标签名
@@ -39,7 +40,7 @@ pub struct TagUpdateTypeRequest {
 }
 
 /// 标签列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagListRequest {
     /// 标签名（模糊搜索）
@@ -56,7 +57,7 @@ pub struct TagListRequest {
 }
 
 /// 标签返回值 VO（对齐前端 TagVo 契约）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagVO {
     /// 乐观锁版本号
@@ -82,7 +83,7 @@ pub struct TagVO {
 }
 
 /// 标签列表响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagListResponse {
     pub total: i64,
@@ -91,7 +92,7 @@ pub struct TagListResponse {
 }
 
 /// 标签新增响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagAddResponse {
     pub id: i64,

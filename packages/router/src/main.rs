@@ -1,5 +1,6 @@
 pub mod functions;
 mod middlewares;
+pub mod openapi;
 mod routes;
 
 use anyhow::Result;
@@ -89,6 +90,17 @@ async fn main() -> Result<()> {
 
     log::info!("Site will run on port {}", port);
     init_db_conn().await?;
+
+    // DEV-only：DEBUG 开启时把 OpenAPI 文档落盘为 ./openapi.json
+    // （写盘失败只告警，不阻塞启动）。
+    if openapi::debug_enabled() {
+        if let Err(e) = openapi::write_json_file("openapi.json") {
+            log::warn!("failed to write openapi.json: {e}");
+        }
+        log::info!(
+            "OpenAPI docs enabled: http://0.0.0.0:{port}/openapi.json + /swagger-ui (spec written to openapi.json)"
+        );
+    }
 
     let router = router()
         .await?

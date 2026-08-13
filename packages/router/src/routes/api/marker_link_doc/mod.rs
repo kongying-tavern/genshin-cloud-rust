@@ -1,4 +1,4 @@
-mod doc;
+pub(crate) mod doc;
 
 use anyhow::Result;
 
