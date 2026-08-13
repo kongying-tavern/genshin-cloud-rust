@@ -385,7 +385,7 @@ pub async fn do_tweak(
                                 let hf = match i.clamp(i32::MIN as i64, i32::MAX as i64) as i32 {
                                     0 => _utils::types::HiddenFlag::Visible,
                                     1 => _utils::types::HiddenFlag::Hidden,
-                                    2 => _utils::types::HiddenFlag::Spy,
+                                    2 => _utils::types::HiddenFlag::Beta,
                                     3 => _utils::types::HiddenFlag::Suprise,
                                     _ => _utils::types::HiddenFlag::Visible,
                                 };

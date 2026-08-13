@@ -26,7 +26,7 @@ player's current UI filter?* A pure bitmask applied to the item/area browsing
 UI.
 
 They are orthogonal. A soft-deleted row is hidden from everyone regardless of
-its `hidden_flag` or `special_flag`. A `hidden_flag = Spy` row is hidden from
+its `hidden_flag` or `special_flag`. A `hidden_flag = Beta` row is hidden from
 the public regardless of its `special_flag`. This document explains the last
 two; soft delete is covered by the `SafeEntityTrait` pattern in
 [the architecture guide](../guides/architecture.md).
@@ -41,14 +41,14 @@ enum and the wire contract; do not renumber them.
 | --- | --- | --- | --- |
 | `Visible`  | 0 | 可见 | Everyone. The public dataset. |
 | `Hidden`   | 1 | 隐藏 | Insiders only — internal contributors, not yet released. |
-| `Spy`      | 2 | 内鬼 / 测试服 | Test-server / datamined data. Must not leak to the public map. |
+| `Beta`     | 2 | 测试服（旧名 `Spy`） | Test-server / datamined data. Must not leak to the public map. |
 | `Suprise`  | 3 | 彩蛋 | Easter-egg content (note the Java spelling `Suprise`, preserved for parity). |
 
 ```rust
 pub enum HiddenFlag {
     #[sea_orm(num_value = 0)] Visible  = 0,
     #[sea_orm(num_value = 1)] Hidden   = 1,
-    #[sea_orm(num_value = 2)] Spy      = 2,
+    #[sea_orm(num_value = 2)] Beta     = 2,
     #[sea_orm(num_value = 3)] Suprise  = 3,
 }
 ```
@@ -65,7 +65,7 @@ ordinary player.
 
 - Higher bits grant the corresponding tiers. Insider accounts get the bit for
 
-`Hidden`; internal/test accounts get the bits for `Spy` and `Suprise`.
+`Hidden`; internal/test accounts get the bits for `Beta` and `Suprise`.
 
 The server's job is therefore not to *decide* visibility per user, but to
 **partition the dataset by flag** so the client can pick the partitions its
@@ -88,13 +88,13 @@ if let Some(hidden_flag) = payload.hidden_flag {
 
 `hidden_flag` is a *data-level* filter, not an authorization boundary. The
 server hands the client the blob for `flag = Visible` and trusts the client not
-to ask for `flag = Spy` if its `userDataLevel` does not allow it. This is
+to ask for `flag = Beta` if its `userDataLevel` does not allow it. This is
 deliberate:
 
 - The map is a public read-mostly tool; there is no privileged write path to
 
-protect here (writes go through the punctuate audit, see
-[Punctuate workflow](./punctuate-workflow.md)).
+protect here (writes are gated upstream by the contributor audit queue — the
+punctuate workflow that used to live in this repo is deprecated).
 
 - The insider/test data is "soft confidential" — embarrassing if leaked, not a
 
@@ -106,8 +106,8 @@ not worth it for that threat model.
 see Inazuma-specific surprises) is naturally client-driven: the client knows
 the player's progress, the server does not.
 
-The hard boundary — preventing vandalism — is handled upstream by the punctuate
-audit queue, not by `hidden_flag`.
+The hard boundary — preventing vandalism — is handled upstream by the
+contributor audit queue, not by `hidden_flag`.
 
 ## `special_flag` — the bitmask filter
 
@@ -183,8 +183,8 @@ A soft-deleted marker is invisible to the public, to insiders, and to test
 accounts alike — `find_safety()` excludes it before the other two clauses even
 get a chance to run. Editors can still see deleted rows by going through the
 history/audit tables, not the live `find_safety()` path. This is why the
-punctuate `Deleted` path (see [Punctuate workflow](./punctuate-workflow.md))
-uses `delete_safety` (which sets `del_flag = true`) rather than a hard delete:
+punctuate `Deleted` promotion path (deprecated, see the historical workflow)
+used `delete_safety` (which sets `del_flag = true`) rather than a hard delete:
 the row drops out of every live view immediately, but stays recoverable for
 audit.
 
@@ -192,7 +192,7 @@ audit.
 
 - **Treating `hidden_flag` like a boolean "hidden/not-hidden".** Only `Visible`
 
-(0) is public; `Hidden`, `Spy`, and `Suprise` are three *different*
+(0) is public; `Hidden`, `Beta`, and `Suprise` are three *different*
 non-public audiences, and a `userDataLevel` bitmask grants each independently.
 
 - **Rewriting the `special_flag = 0` branch as `(x & 0) != 0`.** That matches

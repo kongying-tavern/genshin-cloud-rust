@@ -28,7 +28,7 @@
 | 钓鱼点 | Fishing Spot | 各国鱼类分布点，按鱼种标注 |
 | 提瓦特 | Teyvat | 原神游戏世界的总称 |
 
-> 提示：游戏内容会随版本更新扩充（枫丹、纳塔、至冬等），这些新地区的点位在录入阶段会标 `hidden_flag = Spy`（测试服），上线当天转 `Visible`，详见 [隐藏/特殊标记设计](../designs/hidden-and-special-flags.md)。
+> 提示：游戏内容会随版本更新扩充（枫丹、纳塔、至冬等），这些新地区的点位在录入阶段会标 `hidden_flag = Beta`（测试服），上线当天转 `Visible`，详见 [隐藏/特殊标记设计](../designs/hidden-and-special-flags.md)。
 
 ## 二、地图工具业务概念
 
@@ -43,7 +43,7 @@
 | 物品类型 | `item_type`（`models/item/item_type.rs`） | 物品的分类维度，通过 `item_type_link` 多对多关联 |
 | 点位关联 | `marker_linkage`（`models/marker/marker_linkage.rs`） | 点位之间的关系（同组、触发、路径等），归档时导出 `list`（边数组）与 `graph`（邻接表）两个视图 |
 | 点位-物品关联 | marker-item link / `marker_item_link` | 点位与物品的多对多关系 |
-| 打点（提交） | punctuate / `marker_punctuate`（`models/marker/marker_punctuate.rs`） | 玩家贡献点位的一次提交动作，经审核后晋升为正式 `marker`，详见 [打点工作流](../designs/punctuate-workflow.md) |
+| 打点（提交） | punctuate / `marker_punctuate`（`models/marker/marker_punctuate.rs`） | 玩家贡献点位的一次提交动作，暂存表记录（审核工作流已弃用，暂存表随 schema 保留） |
 | 贡献评分 | `score_stat`（`models/common/score_stat.rs`） | 按 `scope` + `span` 聚合的贡献者评分，打点通过后汇入 |
 | BinaryMD5 归档 | `*_doc` 端点家族 | GZIP 压缩的批量数据导出，以压缩字节 MD5 为键，供客户端冷启动增量同步，详见 [归档导出](../designs/binarymd5-archive-export.md) |
 | 历史记录 | `history`（`models/common/history.rs`） | 编辑操作的审计轨迹，`edit_type`（新增/修改/删除）+ `operation_type`（地区/图标/物品/点位） |
@@ -60,10 +60,10 @@
 | 不通过 | `MarkerPunctuateStatus::Rejected`（`2`） | 编辑驳回（对应 Java REJECT，附 `audit_remark`），**非终态**，可改后重提 |
 | 新增 / 修改 / 删除 | `MarkerPunctuateMethodType::{Added, Modified, Deleted}`（1/2/3） | 打点建议的操作类型，决定晋升路径 |
 | 可见 | `HiddenFlag::Visible`（`0`） | 所有人可见 |
-| 隐藏 | `HiddenFlag::Hidden`（`1`） | 仅内鬼 / 后台 |
-| 测试服 | `HiddenFlag::Spy`（`2`） | 仅测试服玩家（未上线的新版本数据） |
+| 隐藏 | `HiddenFlag::Hidden`（`1`） | 仅测试 / 后台 |
+| 测试服 | `HiddenFlag::Beta`（`2`，旧名 `Spy`） | 仅测试服玩家（未上线的新版本数据） |
 | 彩蛋 | `HiddenFlag::Suprise`（`3`） | 主动开启彩蛋的玩家可见（防剧透） |
-| 内鬼 | Insider / Spy | 拥有测试服 / 内部数据访问权限的用户角色 |
+| 测试服角色 | Beta（`SystemUserRole::MapBeta`，旧名 `MapNeigui`） | 拥有测试服数据访问权限的用户角色 |
 | 特殊标记 | `special_flag`（i32 位掩码） | 物品 / 地区的查询过滤位，第 0 位 = 前台是否默认显示，详见 [标记设计](../designs/hidden-and-special-flags.md) |
 | 软删除 | `del_flag`（bool） | 逻辑删除标记，`SafeEntityTrait::find_safety` 自动过滤 `del_flag=false` |
 | 乐观锁 | `version`（i64） | 实体版本号，`update_safety` 靠 `WHERE version = old` 自增实现 |
@@ -99,7 +99,7 @@
 | 纳塔 | Natlan | 火之国，火神瞳（Pyroculus）分布 |
 | 至冬 | Snezhnaya | 冰之国（剧情推进中逐步开放） |
 
-> 地区在 `area` 表里是树形结构（`parent_id`、`is_final`），末端地区用于挂 `item`（物品必属一个末端地区）。新版本地区录入时标 `hidden_flag = Spy`，上线转 `Visible`。
+> 地区在 `area` 表里是树形结构（`parent_id`、`is_final`），末端地区用于挂 `item`（物品必属一个末端地区）。新版本地区录入时标 `hidden_flag = Beta`，上线转 `Visible`。
 
 ## 六、系统域
 
@@ -114,7 +114,7 @@
 ## 七、易混淆点提醒
 
 - **`tag` vs `tag_type` vs `item_type`**：`tag` 是把**图标**归类到 `tag_type`（图标分类）；`item_type` 是**物品**的分类，两者独立。别把「图标的分类」和「物品的分类」混为一谈。
-- **`marker` vs `marker_punctuate`**：`marker` 是全服可见的正式点位；`marker_punctuate` 是玩家提交的、待审核的打点建议。晋升前两者数据隔离，详见 [打点工作流](../designs/punctuate-workflow.md#2-两个表为什么要分离)。
+- **`marker` vs `marker_punctuate`**：`marker` 是全服可见的正式点位；`marker_punctuate` 是玩家提交的、待审核的打点建议暂存表（审核工作流已弃用，暂存表随 schema 保留），两者数据隔离。
 - **`hidden_flag` vs `special_flag` vs `del_flag`**：三套正交标记，分别管「谁能看」、「查不查得出来」、「是否已删」，详见 [标记设计](../designs/hidden-and-special-flags.md#4-三套标记的正交关系)。
 - **`Suprise` 拼写**：`HiddenFlag::Suprise` 少一个 `r`，是为对齐 Java 历史拼写、保证库存数据反序列化兼容，**不是笔误**，勿改。
 - **`IconStyleType::LikeOculus`（值 2）已废弃**：保留仅为兼容历史 `num_value=2` 的行，新数据应使用 `Oculus`（值 3）。

@@ -25,14 +25,15 @@ impl<'de> Deserialize<'de> for HiddenFlag {
             serde_json::Value::Number(n) => match n.as_i64() {
                 Some(0) => Ok(HiddenFlag::Visible),
                 Some(1) => Ok(HiddenFlag::Hidden),
-                Some(2) => Ok(HiddenFlag::Spy),
+                Some(2) => Ok(HiddenFlag::Beta),
                 Some(3) => Ok(HiddenFlag::Suprise),
                 _ => Err(serde::de::Error::custom(format!("unknown hiddenFlag {n}"))),
             },
             serde_json::Value::String(s) => match s.as_str() {
                 "Visible" => Ok(HiddenFlag::Visible),
                 "Hidden" => Ok(HiddenFlag::Hidden),
-                "Spy" => Ok(HiddenFlag::Spy),
+                // "Spy" 为历史名字（旧数据），与 Beta 等价。
+                "Spy" | "Beta" => Ok(HiddenFlag::Beta),
                 "Suprise" => Ok(HiddenFlag::Suprise),
                 _ => Err(serde::de::Error::custom(format!("unknown hiddenFlag {s}"))),
             },
@@ -54,9 +55,9 @@ pub enum HiddenFlag {
     /// 隐藏
     #[sea_orm(num_value = 1)]
     Hidden = 1,
-    /// 内鬼 / 测试服
+    /// 测试服（Beta）
     #[sea_orm(num_value = 2)]
-    Spy = 2,
+    Beta = 2,
     /// 彩蛋
     #[sea_orm(num_value = 3)]
     Suprise = 3,

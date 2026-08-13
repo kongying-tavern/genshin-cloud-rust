@@ -107,7 +107,7 @@ pub async fn do_update(
     let role = match role_id {
         0 => _utils::types::SystemUserRole::Admin,
         1 => _utils::types::SystemUserRole::MapManager,
-        2 => _utils::types::SystemUserRole::MapNeigui,
+        2 => _utils::types::SystemUserRole::MapBeta,
         3 => _utils::types::SystemUserRole::MapPunctuate,
         4 => _utils::types::SystemUserRole::MapUser,
         5 => _utils::types::SystemUserRole::Visitor,

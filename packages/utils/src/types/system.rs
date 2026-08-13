@@ -177,8 +177,8 @@ pub enum SystemUserRole {
     Admin = 0,
     /// 地图管理员
     MapManager = 1,
-    /// 测试打点员
-    MapNeigui = 2,
+    /// 测试服测试员（Beta）
+    MapBeta = 2,
     /// 地图打点员
     MapPunctuate = 3,
     /// 地图用户
@@ -208,7 +208,7 @@ impl<'de> Deserialize<'de> for SystemUserRole {
             serde_json::Value::Number(n) => match n.as_i64() {
                 Some(0) => Ok(SystemUserRole::Admin),
                 Some(1) => Ok(SystemUserRole::MapManager),
-                Some(2) => Ok(SystemUserRole::MapNeigui),
+                Some(2) => Ok(SystemUserRole::MapBeta),
                 Some(3) => Ok(SystemUserRole::MapPunctuate),
                 Some(4) => Ok(SystemUserRole::MapUser),
                 Some(5) => Ok(SystemUserRole::Visitor),
@@ -217,7 +217,8 @@ impl<'de> Deserialize<'de> for SystemUserRole {
             serde_json::Value::String(s) => match s.as_str() {
                 "Admin" => Ok(SystemUserRole::Admin),
                 "MapManager" => Ok(SystemUserRole::MapManager),
-                "MapNeigui" => Ok(SystemUserRole::MapNeigui),
+                // "MapNeigui" 为历史名字（旧数据），与 MapBeta 等价。
+                "MapNeigui" | "MapBeta" => Ok(SystemUserRole::MapBeta),
                 "MapPunctuate" => Ok(SystemUserRole::MapPunctuate),
                 "MapUser" => Ok(SystemUserRole::MapUser),
                 "Visitor" => Ok(SystemUserRole::Visitor),
@@ -240,8 +241,8 @@ impl SystemUserRole {
         }
 
         match self {
-            SystemUserRole::Admin | SystemUserRole::MapNeigui => {
-                matches!(flag, HiddenFlag::Hidden | HiddenFlag::Spy)
+            SystemUserRole::Admin | SystemUserRole::MapBeta => {
+                matches!(flag, HiddenFlag::Hidden | HiddenFlag::Beta)
             },
             SystemUserRole::MapManager | SystemUserRole::MapPunctuate => {
                 matches!(flag, HiddenFlag::Hidden)
