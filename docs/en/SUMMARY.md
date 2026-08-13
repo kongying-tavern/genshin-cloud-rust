@@ -18,7 +18,6 @@
 # Designs
 
 - [Design Index](./designs/README.md)
-- [Punctuate Workflow](./designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
 

@@ -20,7 +20,7 @@ These are the tables that hold the map's actual data. All live under the
 | Chinese | English | Code identifier | Notes |
 | --- | --- | --- | --- |
 | 点位 | marker (POI) | `marker` table, `MarkerVO` | A point of interest on the map: coordinates + icon + items + content. The unit of crowd-sourced contribution. |
-| 打点 | punctuate (crowd-sourced submission) | `marker_punctuate` table, `PunctuateData` | A *staged* contribution that has not yet been audited. See [Punctuate workflow](../designs/punctuate-workflow.md). |
+| 打点 | punctuate (crowd-sourced submission) | `marker_punctuate` table | A *staged* contribution that has not yet been audited (the audit workflow is deprecated; the staging table remains part of the schema). |
 | 物品 | item (collectible) | `item` table, `ItemVO` | A collectible/resource type (e.g. a particular kind of ore, a regional specialty, a chest tier). Attached to markers via `marker_item_link`. |
 | 图标 | icon (marker visual) | `icon` table | The picture drawn on top of a marker. Item → icon → marker is the rendering chain. |
 | 地区 | area (game region) | `area` table, `AreaVO` | A game region: 蒙德 (Mondstadt), 璃月 (Liyue), 稻妻 (Inazuma), 须弥 (Sumeru), 枫丹 (Fontaine), 纳塔 (Natlan), 至冬 (Snezhnaya), etc. Hierarchical via `parent_id`. |
@@ -49,9 +49,9 @@ The many-to-many join tables follow a consistent `*_link` suffix:
 
 | Chinese | English | Code identifier | Notes |
 | --- | --- | --- | --- |
-| 权限屏蔽标记 | hidden_flag (audience tier) | `HiddenFlag` enum | Data-level audience gate: `Visible` / `Hidden` / `Spy` / `Suprise`. See [Hidden and special flags](../designs/hidden-and-special-flags.md). |
+| 权限屏蔽标记 | hidden_flag (audience tier) | `HiddenFlag` enum | Data-level audience gate: `Visible` / `Hidden` / `Beta` / `Suprise`. See [Hidden and special flags](../designs/hidden-and-special-flags.md). |
 | 特殊标记 | special_flag (UI bitmask) | `special_flag: Option<i32>` column | A bitmask filter applied by the client's item/area browsing UI. |
-| 审核流程 | punctuate audit workflow | `MarkerPunctuateStatus` enum | The `Pending → Reviewing → Rejected` state machine. See [Punctuate workflow](../designs/punctuate-workflow.md). |
+| 审核流程 | punctuate audit workflow (deprecated) | `MarkerPunctuateStatus` enum | The `Pending → Reviewing → Rejected` state machine no longer ships in the Rust port; the `marker_punctuate` staging table stays for schema parity. |
 | 暂存 | stage (Pending) | `MarkerPunctuateStatus::Pending` (Java `STAGE`) | A submission saved by the contributor but not yet handed to editors. |
 | 审核中 | reviewing (committed) | `MarkerPunctuateStatus::Reviewing` (Java `COMMIT`) | A submission in the editor queue. |
 | 不通过 | rejected | `MarkerPunctuateStatus::Rejected` (Java `REJECT`) | An editor turned the submission down; the contributor can revise and re-commit. |
@@ -73,7 +73,7 @@ The many-to-many join tables follow a consistent `*_link` suffix:
 | 空荧酒馆 | Kongying Tavern | The community/organization that maintains the map. The GitHub org is `kongying-tavern`. Sometimes abbreviated 空荧. |
 | 原神地图 | Genshin Map | The product itself. The Rust backend in this repo is the server half; the Java repo is the reference implementation. |
 | 提瓦特 | Teyvat | The game world. "All of Teyvat" is the dataset the `*_doc` exports aim to cover. |
-| 内鬼 | spy / insider leak (test-server data) | `HiddenFlag::Spy`. Data mined or test-server content that must not leak to the public map. |
+| 测试服 | Beta (test-server data) | `HiddenFlag::Beta` (legacy name `Spy`). Test-server content that must not leak to the public map. |
 | 彩蛋 | easter egg | `HiddenFlag::Suprise` (misspelled to match the Java enum). |
 
 ## Reading the table

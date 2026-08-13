@@ -14,8 +14,6 @@ pub mod marker_doc;
 pub mod marker_link;
 pub mod marker_link_doc;
 pub mod notice;
-// pub mod punctuate;
-// pub mod punctuate_audit;
 pub mod res;
 // pub mod route;
 pub mod score;
@@ -45,8 +43,6 @@ pub async fn router() -> Result<Router> {
         .nest("/marker_link", marker_link::router().await?)
         .nest("/marker_link_doc", marker_link_doc::router().await?)
         .nest("/notice", notice::router().await?)
-        // .nest("/punctuate", punctuate::router().await?)
-        // .nest("/punctuate_audit", punctuate_audit::router().await?)
         .nest("/res", res::router().await?)
         // .nest("/route", route::router().await?)
         .nest("/score", score::router().await?)

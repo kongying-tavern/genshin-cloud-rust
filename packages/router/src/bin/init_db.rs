@@ -1,8 +1,9 @@
 //! Idempotent schema initializer for local/e2e development.
 //!
-//! Creates the `genshin_map` schema and every table from the sea-orm models
-//! (`CREATE TABLE IF NOT EXISTS`), then exits. DDL is generated from the
-//! entity definitions, so it can never drift from the code.
+//! Creates the schema (default `genshin_map`, override via `DB_SCHEMA`) and
+//! every table from the sea-orm models (`CREATE TABLE IF NOT EXISTS`), then
+//! exits. DDL is generated from the entity definitions, so it can never drift
+//! from the code.
 //!
 //! **On-demand mode**: when all 24 tables already exist the CREATE pass is
 //! skipped entirely ("schema already up to date"). Afterwards it applies the
@@ -22,9 +23,11 @@
 use anyhow::{Context, Result};
 
 use sea_orm::{
-    ActiveValue::Set, ColumnTrait, ConnectionTrait, Database, DbBackend, EntityTrait, QueryFilter,
-    Schema,
+    ActiveValue::Set, ColumnTrait, ConnectOptions, ConnectionTrait, DbBackend, EntityTrait,
+    QueryFilter, Schema,
 };
+
+use _database::default_schema;
 
 use _database::models::{
     area::area as area_entity, area::item_area_public as item_area_public_entity,
@@ -68,6 +71,7 @@ async fn main() -> Result<()> {
         .ok()
         .and_then(|v| v.parse::<u16>().ok())
         .unwrap_or(5432);
+    let schema = default_schema();
     let url = format!(
         "postgres://{}:{}@{}:{}/{}",
         std::env::var("DB_USERNAME").unwrap_or_else(|_| "genshin_map".into()),
@@ -76,32 +80,36 @@ async fn main() -> Result<()> {
         db_port,
         std::env::var("DB_DATABASE").unwrap_or_else(|_| "genshin_map".into()),
     );
-    let db = Database::connect(&url)
+    // Entities carry no schema qualifier; unqualified DDL/queries land in the
+    // schema resolved through the connection `search_path`.
+    let mut opt = ConnectOptions::new(url.clone());
+    opt.set_schema_search_path(schema.clone());
+    let db = sea_orm::Database::connect(opt)
         .await
         .with_context(|| format!("connect to {url}"))?;
 
-    db.execute_unprepared("CREATE SCHEMA IF NOT EXISTS genshin_map")
+    db.execute_unprepared(&format!(r#"CREATE SCHEMA IF NOT EXISTS "{schema}""#))
         .await
         .context("create schema")?;
 
     // On-demand: skip the CREATE pass entirely when the schema already
     // exists (probe a representative table).
     let schema_present = db
-        .execute_unprepared("SELECT 1 FROM genshin_map.sys_user LIMIT 1")
+        .execute_unprepared(&format!(r#"SELECT 1 FROM "{schema}".sys_user LIMIT 1"#))
         .await
         .is_ok();
 
     if schema_present {
-        println!("Schema already up to date (genshin_map)");
+        println!("Schema already up to date ({schema})");
     } else {
-        let schema = Schema::new(DbBackend::Postgres);
+        let schema_obj = Schema::new(DbBackend::Postgres);
         // Order matters for the FOREIGN KEY constraints: referenced tables
         // must exist first. sys_user → standalone masters (area is
         // self-referencing via parent_id, which is fine) → link tables →
         // system aux tables.
         let created = ensure_tables!(
             db,
-            schema,
+            schema_obj,
             sys_user_entity::Entity,
             area_entity::Entity,
             icon_entity::Entity,
@@ -127,12 +135,12 @@ async fn main() -> Result<()> {
             sys_user_invitation_entity::Entity,
             sys_action_log_entity::Entity,
         );
-        println!("Schema ready: {created} tables ensured in genshin_map");
+        println!("Schema ready: {created} tables ensured in {schema}");
     }
 
     // Performance indexes (idempotent). Always runs — also on the on-demand
     // path, where tables already exist but the indexes may not.
-    ensure_indexes(&db).await?;
+    ensure_indexes(&db, &schema).await?;
 
     ensure_admin_account(&db).await?;
     Ok(())
@@ -141,7 +149,9 @@ async fn main() -> Result<()> {
 /// Apply the performance indexes from `scripts/indexes_dev.sql`
 /// (`CREATE INDEX IF NOT EXISTS`, idempotent). The same file is executed
 /// manually on the production database by ops; see its header comment.
-async fn ensure_indexes(db: &sea_orm::DatabaseConnection) -> Result<()> {
+/// The embedded statements are schema-qualified (`genshin_map.`); the
+/// qualifier is rewritten to the configured schema before execution.
+async fn ensure_indexes(db: &sea_orm::DatabaseConnection, schema: &str) -> Result<()> {
     // Strip full-line comments, then execute statement by statement.
     let sql = r#"-- scripts/indexes_dev.sql
 -- Performance indexes for the `genshin_map` schema (PostgreSQL 15).
@@ -198,7 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_marker_item_link_marker_id ON genshin_map.marker_
         .collect::<Vec<_>>()
         .join(" ");
     for stmt in sql.split(';').map(str::trim).filter(|s| !s.is_empty()) {
-        db.execute_unprepared(stmt)
+        let stmt = stmt.replace("genshin_map.", &format!("{schema}."));
+        db.execute_unprepared(&stmt)
             .await
             .with_context(|| format!("create index: {stmt}"))?;
     }

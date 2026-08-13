@@ -2,7 +2,7 @@
 
 # 隐藏标记与特殊标记（Hidden / Special Flags）
 
-> [← 设计文档索引](./README.md) · 相关：[BinaryMD5 归档导出](./binarymd5-archive-export.md) · [打点审批工作流](./punctuate-workflow.md)
+> [← 设计文档索引](./README.md) · 相关：[BinaryMD5 归档导出](./binarymd5-archive-export.md)
 
 本文解释原神地图后端三套**正交**的可见性 / 过滤标记：`hidden_flag`（谁能看）、
 `special_flag`（查不查得出来）、`del_flag`（软删除）。它们名字相近、都挂在点位 /
@@ -23,7 +23,7 @@
 点位（比如隐藏成就触发点）只该对主动选择「看彩蛋」的玩家显示。这是**可见性**
 问题。
 
-- **测试服 / 内鬼数据隔离**：新版本上线前，编辑团队要提前在地图里录入下个版本
+- **测试服（Beta）数据隔离**：新版本上线前，编辑团队要提前在地图里录入下个版本
 
 （如枫丹、纳塔）的点位，这些数据绝对不能漏给正式服玩家（会剧透 + 违规）。这
 是**数据隔离**问题。
@@ -48,14 +48,14 @@
 | 枚举成员 | 数值 | 含义 | 谁能看 |
 | --- | --- | --- | --- |
 | `Visible` | `0` | 正式数据 | 所有玩家 |
-| `Hidden` | `1` | 隐藏 | 仅内鬼 / 后台 |
-| `Spy` | `2` | 测试服 | 测试服玩家 |
+| `Hidden` | `1` | 隐藏 | 仅测试 / 后台 |
+| `Beta` | `2` | 测试服（旧名 `Spy`，数值与线协议不变） | 测试服玩家 |
 | `Suprise` | `3` | 彩蛋 | 主动开启彩蛋的玩家 |
 
 注意：这是**数据级的过滤**，不是接口级的权限校验。它解决的不是「这个用户能不能调
 这个 API」，而是「这个用户能在地图上看到哪些点位」。前端通过请求头 `userDataLevel`
 （一个**位掩码**）声明自己有权看到哪些层级——比如普通玩家传的掩码里只置了 `Visible`
-位，内鬼客户端会同时置 `Hidden` / `Spy` 位。
+位，测试客户端会同时置 `Hidden` / `Beta` 位。
 
 这套标记的两个主要用途：
 
@@ -66,7 +66,7 @@
 
 - **测试数据隔离**：下个版本的新地区（枫丹廷、纳塔部落等）点位在录入阶段标成
 
-`Spy`，正式服前端拉不到；版本上线当天把对应点位的 `hidden_flag` 改回 `Visible`，
+`Beta`，正式服前端拉不到；版本上线当天把对应点位的 `hidden_flag` 改回 `Visible`，
 全服即时可见。这避免了「上线日临时录数据」的慌乱。
 
 ### 2.1 下沉到归档层
@@ -74,7 +74,7 @@
 `hidden_flag` 不只是查询时过滤，而是**在 BinaryMD5 归档分片时就作为第一级分组键**
 （见 [归档导出文档·第 3.1 节](./binarymd5-archive-export.md)）。`marker_doc`
 和 `item_doc` 都按 `hidden_flag` 分组各自压缩成独立的 gzip blob、各自一个 MD5。这意味着
-普通玩家客户端**根本不会收到** `Hidden`/`Spy`/`Suprise` 组的 MD5——不是查询时过滤掉，
+普通玩家客户端**根本不会收到** `Hidden`/`Beta`/`Suprise` 组的 MD5——不是查询时过滤掉，
 而是数据分片压根不下发。这是比「查询过滤」更强的隔离：哪怕前端有 bug 漏过滤，
 数据也没传到客户端。
 
@@ -85,10 +85,9 @@
 - `marker.hidden_flag`（点位可见性）
 - `item.hidden_flag`（物品可见性）
 - `area.hidden_flag`（地区可见性）
-- `marker_punctuate.hidden_flag`——打点建议也带这个字段，`do_pass` 晋升时原样带进
-
-正式 `marker`（见 [打点工作流](./punctuate-workflow.md#4-method_type三种晋升路径)）。
-所以一个点位上线后就拥有提交者设定的可见性。
+- `marker_punctuate.hidden_flag`——打点建议的暂存表也带这个字段（审核工作流已弃用，
+  暂存表随 schema 保留），晋升/导入时原样带进正式 `marker`。所以一个点位上线后就
+  拥有提交者设定的可见性。
 
 字段都加了 `#[sea_orm(indexed)]`，因为归档分组查询要按它过滤。
 
@@ -159,7 +158,7 @@ if let Some(sf) = payload.special_flag {
 | `del_flag` | bool | **是否已删**（生命周期） | 「这个点位下线了，任何查询都不能返回」 |
 
 一个点位可以同时：已经被软删（`del_flag=true`）、原本是测试服数据
-（`hidden_flag=Spy`）、且是特殊物品（`special_flag=1`）。三者互不影响。
+（`hidden_flag=Beta`）、且是特殊物品（`special_flag=1`）。三者互不影响。
 
 ### 4.1 与软删除 del_flag 的正交关系
 
@@ -191,16 +190,17 @@ if let Some(sf) = payload.special_flag {
 查不到，但它的点位（如果 `hidden_flag=Visible`）仍然会出现在地图上和归档里。
 想真正隐藏一个点位，要改 `hidden_flag`。
 
-- **晋升时漏带 `hidden_flag`**：打点建议晋升为正式点位时，`do_pass` 必须把
+- **晋升时漏带 `hidden_flag`**：打点建议晋升为正式点位时，必须把
 
-`punctuate.hidden_flag` 原样写进 `marker.hidden_flag`（`punctuate_audit.rs:124`）。
-如果漏掉，提交者标成 `Suprise` 的彩蛋点会变成全服可见，剧透就漏出去了。
+`punctuate.hidden_flag` 原样写进 `marker.hidden_flag`（打点审核工作流已弃用，该
+语义保留在历史实现中）。如果漏掉，提交者标成 `Suprise` 的彩蛋点会变成全服可见，
+剧透就漏出去了。
 
 ## 6. 与 Java 实现的对齐
 
 | Java（`java-genshin-map-cloud`） | Rust |
 | --- | --- |
-| `HiddenFlag` 枚举（0~3） | `HiddenFlag` 枚举（`Visible/Hidden/Spy/Suprise`） |
+| `HiddenFlag` 枚举（0~3） | `HiddenFlag` 枚举（`Visible/Hidden/Beta/Suprise`，`Beta` 旧名 `Spy`） |
 | `userDataLevel` 请求头位掩码 | 由前端按位组合，后端按 flag 分组归档 |
 | `selectPageItemByCondition`（special_flag 位掩码） | `item::do_get_list`（`bit_and` + `eq(0)` 两分支） |
 | `BaseEntity.del_flag`（MyBatis-Plus 逻辑删除） | `SafeEntityTrait::find_safety`（`del_flag=false` 过滤） |

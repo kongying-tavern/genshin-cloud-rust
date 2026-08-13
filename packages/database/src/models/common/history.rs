@@ -7,7 +7,7 @@ use _utils::{
 };
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "history", schema_name = "genshin_map")]
+#[sea_orm(table_name = "history")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,

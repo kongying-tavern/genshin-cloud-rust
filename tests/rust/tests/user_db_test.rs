@@ -45,14 +45,18 @@ async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
     DB_CONN.get().map(|m| &m.pg_conn)
 }
 
-/// Recreate the `sys_user` table in the `genshin_map` schema. Idempotent so the
-/// test can run repeatedly. `sys_user` only self-references (creator/updater),
-/// so it can be created in isolation — no foreign-key ordering concerns.
+/// Recreate the `sys_user` table in the configured schema (default
+/// `genshin_map`, see `DB_SCHEMA`). Idempotent so the test can run
+/// repeatedly. `sys_user` only self-references (creator/updater), so it can
+/// be created in isolation — no foreign-key ordering concerns.
 async fn recreate_table(db: &sea_orm::DatabaseConnection) -> anyhow::Result<()> {
-    db.execute_unprepared("CREATE SCHEMA IF NOT EXISTS genshin_map")
+    let schema = _database::default_schema();
+    db.execute_unprepared(&format!(r#"CREATE SCHEMA IF NOT EXISTS "{schema}""#))
         .await?;
-    db.execute_unprepared(r#"DROP TABLE IF EXISTS "genshin_map"."sys_user" CASCADE"#)
-        .await?;
+    db.execute_unprepared(&format!(
+        r#"DROP TABLE IF EXISTS "{schema}"."sys_user" CASCADE"#
+    ))
+    .await?;
 
     let schema = Schema::new(sea_orm::DbBackend::Postgres);
     let stmt: TableCreateStatement = schema.create_table_from_entity(sys_user::Entity);

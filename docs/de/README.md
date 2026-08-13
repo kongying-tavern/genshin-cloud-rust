@@ -23,14 +23,13 @@ nur eine Einstiegsseite; die vollständige Dokumentation finden Sie auf
 | [Glossary](../en/guides/glossary.md) | Chinesisch-englische Fachbegriffe |
 | [Architecture](../en/guides/architecture.md) | Schichtung der vier Pakete, Request-Fluss, `SafeEntityTrait`-Muster |
 | [Building](../en/guides/building.md) | Voraussetzungen, `just`-Befehle, `.env`, lokales docker-compose |
-| [API Reference](../en/guides/api-reference.md) | Vom Router bereitgestellte API-Domänen (area/icon/item/marker/punctuate/score/system…) |
+| [API Reference](../en/guides/api-reference.md) | Vom Router bereitgestellte API-Domänen (area/icon/item/marker/score/system…) |
 | [Commit Convention](../en/guides/commit-message-convention.md) | gitmoji-Commit-Konvention |
 | [Java Sync Roadmap](../en/guides/sync-with-java-roadmap.md) | Portierungsreihenfolge aus der Java-Referenz |
 | [Domain Sync Template](../en/guides/domain-sync-template.md) | Fünf-Schichten-Vorlage zum Portieren einer Java-Domäne nach Rust |
 
 ### Designs
 
-- [Punctuate Workflow](../en/designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](../en/designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](../en/designs/hidden-and-special-flags.md)
 

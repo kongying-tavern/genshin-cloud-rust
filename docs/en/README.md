@@ -30,7 +30,7 @@ guides when you start contributing.
 | [Glossary](./guides/glossary.md) | Chinese-English domain terminology |
 | [Architecture](./guides/architecture.md) | The four-package layering, request flow from axum to PostgreSQL, the `SafeEntityTrait` pattern, and Redis/MinIO integration points. |
 | [Building](./guides/building.md) | Prerequisites, `just init` / `just build` / `just dev`, the `.env` file, the local docker-compose stack, and the CI workflows. |
-| [API Reference](./guides/api-reference.md) | The API domains the router exposes (area, icon, item, marker, notice, punctuate, score, system, ...), grouped by purpose. |
+| [API Reference](./guides/api-reference.md) | The API domains the router exposes (area, icon, item, marker, notice, score, system, ...), grouped by purpose. |
 | [Commit Convention](./guides/commit-message-convention.md) | The `celestia-devtools` gitmoji convention enforced by the commit-msg hook, with the common gitmoji cheatsheet and skip overrides. |
 | [Java Sync Roadmap](./guides/sync-with-java-roadmap.md) | The priority order for porting features from `java-genshin-map-cloud`, with the key entity/feature and complexity estimate for each step. |
 | [Domain Sync Template](./guides/domain-sync-template.md) | The five-layer pattern for porting one Java domain to Rust, with a concrete `area` mini-example. |
@@ -41,7 +41,6 @@ Design notes capture the "why" behind non-obvious decisions. This section is
 seeded alongside the guides above; deeper ADR-style documents will be added as
 the port progresses.
 
-- [Punctuate Workflow](./designs/punctuate-workflow.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
 

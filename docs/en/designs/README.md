@@ -25,7 +25,6 @@ audience tier and by UI filter, not by a single permission check.
 
 | Document | What it explains |
 | --- | --- |
-| [Punctuate Workflow](./punctuate-workflow.md) | Why crowd-sourced submissions go through a staging table (`marker_punctuate`) and an audit state machine (`Pending → Reviewing → Rejected`) before being promoted to live markers. Covers the `Added` / `Modified` / `Deleted` promotion paths in `do_pass`. |
 | [BinaryMD5 Archive Export](./binarymd5-archive-export.md) | Why the map cold-starts from GZIP-compressed JSON blobs keyed by MD5, how markers are paged by `id / 3000` while items and linkages use single-blob variants, and where the Rust port still needs a cache layer. |
 | [Hidden and Special Flags](./hidden-and-special-flags.md) | Why the project has three orthogonal visibility mechanisms — soft delete (`del_flag`), audience tier (`hidden_flag`), and UI bitmask (`special_flag`) — and how they compose. |
 

@@ -3,13 +3,65 @@ mod middlewares;
 mod routes;
 
 use anyhow::Result;
+use std::io::Write;
 use std::net::SocketAddr;
+use std::path::Path;
 
 use axum::serve;
 use tokio::net::TcpListener;
 
 use crate::routes::router;
 use _database::init_db_conn;
+
+/// Tee target: forwards every formatted log record to stderr (always) and to
+/// a log file (only when `LOG_DIR` is set). File output is append-only, so
+/// container restarts never clobber previous logs.
+struct TeeTarget {
+    file: Option<std::fs::File>,
+}
+
+impl Write for TeeTarget {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        std::io::stderr().write_all(buf)?;
+        if let Some(f) = self.file.as_mut() {
+            f.write_all(buf)?;
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::stderr().flush()?;
+        if let Some(f) = self.file.as_mut() {
+            f.flush()?;
+        }
+        Ok(())
+    }
+}
+
+/// Open `<LOG_DIR>/genshin-cloud.log` in append mode. Returns `None` (with a
+/// warning) when `LOG_DIR` is unset or the file cannot be opened — logging
+/// then stays on stderr only, and startup never fails because of logs.
+fn open_log_file() -> Option<std::fs::File> {
+    let dir = std::env::var("LOG_DIR").ok()?;
+    let path = Path::new(&dir).join("genshin-cloud.log");
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        Ok(f) => {
+            eprintln!("log file output enabled: {}", path.display());
+            Some(f)
+        },
+        Err(e) => {
+            eprintln!(
+                "LOG_DIR set but {} open failed, logging to stderr only: {e}",
+                path.display()
+            );
+            None
+        },
+    }
+}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
@@ -21,9 +73,14 @@ async fn main() -> Result<()> {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    env_logger::Builder::new()
-        .filter(None, log::LevelFilter::Info)
-        .init();
+    let mut builder = env_logger::Builder::new();
+    builder.filter(None, log::LevelFilter::Info);
+    if let Some(file) = open_log_file() {
+        builder.target(env_logger::Target::Pipe(Box::new(TeeTarget {
+            file: Some(file),
+        })));
+    }
+    builder.init();
 
     let port = std::env::var("PORT")
         .ok()

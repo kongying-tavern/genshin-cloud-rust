@@ -46,6 +46,7 @@ def main() -> int:
     user = os.environ.get("DB_USERNAME", "genshin_map")
     password = os.environ.get("DB_PASSWORD", "")
     database = os.environ.get("DB_DATABASE", "genshin_map")
+    schema = os.environ.get("DB_SCHEMA", "genshin_map")
 
     try:
         conn = psycopg2.connect(
@@ -74,7 +75,7 @@ def main() -> int:
         "icon",
         "area",
     ):
-        cur.execute(f'DELETE FROM "genshin_map"."{table}"')
+        cur.execute(f'DELETE FROM "{schema}"."{table}"')
 
     now = "(now() AT TIME ZONE 'UTC')"
 
@@ -92,7 +93,7 @@ def main() -> int:
     ]
     for aid, name, parent, code, final in areas:
         cur.execute(
-            f'INSERT INTO "genshin_map"."area" '
+            f'INSERT INTO "{schema}"."area" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, code, content, icon_tag, parent_id, is_final, hidden_flag, sort_index, special_flag) "
             f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, {str(final).lower()}, 0, {aid}, 0)",
@@ -112,7 +113,7 @@ def main() -> int:
     ]
     for iid, name, url in icons:
         cur.execute(
-            f'INSERT INTO "genshin_map"."icon" '
+            f'INSERT INTO "{schema}"."icon" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, name, url) "
             f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, %s)",
             (name, url),
@@ -128,7 +129,7 @@ def main() -> int:
     ]
     for tid, name, icon_tag, sort in item_types:
         cur.execute(
-            f'INSERT INTO "genshin_map"."item_type" '
+            f'INSERT INTO "{schema}"."item_type" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"icon_tag, name, content, parent_id, is_final, hidden_flag, sort_index) "
             f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, {tid}, true, 0, {sort})",
@@ -147,7 +148,7 @@ def main() -> int:
     ]
     for iid, name, area_id, icon_tag, sort, type_id in items:
         cur.execute(
-            f'INSERT INTO "genshin_map"."item" '
+            f'INSERT INTO "{schema}"."item" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, area_id, default_refresh_time, default_content, default_count, "
             f"icon_tag, icon_style_type, hidden_flag, sort_index, special_flag) "
@@ -155,7 +156,7 @@ def main() -> int:
             (name, icon_tag),
         )
         cur.execute(
-            f'INSERT INTO "genshin_map"."item_type_link" '
+            f'INSERT INTO "{schema}"."item_type_link" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"type_id, item_id) "
             f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, {type_id}, {iid})"
@@ -168,7 +169,7 @@ def main() -> int:
     ]
     for nid, title, content in notices:
         cur.execute(
-            f'INSERT INTO "genshin_map"."notice" '
+            f'INSERT INTO "{schema}"."notice" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"channel, title, content, valid_time_start, valid_time_end, sort_index) "
             f"VALUES (0, {nid}, {now}, NULL, 1, NULL, false, %s, %s, %s, {now}, NULL, {nid})",
@@ -185,7 +186,7 @@ def main() -> int:
     ]
     for tid, name in tag_types:
         cur.execute(
-            f'INSERT INTO "genshin_map"."tag_type" '
+            f'INSERT INTO "{schema}"."tag_type" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, parent_id, is_final) "
             f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, {tid}, true)",
@@ -200,13 +201,13 @@ def main() -> int:
     ]
     for tid, tag_name, icon_id, type_id in tags:
         cur.execute(
-            f'INSERT INTO "genshin_map"."tag" '
+            f'INSERT INTO "{schema}"."tag" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, tag, icon_id) "
             f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, {icon_id})",
             (tag_name,),
         )
         cur.execute(
-            f'INSERT INTO "genshin_map"."tag_type_link" '
+            f'INSERT INTO "{schema}"."tag_type_link" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"type_id, tag_name) "
             f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, {type_id}, %s)",
@@ -234,7 +235,7 @@ def main() -> int:
         y = -rng.randint(2300, 4700)
         position = f"{x}.{rng.randint(0, 9)},{y}.{rng.randint(0, 9)}"
         cur.execute(
-            f'INSERT INTO "genshin_map"."marker" '
+            f'INSERT INTO "{schema}"."marker" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"marker_stamp, marker_title, position, content, picture, marker_creator_id, "
             f"picture_creator_id, video_path, refresh_time, hidden_flag, extra) "
@@ -242,20 +243,20 @@ def main() -> int:
             (title_by_item[item_id], position),
         )
         cur.execute(
-            f'INSERT INTO "genshin_map"."marker_item_link" '
+            f'INSERT INTO "{schema}"."marker_item_link" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"item_id, marker_id, count) "
             f"VALUES (0, {marker_id}, {now}, NULL, NULL, NULL, false, {item_id}, {marker_id}, 1)"
         )
         marker_id += 1
 
-    cur.execute('SELECT count(*) FROM "genshin_map"."marker"')
+    cur.execute('SELECT count(*) FROM "{schema}"."marker"')
     marker_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "genshin_map"."item"')
+    cur.execute('SELECT count(*) FROM "{schema}"."item"')
     item_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "genshin_map"."area"')
+    cur.execute('SELECT count(*) FROM "{schema}"."area"')
     area_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "genshin_map"."item_type"')
+    cur.execute('SELECT count(*) FROM "{schema}"."item_type"')
     type_count = cur.fetchone()[0]
 
     conn.close()

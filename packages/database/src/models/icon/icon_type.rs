@@ -3,7 +3,7 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "icon_type", schema_name = "genshin_map")]
+#[sea_orm(table_name = "icon_type")]
 pub struct Model {
     /// 乐观锁
     pub version: i64,
