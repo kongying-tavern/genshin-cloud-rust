@@ -40,7 +40,7 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # 官方组织命名空间（无论 workflow 在 fork 还是官方仓库触发）
           images: ghcr.io/kongying-tavern/genshin-cloud-rust
