@@ -15,20 +15,11 @@ use _functions::functions::system::oauth::{
 
 #[derive(Debug, Deserialize)]
 pub struct LoginQuery {
-    grant_type: Option<LoginQueryType>,
+    grant_type: Option<String>,
     // ClientCredentials
     scope: Option<String>,
     // RefreshToken
     refresh_token: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case", untagged)]
-pub enum LoginQueryType {
-    // 这里留着只是用于标记，Password 这个项是故意忽略的，因为这个类型只能手动解析
-    // Password,
-    ClientCredentials,
-    RefreshToken,
 }
 
 #[tracing::instrument(skip(form))]
@@ -90,11 +81,13 @@ pub async fn oauth(
         .into_response());
     }
 
-    match query
-        .grant_type
-        .ok_or((StatusCode::BAD_REQUEST, "Grant type is required".into()))?
-    {
-        LoginQueryType::ClientCredentials => {
+    // grant_type 手动按字符串分派（password 走上面的 multipart 表单；client_credentials
+    // / refresh_token 走 query）：serde_urlencoded 对 query 里的单元枚举
+    // （untagged enum）无法反序列化——此前用类型化枚举导致所有 query 型
+    // grant_type 一律在 Query 提取器阶段 400，refresh_token / client_credentials
+    // 两个 HTTP 分支完全不可用。
+    match query.grant_type.as_deref().map(str::trim) {
+        Some("client_credentials") => {
             let scope = query.scope.ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
@@ -108,7 +101,7 @@ pub async fn oauth(
             )
             .into_response());
         },
-        LoginQueryType::RefreshToken => {
+        Some("refresh_token") => {
             let refresh_token = query.refresh_token.ok_or_else(|| {
                 (
                     StatusCode::BAD_REQUEST,
@@ -120,5 +113,42 @@ pub async fn oauth(
                 .map_err(crate::routes::internal_error)?;
             return Ok(Json(ret).into_response());
         },
+        _ => {
+            return Err((StatusCode::BAD_REQUEST, "Invalid grant type".into()));
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LoginQuery;
+    use axum::extract::Query;
+
+    /// The frontend refresh grant posts `/oauth/token?grant_type=refresh_token&…`
+    /// with a JSON content type (no form body); client credentials similarly
+    /// arrive as query params. The `LoginQuery` shape must deserialize the
+    /// exact query strings the frontend sends — an earlier typed enum variant
+    /// rejected every value at the extractor stage and silently killed token
+    /// refresh for all clients.
+    #[test]
+    fn login_query_parses_frontend_refresh_and_client_credentials_params() {
+        let uri = "/oauth/token?grant_type=refresh_token&refresh_token=abc.def"
+            .parse::<axum::http::Uri>()
+            .unwrap();
+        let Query(q) = Query::<LoginQuery>::try_from_uri(&uri).expect("refresh query must parse");
+        assert_eq!(q.grant_type.as_deref(), Some("refresh_token"));
+        assert_eq!(q.refresh_token.as_deref(), Some("abc.def"));
+
+        let uri = "/oauth/token?grant_type=client_credentials&scope=all"
+            .parse::<axum::http::Uri>()
+            .unwrap();
+        let Query(q) =
+            Query::<LoginQuery>::try_from_uri(&uri).expect("client_credentials query must parse");
+        assert_eq!(q.grant_type.as_deref(), Some("client_credentials"));
+        assert_eq!(q.scope.as_deref(), Some("all"));
+
+        let uri = "/oauth/token".parse::<axum::http::Uri>().unwrap();
+        let Query(q) = Query::<LoginQuery>::try_from_uri(&uri).expect("bare query must parse");
+        assert!(q.grant_type.is_none());
     }
 }

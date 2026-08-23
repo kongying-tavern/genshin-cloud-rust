@@ -69,6 +69,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Fix the `POST /oauth/token` query-string grant dispatch: the typed
+  `LoginQueryType` enum could never deserialize a query parameter, so every
+  `?grant_type=refresh_token` / `?grant_type=client_credentials` request was
+  rejected with a 400 at the extractor stage — the frontend's automatic token
+  refresh (which posts exactly that query shape) silently failed, logging
+  every user out once the 15-day access token expired. `grant_type` is now
+  matched as a plain string, with a unit test pinning the frontend's exact
+  query strings.
 - Fix the role contract that gates the whole frontend data pipeline:
   `GET /system/role/list` was a stub returning `null` (the frontend builds
   its role table from it), and `SysUserVO.roleId` serialized as the enum
