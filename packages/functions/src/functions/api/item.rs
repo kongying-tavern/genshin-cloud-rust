@@ -201,11 +201,14 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
 
 // 列表（带过滤、分页、排序）
 pub async fn do_get_list(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: ItemFilterRequest,
 ) -> Result<CommonResponse<ItemListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
-    let mut query = item_model::Entity::find_safety();
+    // 可见性（Java listItem 的 hiddenFlagList）：按调用者角色过滤。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
+    let mut query =
+        item_model::Entity::find_safety().filter(item_model::Column::HiddenFlag.is_in(allowed));
 
     if let Some(area_ids) = payload.area_id_list
         && !area_ids.is_empty()
@@ -334,7 +337,7 @@ pub async fn do_join_type(
 }
 
 pub async fn do_get_list_by_id(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<Vec<ItemVO>>> {
     const MAX_BATCH: usize = 1000;
@@ -349,8 +352,11 @@ pub async fn do_get_list_by_id(
     }
     let db = &DB_CONN.wait().pg_conn;
     let icon_tag_map = super::icon::icon_tag_map(db).await?;
+    // 可见性：不可见 flag 的物品对调用者如同不存在。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let items = item_model::Entity::find_safety()
         .filter(item_model::Column::Id.is_in(payload))
+        .filter(item_model::Column::HiddenFlag.is_in(allowed))
         .all(db)
         .await?;
     let type_map = type_id_map(db).await?;

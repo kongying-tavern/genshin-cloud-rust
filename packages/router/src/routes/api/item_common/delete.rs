@@ -14,7 +14,7 @@ use crate::middlewares::ExtractManager;
 pub async fn delete(
     ExtractManager(auth): ExtractManager,
     Path(item_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match crate::functions::api::item_common::do_delete(auth, item_id).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

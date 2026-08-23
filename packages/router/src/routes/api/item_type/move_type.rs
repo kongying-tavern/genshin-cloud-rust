@@ -2,7 +2,6 @@ use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
-    http::StatusCode,
     response::IntoResponse,
 };
 
@@ -17,7 +16,7 @@ pub async fn move_to_target(
     ExtractManager(auth): ExtractManager,
     Path(target_type_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item_type::do_move_to_target(auth, target_type_id, payload)
         .await
     {

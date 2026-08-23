@@ -9,7 +9,7 @@ use crate::middlewares::ExtractAuthInfo;
 #[tracing::instrument(skip(auth))]
 pub async fn all_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag_doc::do_all_bin_md5(auth, serde_json::json!({})).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

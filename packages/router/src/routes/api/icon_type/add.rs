@@ -13,7 +13,7 @@ use _utils::models::wrapper::CommonResponse;
 pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconTypeAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::icon_type::do_add(auth, payload).await {
         Ok(id) => Ok((StatusCode::OK, Json(CommonResponse::new(Ok(id))))),
         Err(e) => Err(crate::routes::internal_error(e)),

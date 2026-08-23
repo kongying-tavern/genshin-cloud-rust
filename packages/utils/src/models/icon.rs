@@ -10,6 +10,10 @@ pub struct IconBaseRequest {
     pub name: String,
     /// 图标 URL
     pub url: String,
+    /// 图标分类 ID 列表（Java IconDto.typeIdList / 前端契约）：写入
+    /// icon_type_link；此前 Rust 侧缺失该字段，前端归类被静默丢弃。
+    #[serde(default)]
+    pub type_id_list: Option<Vec<i64>>,
 }
 
 /// 新增图标请求

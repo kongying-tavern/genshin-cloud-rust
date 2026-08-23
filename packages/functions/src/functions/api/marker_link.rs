@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -48,6 +48,20 @@ pub async fn do_link(
 ) -> Result<CommonResponse<String>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
+
+    // 校验（Java checkLinkList 同文案）：非空、端点合法、禁止自关联。
+    if payload.is_empty() {
+        return Err(anyhow!("关联数据不可为空"));
+    }
+    for p in &payload {
+        if p.from_id <= 0 || p.to_id <= 0 {
+            return Err(anyhow!("无效的关联节点ID"));
+        }
+        if p.from_id == p.to_id {
+            return Err(anyhow!("不能将点位关联到自身"));
+        }
+    }
+
     let group_id = uuid::Uuid::new_v4().simple().to_string();
     // 受影响组与点位（对齐 Java `LinkChangeVo`：broadcast MarkerLinked 的 data）
     let mut affected_groups: Vec<String> = vec![group_id.clone()];
@@ -109,6 +123,29 @@ pub async fn do_link(
         };
         active.insert(db).await?;
     }
+
+    // 跨组合并（Java linkMarker 的 getRelatedLinkageList + patchLinkSearchMap）：
+    // 与本次任一端点相关的既有关联行整体迁入新组，旧组随之清空。
+    if !affected_markers.is_empty() {
+        let related = linkage_model::Entity::find_safety()
+            .filter(
+                sea_orm::Condition::any()
+                    .add(linkage_model::Column::FromId.is_in(&affected_markers))
+                    .add(linkage_model::Column::ToId.is_in(&affected_markers)),
+            )
+            .all(db)
+            .await?;
+        for r in related {
+            if r.group_id != group_id {
+                if !affected_groups.contains(&r.group_id) && !r.group_id.is_empty() {
+                    affected_groups.push(r.group_id.clone());
+                }
+                let mut am: linkage_model::ActiveModel = r.into();
+                am.group_id = Set(group_id.clone());
+                linkage_model::Entity::update_safety(am)?.exec(db).await?;
+            }
+        }
+    }
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast(
         "MarkerLinked",
@@ -163,9 +200,12 @@ pub async fn do_get_graph(
         return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
     }
     let db = &DB_CONN.wait().pg_conn;
-    // 每个 groupId 返回一个 GraphVo 结构。前端类型（markerLink.ts GraphVo）声明
-    // relations 为 `Record<string, string[]>`，但该接口前端无调用方；做最小对齐：
-    // relations 改为该组 link 的 id 字符串列表，relRefs/pathRefs 无更丰富的图数据，置空数组。
+    // Java GraphVo 契约（MarkerLinkageDataHelper.buildLinkageGraph）：
+    // {groupId: {relations: {markerId: [relationId]}, relRefs: {relationId:
+    // RelationVo}, pathRefs: {markerId: [PathEdgeVo]}}}。前端（map 前端 +
+    // register 侧 typings.d.ts）按 markerId 索引 relations —— 此前返回
+    // 裸数组会让所有关联渲染失效。TRIGGER 族（一对一）语义完整对齐；
+    // group 族（RELATED/DIRECTED/PATH_*）以 BIDI group 引用输出。
     let mut map: std::collections::HashMap<String, serde_json::Value> =
         std::collections::HashMap::new();
     for g in payload.group_ids {
@@ -173,13 +213,67 @@ pub async fn do_get_graph(
             .filter(linkage_model::Column::GroupId.eq(g.clone()))
             .all(db)
             .await?;
-        let relations: Vec<String> = items.into_iter().map(|it| it.id.to_string()).collect();
+
+        let mut relations: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        let mut rel_refs: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        let mut path_refs: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+
+        for it in &items {
+            if it.from_id <= 0 || it.to_id <= 0 {
+                continue;
+            }
+            let relation_id = uuid::Uuid::new_v4().simple().to_string();
+            let link_ref = serde_json::json!({
+                "markerId": it.from_id,
+                "srcId": it.from_id,
+                "tarId": it.to_id,
+                "pathRefId": it.id,
+            });
+            let action = format!("{:?}", it.link_action).to_uppercase();
+            let relation = match action.as_str() {
+                "TRIGGER" | "TRIGGER_ALL" | "TRIGGER_ANY" => serde_json::json!({
+                    "type": action,
+                    "triggers": [link_ref],
+                    "targets": [serde_json::json!({
+                        "markerId": it.to_id,
+                        "srcId": it.from_id,
+                        "tarId": it.to_id,
+                        "pathRefId": it.id,
+                    })],
+                    "group": [],
+                }),
+                _ => serde_json::json!({
+                    "type": action,
+                    "triggers": [],
+                    "targets": [],
+                    "group": [link_ref],
+                }),
+            };
+            rel_refs.insert(relation_id.clone(), relation);
+            for mid in [it.from_id, it.to_id] {
+                let key = mid.to_string();
+                let entry = relations
+                    .entry(key)
+                    .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+                if let serde_json::Value::Array(arr) = entry {
+                    arr.push(serde_json::Value::String(relation_id.clone()));
+                }
+            }
+            if let Some(path) = it.path.as_ref().and_then(|p| p.as_array()) {
+                let entry = path_refs
+                    .entry(it.from_id.to_string())
+                    .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+                if let serde_json::Value::Array(arr) = entry {
+                    arr.extend(path.iter().cloned());
+                }
+            }
+        }
         map.insert(
             g,
             serde_json::json!({
                 "relations": relations,
-                "relRefs": [],
-                "pathRefs": []
+                "relRefs": rel_refs,
+                "pathRefs": path_refs
             }),
         );
     }

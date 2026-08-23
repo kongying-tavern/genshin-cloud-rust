@@ -12,7 +12,7 @@ use _utils::models::AreaAddRequest;
 pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<AreaAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::area::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

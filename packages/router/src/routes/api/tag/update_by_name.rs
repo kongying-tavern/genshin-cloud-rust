@@ -10,7 +10,7 @@ use crate::middlewares::ExtractManager;
 pub async fn update(
     ExtractManager(auth): ExtractManager,
     Path((tag_name, icon_id)): Path<(String, i64)>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag::do_update_by_name(auth, tag_name, icon_id).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

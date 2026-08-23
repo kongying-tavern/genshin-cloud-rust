@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
 use _utils::models::wrapper::Pagination;
@@ -30,7 +30,7 @@ pub struct DeviceListParams {
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceListParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let size_raw = payload
         .pagination
         .as_ref()
@@ -73,10 +73,10 @@ pub struct DeviceUpdateParams {
 pub async fn update(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceUpdateParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let status = payload
         .status
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, "status required".to_string()))?;
+        .ok_or_else(|| crate::routes::route_error("status required"))?;
     match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

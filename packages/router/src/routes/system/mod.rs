@@ -15,11 +15,12 @@ use axum::{
 };
 
 pub async fn router() -> Result<Router> {
-    // /invitation/consume 与 /user/register/qq 是公开接口（注册流程未登录
-    // 调用），不挂 auth layer；其余路由合并到一个挂 ExtractAuthInfo layer 的
-    // router 中。
+    // /invitation/info、/invitation/consume 与 /user/register/qq 是公开接口
+    // （注册流程未登录调用，对齐 Java 网关 pass-filter），不挂 auth layer；
+    // 其余路由合并到一个挂 ExtractAuthInfo layer 的 router 中。
     let ret = Router::new()
         .route("/invitation/consume", post(invitation::consume))
+        .route("/invitation/info", post(invitation::info))
         .route("/user/register/qq", post(user::register_qq))
         .merge(
             Router::new()
@@ -39,7 +40,6 @@ pub async fn router() -> Result<Router> {
                 .route("/device/update", post(device::update))
                 .route("/invitation/list", post(invitation::list))
                 .route("/invitation/update", post(invitation::update))
-                .route("/invitation/info", post(invitation::info))
                 .route("/invitation/{invitation_id}", delete(invitation::delete))
                 .route("/role/list", get(role::list))
                 .route("/user/register", post(user::register))

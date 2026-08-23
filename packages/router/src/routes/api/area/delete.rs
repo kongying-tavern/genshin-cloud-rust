@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use axum::extract::Json;
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{extract::Path, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
@@ -15,7 +15,7 @@ use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 pub async fn delete(
     ExtractManager(auth): ExtractManager,
     Path(area_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::area::do_delete(auth, area_id).await {
         Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

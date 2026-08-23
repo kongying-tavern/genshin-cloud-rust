@@ -10,7 +10,7 @@ use crate::middlewares::ExtractManager;
 pub async fn create(
     ExtractManager(auth): ExtractManager,
     Path(tag_name): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag::do_create_by_name(auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

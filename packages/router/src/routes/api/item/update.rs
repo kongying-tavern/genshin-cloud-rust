@@ -2,7 +2,6 @@ use anyhow::Result;
 
 use axum::{
     extract::{Json, Path},
-    http::StatusCode,
     response::IntoResponse,
 };
 
@@ -17,7 +16,7 @@ pub async fn update(
     ExtractManager(auth): ExtractManager,
     Path(edit_same): Path<i64>,
     Json(payload): Json<Vec<ItemUpdateData>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item::do_update(auth, edit_same != 0, payload).await {
         Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

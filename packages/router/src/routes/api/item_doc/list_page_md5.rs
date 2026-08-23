@@ -9,7 +9,7 @@ use crate::middlewares::ExtractAuthInfo;
 #[tracing::instrument(skip(auth))]
 pub async fn list_page_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item_doc::do_list_page_bin_md5(auth, serde_json::json!({}))
         .await
     {

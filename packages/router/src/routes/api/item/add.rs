@@ -12,7 +12,7 @@ use _utils::models::item::ItemAddRequest;
 pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<ItemAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match crate::functions::api::item::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

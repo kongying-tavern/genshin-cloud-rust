@@ -3,11 +3,10 @@ use serde::{Deserialize, Serialize};
 
 use axum::{
     extract::{Json, Path},
-    http::StatusCode,
     response::IntoResponse,
 };
 
-use crate::middlewares::{ExtractAdmin, ExtractAuthInfo};
+use crate::middlewares::ExtractAdmin;
 use _utils::{
     models::wrapper::Pagination,
     types::{AccessPolicyItemEnum, InvitationSort},
@@ -71,7 +70,7 @@ pub struct InvitationInfoRequest {
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationListRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let size_raw = payload
         .pagination
         .as_ref()
@@ -105,7 +104,7 @@ pub async fn list(
 pub async fn update(
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationUpdateRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::system::invitation::do_update(
         auth,
         payload.code,
@@ -122,13 +121,12 @@ pub async fn update(
 }
 
 /// 检查用户邀请数据
-/// POST /invitation/info
-#[tracing::instrument(skip(auth))]
+/// POST /invitation/info（公开接口：注册流程未登录调用，对齐 Java pass-filter）
+#[tracing::instrument(skip_all)]
 pub async fn info(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<InvitationInfoRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    match _functions::functions::system::invitation::do_info(auth, payload.code).await {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
+    match _functions::functions::system::invitation::do_info_public(payload.code).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -139,7 +137,7 @@ pub async fn info(
 #[tracing::instrument(skip(payload))]
 pub async fn consume(
     Json(payload): Json<InvitationConsumeRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::system::invitation::do_consume(
         payload.code,
         payload.username,
@@ -159,7 +157,7 @@ pub async fn consume(
 pub async fn delete(
     ExtractAdmin(auth): ExtractAdmin,
     Path(invitation_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::system::invitation::do_delete(auth, invitation_id).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

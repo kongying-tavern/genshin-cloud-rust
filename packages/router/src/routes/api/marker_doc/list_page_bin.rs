@@ -16,7 +16,7 @@ use axum::http::header;
 pub async fn list_page_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(md5): Path<String>,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, crate::routes::RouteError> {
     match _functions::functions::api::marker_doc::do_list_page_bin(auth, md5).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

@@ -22,7 +22,7 @@ use _utils::models::marker::MarkerTweakRequest;
 pub async fn tweak(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<Vec<MarkerTweakRequest>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match crate::functions::api::marker::do_tweak(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

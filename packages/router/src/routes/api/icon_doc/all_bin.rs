@@ -14,7 +14,7 @@ use axum::http::header;
 #[tracing::instrument(skip(auth))]
 pub async fn all_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, crate::routes::RouteError> {
     match _functions::functions::api::icon_doc::do_all_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

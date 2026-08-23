@@ -14,7 +14,7 @@ use crate::middlewares::ExtractPunctuate;
 pub async fn delete(
     ExtractPunctuate(auth): ExtractPunctuate,
     Path(marker_id): Path<i64>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker::do_delete(auth, marker_id).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

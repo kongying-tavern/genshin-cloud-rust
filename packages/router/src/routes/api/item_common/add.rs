@@ -11,7 +11,7 @@ use crate::middlewares::ExtractManager;
 pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item_common::do_add(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),

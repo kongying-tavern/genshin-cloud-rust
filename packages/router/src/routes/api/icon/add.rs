@@ -13,7 +13,7 @@ use _utils::models::icon::IconAddRequest;
 pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::icon::do_add(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

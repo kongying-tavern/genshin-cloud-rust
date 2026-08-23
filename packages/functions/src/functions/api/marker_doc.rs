@@ -30,24 +30,38 @@ fn marker_page_key(flag: i32, page_index: i64) -> String {
 
 /// `GET /marker_doc/list_page_bin_md5`
 pub async fn do_list_page_bin_md5(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<Vec<BinaryMd5Vo>>> {
+    // 可见性（Java listMarkerBinaryMD5）：低等级用户拿不到高等级分组的
+    // md5，隐藏/测试服页对普通用户如同不存在。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = marker_result().await?;
     Ok(CommonResponse::new(Ok(entries
         .iter()
+        .filter(|e| allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.vo.clone())
         .collect())))
 }
 
 /// `GET /marker_doc/list_page_bin/{md5}`
-pub async fn do_list_page_bin(_auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+    // 与 md5 清单同口径的角色过滤：知道 md5 也不能取到越权分组。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = marker_result().await?;
     entries
         .iter()
-        .find(|e| e.vo.md5 == md5)
+        .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.bytes.clone())
         .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
+}
+
+/// Cache key 形如 `marker:{flag}:{page_index}` —— 解析其中的 flag。
+fn entry_flag(key: &str) -> i32 {
+    key.split(':')
+        .nth(1)
+        .and_then(|f| f.parse().ok())
+        .unwrap_or(-1)
 }
 
 /// Compute (and cache) the full marker page set.

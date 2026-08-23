@@ -11,7 +11,7 @@ use _utils::models::marker_link::MarkerLinkage;
 pub async fn link(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<Vec<MarkerLinkage>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link::do_link(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

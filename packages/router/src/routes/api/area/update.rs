@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
 use _utils::models::{AreaUpdateRequest, common::EmptyResponse, wrapper::CommonResponse};
@@ -11,7 +11,7 @@ use _utils::models::{AreaUpdateRequest, common::EmptyResponse, wrapper::CommonRe
 pub async fn update(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<AreaUpdateRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::area::do_update(auth, payload).await {
         Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

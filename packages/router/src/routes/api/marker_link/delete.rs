@@ -11,7 +11,7 @@ use _utils::models::marker_link::MarkerLinkDeleteRequest;
 pub async fn delete(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<MarkerLinkDeleteRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link::do_delete(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

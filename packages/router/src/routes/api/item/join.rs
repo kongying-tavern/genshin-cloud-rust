@@ -16,7 +16,7 @@ pub async fn join_type(
     ExtractManager(auth): ExtractManager,
     Path(type_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item::do_join_type(auth, type_id, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),

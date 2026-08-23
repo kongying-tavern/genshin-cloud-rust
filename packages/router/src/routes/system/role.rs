@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
 use _utils::models::SysRoleVo;
@@ -10,7 +10,7 @@ use _utils::models::SysRoleVo;
 #[tracing::instrument(skip(_auth))]
 pub async fn list(
     ExtractAuthInfo(_auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let roles = vec![
         SysRoleVo {
             id: 0,

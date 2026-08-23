@@ -12,7 +12,7 @@ use axum::{
 #[tracing::instrument(skip(auth))]
 pub async fn all_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_list_bin_md5(
         auth,
         serde_json::json!({}),
@@ -29,7 +29,7 @@ pub async fn all_bin_md5(
 #[tracing::instrument(skip(auth))]
 pub async fn all_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_list_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
@@ -49,7 +49,7 @@ pub async fn all_bin(
 #[tracing::instrument(skip(auth))]
 pub async fn all_graph_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_graph_bin_md5(
         auth,
         serde_json::json!({}),
@@ -66,7 +66,7 @@ pub async fn all_graph_bin_md5(
 #[tracing::instrument(skip(auth))]
 pub async fn all_graph_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_graph_bin(auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,

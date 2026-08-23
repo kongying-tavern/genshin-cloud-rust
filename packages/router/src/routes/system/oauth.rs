@@ -22,6 +22,20 @@ pub struct LoginQuery {
     refresh_token: Option<String>,
 }
 
+/// OAuth2 错误响应：JSON 体 `{"error": "...", "error_description": "..."}`
+/// （Spring OAuth2 契约；前端 axios 按 `error_description` 提取文案）。
+pub type OAuthError = (StatusCode, axum::Json<serde_json::Value>);
+
+fn oauth_error(code: StatusCode, error: &str, description: &str) -> OAuthError {
+    (
+        code,
+        axum::Json(serde_json::json!({
+            "error": error,
+            "error_description": description,
+        })),
+    )
+}
+
 #[tracing::instrument(skip(form))]
 pub async fn oauth(
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
@@ -29,7 +43,7 @@ pub async fn oauth(
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
     form: Option<Multipart>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, OAuthError> {
     let ip = ip.unwrap_or(native_ip);
 
     // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
@@ -38,19 +52,27 @@ pub async fn oauth(
     let mut form_fields = if let Some(mut form) = form {
         let mut ret = HashMap::new();
         while let Some(field) = form.next_field().await.map_err(|err| {
-            (
+            oauth_error(
                 StatusCode::BAD_REQUEST,
-                format!("Failed to read form field: {}", err),
+                "invalid_request",
+                &format!("Failed to read form field: {err}"),
             )
         })? {
             let name = field
                 .name()
-                .ok_or((StatusCode::BAD_REQUEST, "Field name is required".into()))?
+                .ok_or_else(|| {
+                    oauth_error(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request",
+                        "Field name is required",
+                    )
+                })?
                 .to_string();
             let value = field.text().await.map_err(|err| {
-                (
+                oauth_error(
                     StatusCode::BAD_REQUEST,
-                    format!("Failed to read form field {}: {}", name, err),
+                    "invalid_request",
+                    &format!("Failed to read form field {name}: {err}"),
                 )
             })?;
             ret.insert(name, value);
@@ -60,23 +82,44 @@ pub async fn oauth(
         HashMap::new()
     };
     if !form_fields.is_empty() {
-        let grant_type = form_fields
-            .remove("grant_type")
-            .ok_or((StatusCode::BAD_REQUEST, "Grant type is required".into()))?;
+        let grant_type = form_fields.remove("grant_type").ok_or_else(|| {
+            oauth_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "Grant type is required",
+            )
+        })?;
         if grant_type != "password" {
-            return Err((StatusCode::BAD_REQUEST, "Invalid grant type".into()));
+            return Err(oauth_error(
+                StatusCode::BAD_REQUEST,
+                "unsupported_grant_type",
+                "Invalid grant type",
+            ));
         }
 
-        let username = form_fields
-            .remove("username")
-            .ok_or((StatusCode::BAD_REQUEST, "Username is required".into()))?;
-        let password = form_fields
-            .remove("password")
-            .ok_or((StatusCode::BAD_REQUEST, "Password is required".into()))?;
+        let username = form_fields.remove("username").ok_or_else(|| {
+            oauth_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "Username is required",
+            )
+        })?;
+        let password = form_fields.remove("password").ok_or_else(|| {
+            oauth_error(
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "Password is required",
+            )
+        })?;
         return Ok(Json(
             oauth_password_login(username, password, ip, user_agent)
                 .await
-                .map_err(crate::routes::internal_error)?,
+                .map_err(|e| {
+                    // Java/Spring OAuth2 契约：账密失败 -> 400 invalid_grant
+                    // "Bad credentials"（前端据此映射「账号或密码错误」）。
+                    tracing::warn!("password grant failed: {e}");
+                    oauth_error(StatusCode::BAD_REQUEST, "invalid_grant", "Bad credentials")
+                })?,
         )
         .into_response());
     }
@@ -89,32 +132,40 @@ pub async fn oauth(
     match query.grant_type.as_deref().map(str::trim) {
         Some("client_credentials") => {
             let scope = query.scope.ok_or_else(|| {
-                (
+                oauth_error(
                     StatusCode::BAD_REQUEST,
-                    "Scope is required for client credentials".into(),
+                    "invalid_request",
+                    "Scope is required for client credentials",
                 )
             })?;
-            return Ok(Json(
-                oauth_client_credentials(scope)
-                    .await
-                    .map_err(crate::routes::internal_error)?,
-            )
+            return Ok(Json(oauth_client_credentials(scope).await.map_err(|e| {
+                tracing::warn!("client_credentials grant failed: {e}");
+                oauth_error(StatusCode::BAD_REQUEST, "invalid_scope", &e.to_string())
+            })?)
             .into_response());
         },
         Some("refresh_token") => {
             let refresh_token = query.refresh_token.ok_or_else(|| {
-                (
+                oauth_error(
                     StatusCode::BAD_REQUEST,
-                    "Refresh token is required for refresh token grant type".into(),
+                    "invalid_request",
+                    "Refresh token is required for refresh token grant type",
                 )
             })?;
             let ret = oauth_refresh(refresh_token, ip, user_agent)
                 .await
-                .map_err(crate::routes::internal_error)?;
+                .map_err(|e| {
+                    tracing::warn!("refresh grant failed: {e}");
+                    oauth_error(StatusCode::BAD_REQUEST, "invalid_grant", &e.to_string())
+                })?;
             return Ok(Json(ret).into_response());
         },
         _ => {
-            return Err((StatusCode::BAD_REQUEST, "Invalid grant type".into()));
+            return Err(oauth_error(
+                StatusCode::BAD_REQUEST,
+                "unsupported_grant_type",
+                "Invalid grant type",
+            ));
         },
     }
 }

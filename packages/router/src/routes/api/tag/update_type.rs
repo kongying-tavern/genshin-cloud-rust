@@ -11,7 +11,7 @@ use _utils::models::tag::TagUpdateTypeRequest;
 pub async fn update_type(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<TagUpdateTypeRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag::do_update_type(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

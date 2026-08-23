@@ -11,7 +11,7 @@ use crate::middlewares::ExtractAdmin;
 pub async fn delete_icon_tag_cache(
     ExtractAdmin(auth): ExtractAdmin,
     Json(tags): Json<Vec<String>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::cache::do_delete_icon_tag_cache(auth, tags).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

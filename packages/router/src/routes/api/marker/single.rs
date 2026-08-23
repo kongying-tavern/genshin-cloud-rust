@@ -11,7 +11,7 @@ use _utils::models::marker::{MarkerAddRequest, MarkerUpdateData};
 pub async fn add_single(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<MarkerAddRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker::do_add_single(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -24,7 +24,7 @@ pub async fn add_single(
 pub async fn update_single(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<MarkerUpdateData>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker::do_update_single(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),

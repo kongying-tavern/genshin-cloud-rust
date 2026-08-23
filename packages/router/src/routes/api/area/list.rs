@@ -12,7 +12,7 @@ use _utils::models::AreaListRequest;
 pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaListRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::area::do_list(auth, payload).await {
         Ok(list) => Ok((StatusCode::OK, Json(list))),
         Err(e) => Err(crate::routes::internal_error(e)),

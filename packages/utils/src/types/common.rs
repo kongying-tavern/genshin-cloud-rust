@@ -63,6 +63,22 @@ pub enum HiddenFlag {
     Suprise = 3,
 }
 
+/// 该角色可见的 hiddenFlag 集合（Java `RoleEnum.userDataLevel` 语义）：
+/// - ADMIN / MAP_BETA（等级 15）：0 显示、1 隐藏、2 测试服、3 彩蛋 全部可见；
+/// - MAP_MANAGER / MAP_PUNCTUATE（等级 11）：无测试服点位（0/1/3）；
+/// - MAP_USER / VISITOR（等级 9）：仅 0 显示与 3 彩蛋。
+///
+/// 所有读路径（area/item/item_type/icon_type/marker 查询族与 *_doc 分页）
+/// 必须按此集合过滤，否则隐藏/测试服数据会泄露给普通用户。
+pub fn allowed_hidden_flags(role: crate::types::system::SystemUserRole) -> Vec<i32> {
+    use crate::types::system::SystemUserRole;
+    match role {
+        SystemUserRole::Admin | SystemUserRole::MapBeta => vec![0, 1, 2, 3],
+        SystemUserRole::MapManager | SystemUserRole::MapPunctuate => vec![0, 1, 3],
+        SystemUserRole::MapUser | SystemUserRole::Visitor => vec![0, 3],
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 pub enum HistoryEditType {
@@ -191,4 +207,34 @@ pub enum ScopeStatType {
     /// 按天统计
     #[sea_orm(string_value = "DAY")]
     DAY,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_hidden_flags;
+    use crate::types::system::SystemUserRole;
+
+    /// Java RoleEnum.userDataLevel 的可见集合（回归防线上限）：
+    /// 15 级全见、11 级无测试服、9 级仅显示+彩蛋。
+    #[test]
+    fn allowed_hidden_flags_match_java_user_data_levels() {
+        assert_eq!(
+            allowed_hidden_flags(SystemUserRole::Admin),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(
+            allowed_hidden_flags(SystemUserRole::MapBeta),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(
+            allowed_hidden_flags(SystemUserRole::MapManager),
+            vec![0, 1, 3]
+        );
+        assert_eq!(
+            allowed_hidden_flags(SystemUserRole::MapPunctuate),
+            vec![0, 1, 3]
+        );
+        assert_eq!(allowed_hidden_flags(SystemUserRole::MapUser), vec![0, 3]);
+        assert_eq!(allowed_hidden_flags(SystemUserRole::Visitor), vec![0, 3]);
+    }
 }

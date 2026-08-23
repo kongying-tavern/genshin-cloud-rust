@@ -49,8 +49,52 @@ pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonRes
     };
 
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    // 类型关联（Java createIcon）：typeIdList 非空时校验类型存在并写入
+    // icon_type_link；类型 ID 不存在报「类型ID错误」。
+    if let Some(type_ids) = payload.type_id_list.filter(|l| !l.is_empty()) {
+        write_icon_type_links(res.id, &type_ids).await?;
+    }
     super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(res.id)))
+}
+
+/// 校验类型 ID 全部存在（对齐 Java「类型ID错误」文案）并重建该图标的
+/// icon_type_link（Java updateIcon 的 diff-then-replace 语义：变更时全删重建）。
+async fn write_icon_type_links(icon_id: i64, type_ids: &[i64]) -> Result<()> {
+    use _database::models::icon::icon_type as icon_type_model;
+    let db = &DB_CONN.wait().pg_conn;
+    let existing: Vec<i64> = icon_type_model::Entity::find_safety()
+        .filter(icon_type_model::Column::Id.is_in(type_ids.to_vec()))
+        .select_only()
+        .column(icon_type_model::Column::Id)
+        .into_tuple::<i64>()
+        .all(db)
+        .await?;
+    if existing.len() != type_ids.len() {
+        return Err(anyhow!("类型ID错误"));
+    }
+    // replace semantics: clear then insert
+    icon_type_link_model::Entity::delete_many()
+        .filter(icon_type_link_model::Column::IconId.eq(icon_id))
+        .exec(db)
+        .await?;
+    let now = chrono::Utc::now().naive_utc();
+    for tid in type_ids {
+        icon_type_link_model::ActiveModel {
+            version: Set(0),
+            id: NotSet,
+            create_time: Set(now),
+            update_time: Set(None),
+            creator_id: Set(None),
+            updater_id: Set(None),
+            del_flag: Set(false),
+            icon_id: Set(icon_id),
+            type_id: Set(*tid),
+        }
+        .insert(db)
+        .await?;
+    }
+    Ok(())
 }
 
 // 列表查询（支持分页）
@@ -152,11 +196,16 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
         .await?;
     let item = item.ok_or(anyhow!("Icon not found"))?;
     let mut am: icon_model::ActiveModel = item.into();
-    am.tag = Set(payload.base.name);
-    am.url = Set(payload.base.url);
+    am.tag = Set(payload.base.name.clone());
+    am.url = Set(payload.base.url.clone());
     icon_model::Entity::update_safety(am)?
         .exec(&DB_CONN.wait().pg_conn)
         .await?;
+    // 类型关联（Java updateIcon）：typeIdList 缺省不改动（避免误清空），
+    // 提供时按 replace 语义重建。
+    if let Some(type_ids) = payload.base.type_id_list.clone() {
+        write_icon_type_links(payload.id, &type_ids).await?;
+    }
     super::binary_doc::invalidate_doc_cache().await;
     Ok(CommonResponse::new(Ok(())))
 }

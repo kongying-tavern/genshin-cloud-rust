@@ -5,7 +5,7 @@ mod ws;
 use anyhow::Result;
 
 use axum::{
-    Router,
+    Json, Router,
     extract::DefaultBodyLimit,
     http::StatusCode,
     middleware::from_extractor,
@@ -13,10 +13,46 @@ use axum::{
     routing::{get, post},
 };
 
-/// 将 handler 返回的错误映射为 500 响应：
+use _utils::models::CommonResponse;
+
+/// Handler 统一错误响应类型：HTTP 200 + R 包装（Java `RestException` 契约）。
+///
+/// Java 侧 `@RestControllerAdvice` 对 `GenshinApiException` 与兜底 `Throwable`
+/// 都返回 HTTP 200 的 `R{errorStatus, message, data}`；前端 axios 只从 2xx 响应
+/// 体读取 `data.error`/`data.message` 展示业务文案（非 2xx 走 axios 错误分支，
+/// 只能拿到 "Request failed with status code xxx"）。因此这里保持 200 + JSON，
+/// 鉴权失败（401/403）不走本类型，仍返回真实状态码以触发前端登出。
+pub type RouteError = (StatusCode, Json<CommonResponse<()>>);
+
+/// 业务错误的 R 包装：HTTP 200 + `{error:true, errorStatus:500, message}`。
+fn route_error(message: impl Into<String>) -> RouteError {
+    (
+        StatusCode::OK,
+        Json(
+            CommonResponse::<()>::new(Err(anyhow::anyhow!(message.into())))
+                .with_status(StatusCode::INTERNAL_SERVER_ERROR.as_u16()),
+        ),
+    )
+}
+
+/// 携带真实 HTTP 状态码的 R 包装错误（用于 401/403 等需要前端按状态码
+/// 触发登出的分支；正文仍是 JSON R 结构）。
+pub fn status_error(code: u16, message: impl Into<String>) -> RouteError {
+    let status = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    (
+        status,
+        Json(
+            CommonResponse::<()>::new(Err(anyhow::anyhow!(message.into())))
+                .with_status(status.as_u16()),
+        ),
+    )
+}
+
+/// 将 handler 返回的错误映射为统一 R 包装：
 /// - 业务错误（如 "Item not found"，由 `anyhow!("...")` 产生）保留原文返回给客户端；
-/// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息，避免泄露内部细节。
-pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
+/// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息（Java 的
+///   「请求失败」），避免泄露内部细节。
+pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> RouteError {
     let err: anyhow::Error = e.into();
     let detail = format!("{err}");
     let chain = err
@@ -39,13 +75,9 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> (StatusCode, String) {
     ];
     if INTERNAL_KEYWORDS.iter().any(|kw| chain.contains(kw)) {
         tracing::error!("internal server error: {detail}");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".into(),
-        )
-    } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, detail)
+        return route_error("请求失败");
     }
+    route_error(detail)
 }
 
 pub async fn router() -> Result<Router> {

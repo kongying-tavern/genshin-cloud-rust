@@ -11,7 +11,7 @@ use _utils::models::history::HistoryListRequest;
 pub async fn get_list(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<HistoryListRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::history::do_get_list(auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

@@ -12,7 +12,7 @@ use _utils::models::icon_type::IconTypeUpdateRequest;
 pub async fn update(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconTypeUpdateRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::icon_type::do_update(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

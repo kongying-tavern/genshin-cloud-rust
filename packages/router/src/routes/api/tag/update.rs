@@ -11,7 +11,7 @@ use _utils::models::TagUpdateRequest;
 pub async fn update(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<TagUpdateRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag::do_update(auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

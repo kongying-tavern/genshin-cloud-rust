@@ -10,7 +10,7 @@ use crate::middlewares::ExtractAuthInfo;
 pub async fn get_single(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(tag_name): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::tag::do_get_single(auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),

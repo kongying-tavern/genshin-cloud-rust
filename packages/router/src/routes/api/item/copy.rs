@@ -17,7 +17,7 @@ pub async fn copy_to_area(
     ExtractManager(auth): ExtractManager,
     Path(area_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match crate::functions::api::item::do_copy_to_area(auth, area_id, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),

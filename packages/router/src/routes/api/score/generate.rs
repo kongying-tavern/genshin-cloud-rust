@@ -11,7 +11,7 @@ use _utils::models::score::ScoreGenerateRequest;
 pub async fn generate_score(
     ExtractAdmin(auth): ExtractAdmin,
     Json(request): Json<ScoreGenerateRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::score::do_generate_score(auth, request).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

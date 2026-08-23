@@ -67,8 +67,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   models and the commented-out route stubs. The `marker_punctuate` staging
   table remains part of the schema.
 
+### Changed
+
+- Align the unified error contract with the Java `RestException` behavior:
+  business errors (e.g. "Area not found", optimistic-lock conflicts) now
+  return **HTTP 200 with the R wrapper** (`{error: true, errorStatus: 500,
+  message, data: null}`) instead of a bare 500 plain-text body. The frontend
+  only reads `data.error`/`data.message` from 2xx bodies — with the old
+  500-plain-text shape every business failure surfaced as axios's "Request
+  failed with status code 500" instead of the actual message. Internal
+  failures (DB/Redis/MinIO) keep their details out of the response and return
+  Java's generic `请求失败` message, still wrapped in R. Auth rejections
+  (401/403) keep their real status codes so the frontend logout path still
+  fires.
+- `POST /oauth/token` failures now speak the Spring OAuth2 wire contract:
+  HTTP 400 with `{"error": "invalid_grant", "error_description": "Bad
+  credentials"}`-shaped JSON (previously 500 + plain text), enabling the
+  frontend's account/password error mapping; `invalid_request` /
+  `unsupported_grant_type` / `invalid_scope` carry the parameter-level
+  messages.
+
 ### Fixed
 
+- Icon add/update now honor the frontend's `typeIdList` (Java `IconDto`):
+  links are validated against `icon_type` (unknown ids fail with Java's
+  `类型ID错误`) and written to `icon_type_link` — previously the field was
+  silently dropped and new icons could never be categorized, breaking the
+  admin UI's type filtering for them. Update keeps existing links when
+  `typeIdList` is omitted (Java's null-update would NPE; omit-means-keep is
+  the safe reading of the frontend contract).
+- `POST /api/marker_link/link` now validates like Java's `checkLinkList`
+  (empty list → `关联数据不可为空`, non-positive endpoint ids →
+  `无效的关联节点ID`, self-link → `不能将点位关联到自身`) and migrates
+  **all** existing linkages touching the payload's markers into the new
+  group (Java's `getRelatedLinkageList` + `patchLinkSearchMap` cross-group
+  merge) — previously only rows whose ids appeared in the payload moved,
+  so linking a marker that already belonged to a group left the old group's
+  edges behind and split the relation graph.
+- `POST /api/marker_link/get/graph` now returns the Java `GraphVo` wire
+  shape (`{relations: {markerId: [relationId]}, relRefs: {relationId:
+  {type,triggers,targets,group}}, pathRefs: {markerId: [edges]}}` keyed per
+  group). The previous bare-array `relations` broke every client that
+  indexes relations by marker id (the map frontend's relation rendering).
+- `POST /system/user/register` is again reachable by MAP_MANAGER (the Java
+  `authorities-filter` grants it) after the role-matrix hardening had
+  over-gated it to ADMIN-only.
+- `POST /system/invitation/info` is now login-free again (Java gateway
+  pass-filter lists it beside `/consume`); the auth extractor kept 401-ing
+  the frontend's pre-login invitation check.
+- `POST /system/archive/save/{slot}` now matches the Java/frontend
+  `RBoolean` contract: identical-content saves are skipped and return
+  `false` (previously every save inserted a new history row and returned
+  `{id}`, which the frontend's boolean check read as always-true).
+- `DELETE /api/area/{id}` now cascades like Java's `deleteArea`: it walks the
+  area subtree level by level, soft-deletes the areas and the items inside
+  them, removes the marker-item links to those items, and deletes only the
+  markers that lose **all** their item links (markers still linked to items
+  of other areas survive, matching Java). Previously the endpoint deleted
+  just the area row and left every item and marker orphaned but still
+  visible in queries. The parent area's `isFinal` flag is recalculated after
+  the delete (leaf again once childless), also per Java.
+- Fix the `POST /api/marker/get/id` empty-filter fallback: it materialized a
+  full marker model from a single selected column and failed with a 500
+  "Missing value for column" on every no-condition request; it now selects
+  ids only (and applies the caller's visibility flags).
 - Fix the `POST /oauth/token` query-string grant dispatch: the typed
   `LoginQueryType` enum could never deserialize a query parameter, so every
   `?grant_type=refresh_token` / `?grant_type=client_credentials` request was
@@ -282,6 +344,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (all fixed in the M2/M3 PRs); only the RSA/JWKS rotation gap remains.
 
 ### Security
+
+- Close a **hiddenFlag data leak across every read path**: area/item/marker
+  queries and the `item_doc`/`marker_doc` md5+bin pages served hidden (1),
+  beta/test-server (2), and easter-egg (3) data to any caller — a plain
+  `MAP_USER` token could enumerate hidden marker ids via
+  `POST /api/marker/get/id` and fetch the hidden-group bin contents by md5.
+  All read paths now filter by the caller's role (Java `RoleEnum
+  .userDataLevel` semantics: Admin/Beta see 0-3, Manager/Punctuate see
+  0/1/3, User/Visitor see 0/3), and the doc endpoints refuse md5s outside
+  the caller's allowed groups even when the md5 is known. The empty-filter
+  fallback of `marker/get/id` also stopped crashing (it previously
+  materialized a full model from a single selected column and returned a
+  500 "Missing value for column").
+
 
 - Support JWT signing-key rotation (the last RS256 gap): the new
   `JWT_RSA_VERIFY_KEYS` env (comma-separated RSA **public** key PEMs)

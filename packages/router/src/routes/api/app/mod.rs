@@ -9,7 +9,7 @@ use crate::middlewares::ExtractAdmin;
 #[tracing::instrument(skip(auth))]
 pub async fn trigger_update(
     ExtractAdmin(auth): ExtractAdmin,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::app::do_trigger_update(auth).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

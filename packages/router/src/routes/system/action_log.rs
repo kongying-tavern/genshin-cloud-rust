@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
 use _utils::{models::Pagination, types::ActionLogAction};
@@ -60,7 +60,7 @@ pub struct ActionLogParams {
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
     Json(query): Json<ActionLogParams>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let size_raw = query.pagination.as_ref().and_then(|p| p.size).unwrap_or(10);
     let size: u64 = (if size_raw > 200 { 200 } else { size_raw }) as u64;
     let current = query

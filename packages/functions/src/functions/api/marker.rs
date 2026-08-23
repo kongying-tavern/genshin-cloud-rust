@@ -734,8 +734,12 @@ pub async fn do_update_single(
 /// - ���ε���ͬʱ����ʱȡ��������δ����ʱ���� None�����÷�����ȫ������
 async fn collect_filtered_marker_ids(
     db: &sea_orm::DatabaseConnection,
+    auth: &AuthInfo,
     payload: &MarkerFilterRequest,
 ) -> Result<Option<HashSet<i64>>> {
+    // 可见性（Java selectIdListFilterByHiddenFlag）：按调用者角色过滤
+    // marker.hidden_flag —— 无此过滤时隐藏/测试服点位会泄露给普通用户。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let mut item_ids: Option<HashSet<i64>> = None;
     if let Some(ids) = &payload.item_id_list {
         item_ids = Some(ids.iter().copied().collect());
@@ -792,51 +796,88 @@ async fn collect_filtered_marker_ids(
             marker_ids.insert(l.marker_id);
         }
     }
-    Ok(Some(marker_ids))
+    // 只保留调用者可见 flag 的点位
+    retain_visible_markers(db, marker_ids, &allowed).await
+}
+
+/// 过滤 marker_ids：仅保留 hidden_flag 在 allowed 集合内的点位。
+async fn retain_visible_markers(
+    db: &sea_orm::DatabaseConnection,
+    mut ids: HashSet<i64>,
+    allowed: &[i32],
+) -> Result<Option<HashSet<i64>>> {
+    if ids.is_empty() {
+        return Ok(Some(ids));
+    }
+    let id_vec: Vec<i64> = ids.iter().copied().collect();
+    let mut visible: HashSet<i64> = HashSet::new();
+    for chunk in id_vec.chunks(1000) {
+        for mid in marker_model::Entity::find_safety()
+            .filter(marker_model::Column::Id.is_in(chunk))
+            .filter(marker_model::Column::HiddenFlag.is_in(allowed.to_vec()))
+            .select_only()
+            .column(marker_model::Column::Id)
+            .into_tuple::<i64>()
+            .all(db)
+            .await?
+        {
+            visible.insert(mid);
+        }
+    }
+    ids = visible;
+    Ok(Some(ids))
 }
 
 pub async fn do_get_id(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<i64>>> {
     let db = &DB_CONN.wait().pg_conn;
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
     // itemIdList / areaIdList / typeIdList 任一命中即按条件过滤（多条件取交集）
-    if let Some(ids) = collect_filtered_marker_ids(db, &payload).await? {
+    if let Some(ids) = collect_filtered_marker_ids(db, &auth, &payload).await? {
         let mut v: Vec<i64> = ids.into_iter().collect();
         v.sort_unstable();
         return Ok(CommonResponse::new(Ok(v)));
     }
 
-    // 回退：返回所有 marker id
-    let total_list = marker_model::Entity::find_safety()
+    // 回退：返回调用者可见的所有 marker id（按角色过滤 hidden_flag）。
+    // select_only + into_tuple：只取 id 列，不物化整行模型。
+    let mut ids: Vec<i64> = marker_model::Entity::find_safety()
+        .filter(marker_model::Column::HiddenFlag.is_in(allowed))
         .select_only()
         .column(marker_model::Column::Id)
+        .into_tuple::<i64>()
         .all(db)
         .await?;
-    let ids: Vec<i64> = total_list.into_iter().map(|m| m.id).collect();
+    ids.sort_unstable();
     Ok(CommonResponse::new(Ok(ids)))
 }
 
 pub async fn do_get_list_by_info(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
     let db = &DB_CONN.wait().pg_conn;
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
     // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
-    let ids = match collect_filtered_marker_ids(db, &payload).await? {
+    let ids = match collect_filtered_marker_ids(db, &auth, &payload).await? {
         Some(ids) => {
             let mut v: Vec<i64> = ids.into_iter().collect();
             v.sort_unstable();
             v
         },
-        None => marker_model::Entity::find_safety()
-            .all(db)
-            .await?
-            .into_iter()
-            .map(|m| m.id)
-            .collect(),
+        None => {
+            marker_model::Entity::find_safety()
+                .filter(marker_model::Column::HiddenFlag.is_in(allowed))
+                .select_only()
+                .column(marker_model::Column::Id)
+                .into_tuple::<i64>()
+                .all(db)
+                .await?
+        },
     };
 
     if ids.is_empty() {
@@ -865,7 +906,7 @@ pub async fn do_get_list_by_info(
 }
 
 pub async fn do_get_list_by_id(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
     const MAX_BATCH: usize = 1000;
@@ -883,8 +924,12 @@ pub async fn do_get_list_by_id(
     if payload.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
     }
+    // 越权 ID 过滤（Java selectListWithLargeInFilterByHiddenFlag）：
+    // 不可见 flag 的点位对调用者如同不存在。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let items = marker_model::Entity::find_safety()
         .filter(marker_model::Column::Id.is_in(payload))
+        .filter(marker_model::Column::HiddenFlag.is_in(allowed))
         .all(db)
         .await?;
     let ids: Vec<i64> = items.iter().map(|m| m.id).collect();
@@ -901,16 +946,19 @@ pub async fn do_get_list_by_id(
 }
 
 pub async fn do_get_page(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: Pagination,
 ) -> Result<CommonResponse<MarkerListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
     let size = payload.size.unwrap_or(10).min(200) as u64;
     let current = payload.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 
-    let query = marker_model::Entity::find_safety();
+    // 可见性（Java selectPageFilterByHiddenFlag）：分页与计数同口径过滤
+    let query =
+        marker_model::Entity::find_safety().filter(marker_model::Column::HiddenFlag.is_in(allowed));
     let total = query.clone().count(db).await?;
     let items = query.limit(size).offset(offset).all(db).await?;
 

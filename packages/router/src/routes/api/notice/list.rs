@@ -10,7 +10,7 @@ use _utils::models::notice::NoticeListRequest;
 pub async fn get_notice_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(request): Json<NoticeListRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::notice::do_get_notice_list(auth, request).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
