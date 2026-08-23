@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::{common::EmptyResponse, item::ItemUpdateData, wrapper::CommonResponse};
 
 /// 修改物品
@@ -14,7 +14,7 @@ use _utils::models::{common::EmptyResponse, item::ItemUpdateData, wrapper::Commo
 /// POST /item/update/{editSame}
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(edit_same): Path<i64>,
     Json(payload): Json<Vec<ItemUpdateData>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

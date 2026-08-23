@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::icon_type::IconTypeAddRequest;
 use _utils::models::wrapper::CommonResponse;
 
@@ -11,7 +11,7 @@ use _utils::models::wrapper::CommonResponse;
 /// PUT /icon_type/add
 #[tracing::instrument(skip(auth))]
 pub async fn add(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::icon_type::do_add(auth, payload).await {

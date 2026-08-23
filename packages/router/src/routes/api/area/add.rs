@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::AreaAddRequest;
 
 /// 新增地区
@@ -10,7 +10,7 @@ use _utils::models::AreaAddRequest;
 /// 返回新增地区ID
 #[tracing::instrument(skip(auth))]
 pub async fn add(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<AreaAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::area::do_add(auth, payload).await {

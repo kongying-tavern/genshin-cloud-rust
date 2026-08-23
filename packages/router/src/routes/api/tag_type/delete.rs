@@ -6,13 +6,13 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 
 /// 软删除标签类型
 /// DELETE /tag_type/delete/{typeId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(type_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag_type::do_delete(auth, type_id).await {

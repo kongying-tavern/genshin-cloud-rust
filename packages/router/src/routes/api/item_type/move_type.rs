@@ -6,7 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 批量移动类型为目标类型的子类型
@@ -14,7 +14,7 @@ use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 /// POST /item_type/move/{targetTypeId}
 #[tracing::instrument(skip(auth))]
 pub async fn move_to_target(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(target_type_id): Path<i64>,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {

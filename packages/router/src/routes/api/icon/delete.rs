@@ -2,13 +2,13 @@ use anyhow::Result;
 
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 
 /// 删除图标
 /// DELETE /icon/delete/{iconId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(icon_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::icon::do_delete(auth, icon_id).await {

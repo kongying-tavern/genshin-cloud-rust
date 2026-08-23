@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::{
     common::EmptyResponse, item_type::ItemTypeUpdateData, wrapper::CommonResponse,
 };
@@ -11,7 +11,7 @@ use _utils::models::{
 /// POST /item_type/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<ItemTypeUpdateData>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::item_type::do_update(auth, payload).await {

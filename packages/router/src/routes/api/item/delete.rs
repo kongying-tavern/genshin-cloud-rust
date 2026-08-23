@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, extract::Path, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除物品
@@ -10,7 +10,7 @@ use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 /// DELETE /item/delete/{itemId}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(item_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::item::do_delete(auth, item_id).await {

@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::TagAddRequest;
 
 /// 新增标签
@@ -10,7 +10,7 @@ use _utils::models::TagAddRequest;
 /// 返回新增标签 ID
 #[tracing::instrument(skip(auth))]
 pub async fn add(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<TagAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag::do_add(auth, payload).await {

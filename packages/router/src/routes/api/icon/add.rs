@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::icon::IconAddRequest;
 
 /// 新增图标
@@ -11,7 +11,7 @@ use _utils::models::icon::IconAddRequest;
 /// PUT /icon/add
 #[tracing::instrument(skip(auth))]
 pub async fn add(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::icon::do_add(auth, payload).await {

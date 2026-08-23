@@ -2,14 +2,14 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::TagTypeUpdateRequest;
 
 /// 更新标签类型
 /// POST /tag_type/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<TagTypeUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag_type::do_update(auth, payload).await {

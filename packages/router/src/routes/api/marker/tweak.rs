@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractPunctuate;
 use _utils::models::marker::MarkerTweakRequest;
 
 /// 点位调整
@@ -20,7 +20,7 @@ use _utils::models::marker::MarkerTweakRequest;
 /// POST /marker/tweak
 #[tracing::instrument(skip(auth))]
 pub async fn tweak(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<Vec<MarkerTweakRequest>>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match crate::functions::api::marker::do_tweak(auth, payload).await {

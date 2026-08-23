@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::icon_type::IconTypeUpdateRequest;
 
 /// 修改分类
@@ -10,7 +10,7 @@ use _utils::models::icon_type::IconTypeUpdateRequest;
 /// POST /icon_type/update
 #[tracing::instrument(skip(auth))]
 pub async fn update(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconTypeUpdateRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::icon_type::do_update(auth, payload).await {

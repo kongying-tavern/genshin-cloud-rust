@@ -2,13 +2,13 @@ use anyhow::Result;
 
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 
 /// 按标签名软删除标签（前端兼容路由）
 /// DELETE /tag/{tagName}
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(tag_name): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::tag::do_delete_by_name(auth, tag_name).await {

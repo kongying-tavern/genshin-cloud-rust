@@ -3,7 +3,7 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractPunctuate;
 use _functions::functions::api::res::UploadedFile;
 
 /// 允许上传的内容类型白名单。
@@ -14,7 +14,7 @@ const MAX_FIELD_BYTES: usize = 16 * 1024 * 1024;
 /// 上传图片
 #[tracing::instrument(skip(auth))]
 pub async fn upload_image(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractPunctuate(auth): ExtractPunctuate,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // 收集文件字节与元数据，交给 functions 层落盘 MinIO。

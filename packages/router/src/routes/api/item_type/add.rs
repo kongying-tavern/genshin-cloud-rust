@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::item_type::ItemTypeAddRequest;
 
 /// 添加物品类型
@@ -10,7 +10,7 @@ use _utils::models::item_type::ItemTypeAddRequest;
 /// PUT /item_type/add
 #[tracing::instrument(skip(auth))]
 pub async fn add(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<ItemTypeAddRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::item_type::do_add(auth, payload).await {

@@ -3,12 +3,12 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractAdmin;
 
 /// 删除公告
 #[tracing::instrument(skip(auth))]
 pub async fn delete_notice(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractAdmin(auth): ExtractAdmin,
     Path(notice_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::notice::do_delete_notice(auth, notice_id).await {

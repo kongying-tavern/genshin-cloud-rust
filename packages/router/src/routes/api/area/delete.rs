@@ -3,7 +3,7 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::ExtractAuthInfo;
+use crate::middlewares::ExtractManager;
 use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除地区
@@ -13,7 +13,7 @@ use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 /// 如果点位还属于其他地区的物品，那么这个点位将被保留
 #[tracing::instrument(skip(auth))]
 pub async fn delete(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractManager(auth): ExtractManager,
     Path(area_id): Path<i64>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     match _functions::functions::api::area::do_delete(auth, area_id).await {
