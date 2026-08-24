@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::types::HiddenFlag;
 
 /// 地区基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaRequest {
     /// 地区名称
@@ -42,7 +41,7 @@ pub type AreaAddRequest = AreaRequest;
 
 /// 地区更新请求模型
 /// 使用 flatten 展开基础字段，避免重复定义
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaUpdateRequest {
     /// 地区 ID
@@ -55,7 +54,7 @@ pub struct AreaUpdateRequest {
 }
 
 /// 地区列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaListRequest {
     /// 是否遍历子地区
@@ -67,7 +66,7 @@ pub struct AreaListRequest {
 }
 
 /// 地区返回值 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaVO {
     pub version: i64,
@@ -89,7 +88,7 @@ pub struct AreaVO {
     pub special_flag: i32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AreaListResponse(pub Vec<AreaVO>);
 

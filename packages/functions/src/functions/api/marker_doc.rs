@@ -30,24 +30,38 @@ fn marker_page_key(flag: i32, page_index: i64) -> String {
 
 /// `GET /marker_doc/list_page_bin_md5`
 pub async fn do_list_page_bin_md5(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<Vec<BinaryMd5Vo>>> {
+    // 可见性（Java listMarkerBinaryMD5）：低等级用户拿不到高等级分组的
+    // md5，隐藏/测试服页对普通用户如同不存在。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = marker_result().await?;
     Ok(CommonResponse::new(Ok(entries
         .iter()
+        .filter(|e| allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.vo.clone())
         .collect())))
 }
 
 /// `GET /marker_doc/list_page_bin/{md5}`
-pub async fn do_list_page_bin(_auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+    // 与 md5 清单同口径的角色过滤：知道 md5 也不能取到越权分组。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = marker_result().await?;
     entries
         .iter()
-        .find(|e| e.vo.md5 == md5)
+        .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.bytes.clone())
         .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
+}
+
+/// Cache key 形如 `marker:{flag}:{page_index}` —— 解析其中的 flag。
+fn entry_flag(key: &str) -> i32 {
+    key.split(':')
+        .nth(1)
+        .and_then(|f| f.parse().ok())
+        .unwrap_or(-1)
 }
 
 /// Compute (and cache) the full marker page set.
@@ -153,58 +167,6 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
             }
         }
         Ok(entries)
-    })
-    .await
-}
-
-/// Protobuf wire helpers (no prost dependency, hand-rolled encoding).
-fn pb_varint(mut v: u64, out: &mut Vec<u8>) {
-    while v >= 0x80 {
-        out.push((v as u8 & 0x7F) | 0x80);
-        v >>= 7;
-    }
-    out.push(v as u8);
-}
-
-fn pb_key(out: &mut Vec<u8>, field: u32, wire: u8) {
-    pb_varint(((field as u64) << 3) | wire as u64, out);
-}
-
-fn pb_u64(out: &mut Vec<u8>, field: u32, v: u64) {
-    pb_key(out, field, 0);
-    pb_varint(v, out);
-}
-
-fn pb_msg(out: &mut Vec<u8>, field: u32, msg: &[u8]) {
-    pb_key(out, field, 2);
-    pb_varint(msg.len() as u64, out);
-    out.extend_from_slice(msg);
-}
-
-/// GET /marker_doc/list_diff_snapshot - frontend diff sync snapshot.
-///
-/// Response is protobuf MarkerDiffSnapshotVoList (snapshots = 1):
-/// each MarkerDiffSnapshotVo has version = 1, id = 2.
-/// The marker table has no linkage_id column, so it is omitted (optional).
-pub async fn do_list_diff_snapshot(_auth: AuthInfo) -> Result<Vec<u8>> {
-    super::binary_doc::get_diff_snapshot_cached("marker:diff-snapshot".into(), async {
-        let db = &DB_CONN.wait().pg_conn;
-        let markers = marker_model::Entity::find()
-            .select_only()
-            .column(marker_model::Column::Version)
-            .column(marker_model::Column::Id)
-            .filter(marker_model::Column::DelFlag.eq(false))
-            .into_tuple::<(i64, i64)>()
-            .all(db)
-            .await?;
-        let mut out = Vec::with_capacity(markers.len() * 20);
-        for (version, id) in markers {
-            let mut msg = Vec::with_capacity(16);
-            pb_u64(&mut msg, 1, version as u64);
-            pb_u64(&mut msg, 2, id as u64);
-            pb_msg(&mut out, 1, &msg);
-        }
-        Ok(out)
     })
     .await
 }

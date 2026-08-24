@@ -1,7 +1,7 @@
-pub(crate) mod delete;
-pub(crate) mod get;
-pub(crate) mod single;
-pub(crate) mod tweak;
+mod delete;
+mod get;
+mod single;
+mod tweak;
 
 use anyhow::Result;
 

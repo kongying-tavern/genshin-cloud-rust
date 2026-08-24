@@ -17,14 +17,13 @@ use flate2::{Compression, write::GzEncoder};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, time::Duration};
-use utoipa::ToSchema;
 
 use _database::DB_CONN;
 use redis::AsyncCommands;
 
 /// A single MD5 entry in the `list_page_bin_md5` response.
 /// Mirrors Java `BinaryMD5Vo { md5, time }`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryMd5Vo {
     pub md5: String,
@@ -204,7 +203,6 @@ async fn redis_store(key: &str, entries: &[ResultEntry]) {
 pub async fn invalidate_all() {
     BIN_CACHE.invalidate_all();
     RESULT_CACHE.invalidate_all();
-    DIFF_SNAPSHOT_CACHE.invalidate_all();
     // Bump the Redis epoch: replicas' copies are keyed by the old epoch and
     // expire on their own; the next request computes + stores under the new
     // one. Best-effort — with Redis down this is a no-op.
@@ -255,28 +253,6 @@ pub struct ResultEntry {
 /// full `find_safety().all()` scan (100k+ markers) before the per-page cache
 /// could be consulted. With it, a warm hit performs **zero** database
 /// queries.
-/// In-process cache for the marker diff-snapshot protobuf payload
-/// (serves marker_doc/list_diff_snapshot without rescanning the table).
-static DIFF_SNAPSHOT_CACHE: Lazy<moka::future::Cache<String, Vec<u8>>> = Lazy::new(|| {
-    moka::future::Cache::builder()
-        .max_capacity(10)
-        .time_to_live(Duration::from_secs(3600))
-        .build()
-});
-
-/// Fetch a diff-snapshot payload from the cache, or compute and store it.
-pub async fn get_diff_snapshot_cached(
-    key: String,
-    compute: impl std::future::Future<Output = anyhow::Result<Vec<u8>>>,
-) -> anyhow::Result<Vec<u8>> {
-    if let Some(cached) = DIFF_SNAPSHOT_CACHE.get(&key).await {
-        return Ok(cached);
-    }
-    let payload = compute.await?;
-    DIFF_SNAPSHOT_CACHE.insert(key, payload.clone()).await;
-    Ok(payload)
-}
-
 static RESULT_CACHE: Lazy<moka::future::Cache<String, Vec<ResultEntry>>> = Lazy::new(|| {
     moka::future::Cache::builder()
         .max_capacity(64)

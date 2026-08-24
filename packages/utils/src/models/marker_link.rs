@@ -1,21 +1,18 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::types::MarkerLinkageLinkAction;
 
 /// 通用的组 ID 查询请求模型
 /// 用于需要通过组 ID 列表进行查询的场景
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupIdsRequest {
-    /// 关联组 ID 列表（'groupIds'；配合 'isTraverse' 全量遍历时可为空）
-    pub group_ids: Option<Vec<String>>,
-    /// 是否遍历全量关联数据（'isTraverse'）
-    pub is_traverse: Option<bool>,
+    /// 关联组 ID 列表
+    pub group_ids: Vec<String>,
 }
 
 /// 箭头类型枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ArrowType {
     #[serde(rename = "ARROW")]
     Arrow,
@@ -28,7 +25,7 @@ pub enum ArrowType {
 }
 
 /// 线条样式枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LineType {
     #[serde(rename = "DASHED")]
     Dashed,
@@ -39,7 +36,7 @@ pub enum LineType {
 }
 
 /// 点位关联路径边
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerLinkagePathEdge {
     /// 起点箭头形状
@@ -71,7 +68,7 @@ pub struct MarkerLinkagePathEdge {
 }
 
 /// 点位关联
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerLinkage {
     /// 起始点点位 ID
@@ -97,7 +94,7 @@ pub type MarkerLinkListRequest = GroupIdsRequest;
 pub type MarkerLinkGraphRequest = GroupIdsRequest;
 
 /// 删除点位关联请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerLinkDeleteRequest {
     /// 关联组 ID

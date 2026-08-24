@@ -177,6 +177,18 @@ pub async fn do_update(
 }
 
 /// Check invitation info by code.
+/// 公开查询（Java 免登 pass-filter）：校验邀请码是否存在并返回邀请信息。
+/// 不做登录态校验——该端点在注册流程中于登录前调用。
+pub async fn do_info_public(code: String) -> Result<CommonResponse<serde_json::Value>> {
+    let db = &DB_CONN.wait().pg_conn;
+    let inv = inv_model::Entity::find_safety()
+        .filter(inv_model::Column::Code.eq(code))
+        .one(db)
+        .await?
+        .ok_or_else(|| anyhow!("Invitation code not found"))?;
+    Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
+}
+
 pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;

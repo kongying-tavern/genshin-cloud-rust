@@ -196,6 +196,21 @@ pub async fn do_save(
         i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let db = &DB_CONN.wait().pg_conn;
     let archive = extract_archive(&body);
+
+    // 幂等去重（Java saveArchive / 前端 RBoolean 契约）：与该槽位最后一
+    // 条存档内容一致时不写入，返回 false。
+    let latest = archive_model::Entity::find_safety()
+        .filter(archive_model::Column::UserId.eq(user_id))
+        .filter(archive_model::Column::SlotIndex.eq(slot_index))
+        .order_by_desc(archive_model::Column::Id)
+        .one(db)
+        .await?;
+    if let Some(last) = latest
+        && last.data == serde_json::Value::String(archive.clone())
+    {
+        return Ok(CommonResponse::new(Ok(serde_json::json!(false))));
+    }
+
     // create_time 由服务端定，不信任客户端传入的 time（防止时间戳伪造/脏数据）
     let now = Utc::now().naive_utc();
 
@@ -212,12 +227,11 @@ pub async fn do_save(
         user_id: Set(user_id),
         data: Set(serde_json::Value::String(archive)),
     };
-    let res = archive_model::Entity::insert(am).exec(db).await?;
+    archive_model::Entity::insert(am).exec(db).await?;
     // 写入后按上限清理最旧历史
     prune_slot_history(db, user_id, slot_index.into()).await?;
-    Ok(CommonResponse::new(Ok(serde_json::json!({
-        "id": res.last_insert_id
-    }))))
+    // RBoolean 契约：成功写入返回 true（此前返回 {id} 对象，前端布尔判断恒真）
+    Ok(CommonResponse::new(Ok(serde_json::json!(true))))
 }
 
 /// Rename an archive slot.

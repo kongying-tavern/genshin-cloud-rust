@@ -112,7 +112,7 @@ pub async fn do_list(
         }
     }
 
-    let size = payload.page.size.unwrap_or(10).min(500) as u64;
+    let size = payload.page.size.unwrap_or(10).min(200) as u64;
     let current = payload.page.current.unwrap_or(1);
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size);
 

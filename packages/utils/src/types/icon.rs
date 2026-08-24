@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
-use utoipa::ToSchema;
 
 use sea_orm::prelude::*;
 
@@ -48,7 +47,7 @@ impl<'de> Deserialize<'de> for IconStyleType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "i32", db_type = "Integer")]
 #[allow(deprecated)] // LikeOculus is kept for legacy DB rows (num_value = 2)
 pub enum IconStyleType {

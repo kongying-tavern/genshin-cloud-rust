@@ -167,6 +167,17 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     }
 }
 
+/// 登录响应 `env` 字段来源（Java 契约：Spring active profile 的对应物）。
+/// 读 `APP_ENV`（去空白、转小写），未设置或为空时默认 `dev`；生产部署应
+/// 显式设置 `APP_ENV=prod`。
+fn environment_id() -> String {
+    std::env::var("APP_ENV")
+        .ok()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "dev".to_string())
+}
+
 /// 为用户签发 access/refresh token（含 Redis 会话存储，Redis 不可用时降级）。
 ///
 /// access 与 refresh 使用**不同的 jti**（S2：access token 无法冒充 refresh），
@@ -236,11 +247,12 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
         scope: OauthScopeType::All,
         jti: access_jti,
         // Java 契约（AuthorizationServerConfiguration additionalInfo）：
-        // 前端 `SysToken` 依赖 userId / userRoles 恢复用户态与权限掩码。
+        // 前端 `SysToken` 依赖 userId / userRoles 恢复用户态与权限掩码；
+        // env / message 为必有字符串字段（null 会破坏前端契约）。
         user_id: id,
         user_roles: vec![role_code(item.role_id)],
-        env: None,
-        message: None,
+        env: Some(environment_id()),
+        message: Some(String::new()),
     })
 }
 
@@ -773,7 +785,7 @@ pub async fn oauth_refresh(
         jti: new_access_jti,
         user_id: claims.sub,
         user_roles: vec![role_code(user.role_id)],
-        env: None,
-        message: None,
+        env: Some(environment_id()),
+        message: Some(String::new()),
     })
 }

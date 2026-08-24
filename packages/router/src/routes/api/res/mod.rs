@@ -5,8 +5,8 @@ use axum::{
     routing::{get, put},
 };
 
-pub(crate) mod get;
-pub(crate) mod upload;
+mod get;
+mod upload;
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

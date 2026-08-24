@@ -1,7 +1,7 @@
 # 迭代模式转型与未完成事项迭代计划
 
 > 盘点日期：2026-08-01 · 盘点基线：`dev` (a99f4e9) vs `master` (3b04ef0)
-> 参照规范：celestia-island/celestia-devtools 的 master-based + PR 工作流
+> 参照规范：[celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools) 的 master-based + PR 工作流
 >
 > **转型状态（2026-08-01 当日完成）**：§3 的 T0–T5 已全部执行完毕 ——
 > 收口 PR #18 已 squash 合并进 master（22d5178）；CI 加固 PR #19 已合并

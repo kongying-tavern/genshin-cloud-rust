@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::types::{AccessPolicyList, SystemUserRole};
 
 /// 角色列表 VO（Java `SysRoleVo`；前端按 `roleId`（数字）查表构建权限掩码，
 /// 序列化为字符串会断掉整条数据初始化链）。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SysRoleVo {
     pub id: i64,
@@ -46,7 +45,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SysUserVO {
     /// ID
@@ -75,7 +74,7 @@ pub struct SysUserVO {
 }
 
 /// 存档 VO（对齐前端 `SysArchiveVo` 契约；`time` 为毫秒时间戳，Java `Timestamp` NUMBER_INT）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SysArchiveVo {
     /// 存档时间
@@ -87,7 +86,7 @@ pub struct SysArchiveVo {
 }
 
 /// 存档槽位 VO（对齐前端 `SysArchiveSlotVo` 契约；时间字段为毫秒时间戳）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SysArchiveSlotVo {
     /// 版本号
@@ -107,7 +106,7 @@ pub struct SysArchiveSlotVo {
 }
 
 /// 存档槽位 VO（列表接口返回结构，`archive` 为存档 JSON 文本）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveSlotVo {
     /// 槽位顺序

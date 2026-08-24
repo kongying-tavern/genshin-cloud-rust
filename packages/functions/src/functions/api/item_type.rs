@@ -139,12 +139,15 @@ pub async fn do_move_to_target(
 }
 
 pub async fn do_get_list(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     self_flag: bool,
     payload: ItemTypeListRequest,
 ) -> Result<CommonResponse<ItemTypeListResponse>> {
     let db = &DB_CONN.wait().pg_conn;
-    let mut query = item_type_model::Entity::find_safety();
+    // 可见性（Java listItemType 的 hiddenFlagList）：按调用者角色过滤。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
+    let mut query = item_type_model::Entity::find_safety()
+        .filter(item_type_model::Column::HiddenFlag.is_in(allowed));
     // self=1 查询子级（前端唯一用法，body typeIdList: [-1] 取根 / [nodeId] 取子级）；
     // self=0 按 Java 语义查询自身（typeIdList 含 -1 不过滤，否则 id IN typeIdList）
     if let Some(type_list) = payload.type_id_list
@@ -207,9 +210,12 @@ pub async fn do_get_list(
     Ok(CommonResponse::new(Ok(body)))
 }
 
-pub async fn do_get_list_all(_auth: AuthInfo) -> Result<CommonResponse<ItemTypeAllResponse>> {
+pub async fn do_get_list_all(auth: AuthInfo) -> Result<CommonResponse<ItemTypeAllResponse>> {
     let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
+    // 可见性：list_all 与 list 同口径过滤。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let items = item_type_model::Entity::find_safety()
+        .filter(item_type_model::Column::HiddenFlag.is_in(allowed))
         .all(&DB_CONN.wait().pg_conn)
         .await?;
     let vec = items

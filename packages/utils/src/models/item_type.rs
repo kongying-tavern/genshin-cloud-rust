@@ -1,10 +1,9 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
 
 /// 物品类型对外 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeVO {
     pub version: i64,
@@ -24,7 +23,7 @@ pub struct ItemTypeVO {
     pub sort_index: i32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeListResponse {
     pub total: i64,
@@ -32,7 +31,7 @@ pub struct ItemTypeListResponse {
     pub items: Vec<ItemTypeVO>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemTypeAllResponse(pub Vec<ItemTypeVO>);
 
 /// 物品类型基础请求模型
@@ -58,7 +57,7 @@ pub struct ItemTypeRequest {
 }
 
 /// 物品类型添加请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeAddRequest {
     /// 类型补充说明
@@ -84,7 +83,7 @@ pub struct ItemTypeAddRequest {
 }
 
 /// 物品类型更新请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeUpdateData {
     /// 类型补充说明
@@ -110,7 +109,7 @@ pub struct ItemTypeUpdateData {
 }
 
 /// 物品类型列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemTypeListRequest {
     /// 父级类型 ID 列表

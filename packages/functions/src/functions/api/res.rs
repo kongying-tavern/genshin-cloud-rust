@@ -42,24 +42,6 @@ pub async fn do_get() -> Result<CommonResponse<()>> {
     Ok(CommonResponse::new(Ok(())))
 }
 
-/// Resolve a stored object path to its public URL:
-/// - absolute http(s) URLs pass through unchanged;
-/// - relative paths are prefixed with MINIO_PUBLIC_BASE_URL
-///   (falls back to MINIO_BASE_URL when unset).
-pub fn minio_public_url(raw: &str) -> String {
-    if raw.starts_with("http://") || raw.starts_with("https://") {
-        return raw.to_string();
-    }
-    let base = std::env::var("MINIO_PUBLIC_BASE_URL").unwrap_or_else(|_| {
-        std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into())
-    });
-    format!(
-        "{}/{}",
-        base.trim_end_matches('/'),
-        raw.trim_start_matches('/')
-    )
-}
-
 /// Extension for an upload, derived from the *content type* (never from the
 /// client-supplied file name) so stored keys can't smuggle odd extensions.
 fn ext_for_content_type(content_type: &str) -> &'static str {

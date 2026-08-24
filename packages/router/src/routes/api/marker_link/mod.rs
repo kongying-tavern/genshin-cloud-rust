@@ -1,6 +1,6 @@
-pub(crate) mod delete;
-pub(crate) mod get;
-pub(crate) mod link;
+mod delete;
+mod get;
+mod link;
 
 use anyhow::Result;
 
