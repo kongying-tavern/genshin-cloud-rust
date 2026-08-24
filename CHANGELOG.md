@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `APP_ENV` env var: the runtime environment identifier emitted as the `env`
+  field of the `/oauth/token` login response (the Java active-profile
+  contract). Defaults to `dev`; production deployments should set `prod`.
 - `DB_SCHEMA` env var (PostgreSQL): all tables now resolve through the
   connection `search_path` instead of a hard-coded `genshin_map` schema
   qualifier, so the whole stack (queries, `init_db`, demo seed) runs against
@@ -63,9 +66,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 
 - Deprecated the punctuate workflow: deleted `punctuate-workflow.md` (zhs +
-  en) and its references, removed the unused `punctuate` / `punctuate_audit`
-  models and the commented-out route stubs. The `marker_punctuate` staging
-  table remains part of the schema.
+  en) and its references, removed the unused `punctuate` /
+  `punctuate_audit` models and the commented-out route stubs. The
+  `marker_punctuate` staging table remains part of the schema.
+
+### Fixed
+
+- The `/oauth/token` password/refresh login responses now carry the
+  Java-contract `env` (`dev` by default, configurable via `APP_ENV`) and
+  `message` (`""`) fields as strings — both previously serialized as JSON
+  `null`, breaking the frontend `SysToken` contract.
 
 ### Changed
 

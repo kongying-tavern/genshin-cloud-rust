@@ -166,6 +166,7 @@ All variables are read from the process environment or the root `.env` file
 | `DB_DATABASE` | 否 / No | `genshin_map` | 数据库名。/ Database name. |
 | `DB_SCHEMA` | 否 / No | `genshin_map` | 表所在 schema（经连接 `search_path` 生效）。必须是纯 SQL 标识符，否则回退默认并告警。/ Schema for all tables (via the connection `search_path`). Must be a bare SQL identifier, otherwise the default is used with a warning. |
 | `PORT` | 否 / No | `80` | HTTP 监听端口。/ HTTP listen port. |
+| `APP_ENV` | 否 / No | `dev` | 运行环境标识，写入 `/oauth/token` 登录响应的 `env` 字段（Java active profile 契约；生产部署设 `prod`）。/ Environment identifier emitted as the `env` field of the `/oauth/token` login response (Java active-profile contract; set `prod` in production). |
 | `LOG_DIR` | 否 / No | 未设置 / unset | 设置后日志同时追加写入 `<LOG_DIR>/genshin-cloud.log`（目录不存在时自动创建，stderr 输出保留）。/ When set, logs are also appended to `<LOG_DIR>/genshin-cloud.log` (the directory is created if missing; stderr output stays on). |
 | `REDIS_HOST` | 否 / No | `localhost` | Redis 主机；未配置/不可达时后端降级运行。/ Redis host; the backend degrades gracefully when unreachable. |
 | `REDIS_PORT` | 否 / No | `6379` | Redis 端口。/ Redis port. |
