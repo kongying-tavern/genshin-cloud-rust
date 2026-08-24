@@ -18,10 +18,12 @@
 //! - item.iconStyleType: numeric 0-3 from the frontend.
 //! - sys_user_archive.data: dual shape (legacy object array vs JSON string).
 //! - sys_user.password: `{bcrypt}`-prefixed storage (68 chars).
+//! - area add request: the frontend form carries no isFinal (server-computed).
 
 use _database::models::common::notice::ChannelWrapper;
 use _utils::bcrypt;
 use _utils::models::{
+    area::AreaAddRequest,
     history::HistoryItemVO,
     item::ItemRequest,
     marker::{MarkerItemLinkVo, MarkerVO},
@@ -33,6 +35,33 @@ use _utils::types::{
     AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
     IconStyleType, MarkerLinkageLinkAction,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 0. area add — the frontend form never carries isFinal
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn area_add_request_without_is_final_parses() {
+    // Java 契约：isFinal 由后端计算（createArea 强制 true / updateArea 按子级
+    // 重算），前端新增地区表单不携带该字段。回归：isFinal 曾是必填字段，
+    // 前端不传直接 422 "missing field `isFinal`"。
+    let body = serde_json::json!({
+        "name": "地区-alpha",
+        "code": "C:ALPHA",
+        "content": "地区描述-alpha",
+        "iconId": 3,
+        "specialFlag": 1,
+        "sortIndex": 40,
+        "parentId": -1,
+    });
+    let req: AreaAddRequest =
+        serde_json::from_value(body).expect("area add body without isFinal must parse");
+    assert_eq!(req.parent_id, -1);
+    assert_eq!(
+        req.is_final, None,
+        "isFinal is server-computed, not required"
+    );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. sys_user.access_policy — prefixed form (197/199 rows) round-trips

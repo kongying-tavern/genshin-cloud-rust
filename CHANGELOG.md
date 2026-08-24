@@ -72,6 +72,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `POST /api/area/add` no longer rejects requests without `isFinal` (422
+  "missing field `isFinal`"). The field is not client-fillable in the Java
+  contract — it is now server-computed exactly like the reference backend:
+  a newly created area is always a leaf, the parent (id > 0) stops being one
+  when a child is added, and update recalculates both the area itself (by
+  live-children count) and the old/new parents when the parent changes. The
+  request field stays optional for older clients that still send it; the
+  value is ignored.
 - The `/oauth/token` password/refresh login responses now carry the
   Java-contract `env` (`dev` by default, configurable via `APP_ENV`) and
   `message` (`""`) fields as strings — both previously serialized as JSON
