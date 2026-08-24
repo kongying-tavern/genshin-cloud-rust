@@ -1,12 +1,9 @@
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
-use utoipa::ToSchema;
 
 use sea_orm::prelude::*;
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum, ToSchema,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter, DeriveActiveEnum)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum MarkerLinkageLinkAction {
     /// 触发

@@ -2,8 +2,8 @@ use anyhow::Result;
 
 use axum::{Router, routing::get};
 
-pub(crate) mod all_bin;
-pub(crate) mod all_bin_md5;
+mod all_bin;
+mod all_bin_md5;
 
 pub async fn router() -> Result<Router> {
     let ret = Router::new()

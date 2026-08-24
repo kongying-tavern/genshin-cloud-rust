@@ -1,23 +1,26 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::models::Pagination;
 
 /// 图标基础请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconBaseRequest {
     /// 图标名称
     pub name: String,
     /// 图标 URL
     pub url: String,
+    /// 图标分类 ID 列表（Java IconDto.typeIdList / 前端契约）：写入
+    /// icon_type_link；此前 Rust 侧缺失该字段，前端归类被静默丢弃。
+    #[serde(default)]
+    pub type_id_list: Option<Vec<i64>>,
 }
 
 /// 新增图标请求
 pub type IconAddRequest = IconBaseRequest;
 
 /// 更新图标请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconUpdateRequest {
     /// 图标 ID
@@ -30,7 +33,7 @@ pub struct IconUpdateRequest {
 }
 
 /// 图标列表查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconListRequest {
     /// 上传者
@@ -49,7 +52,7 @@ pub struct IconListRequest {
 }
 
 /// 图标返回值（用于 API 响应）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconVO {
     pub id: i64,
@@ -59,7 +62,7 @@ pub struct IconVO {
     pub url: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconListResponse {
     pub total: i64,

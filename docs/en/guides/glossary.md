@@ -5,7 +5,7 @@
 > contributors and players call things), the English docs (this tree), and the
 > actual Rust/Java identifiers in the codebase.
 > The project is a Rust rewrite of
-> [`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud).
+> [`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud).
 > Identifier names are kept in lockstep across both languages; where a name is
 > surprising (e.g. the misspelling of `Suprise`), it is preserved for parity
 > and called out here.

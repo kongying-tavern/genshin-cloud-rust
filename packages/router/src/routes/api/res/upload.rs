@@ -3,9 +3,8 @@ use anyhow::Result;
 use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
-use crate::middlewares::{ApiError, ExtractAuthInfo, api_error};
+use crate::middlewares::ExtractPunctuate;
 use _functions::functions::api::res::UploadedFile;
-use _utils::models::CommonResponse;
 
 /// 允许上传的内容类型白名单。
 const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
@@ -13,39 +12,22 @@ const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "
 const MAX_FIELD_BYTES: usize = 16 * 1024 * 1024;
 
 /// 上传图片
-#[utoipa::path(
-    put,
-    path = "/api/res/upload/image",
-    tag = "res",
-    summary = "上传图片",
-    request_body(
-        content_type = "multipart/form-data",
-        content = Object,
-        description = "图片文件（image/png、image/jpeg、image/gif、image/webp，单字段 ≤ 16 MiB，可多文件）+ 可选文本字段 filePath",
-    ),
-    responses(
-        (status = 200, description = "上传结果", body = inline(CommonResponse<serde_json::Value>)),
-        (status = 401, description = "未登录或令牌无效"),
-        (status = 500, description = "服务器内部错误", body = String),
-    ),
-)]
 #[tracing::instrument(skip(auth))]
 pub async fn upload_image(
-    ExtractAuthInfo(auth): ExtractAuthInfo,
+    ExtractPunctuate(auth): ExtractPunctuate,
     mut multipart: Multipart,
-) -> Result<impl IntoResponse, ApiError> {
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     // 收集文件字节与元数据，交给 functions 层落盘 MinIO。
     // 注意：这里不写临时文件——无主临时文件会泄漏磁盘，且字节最终
     // 需要原样上传。
     let mut files: Vec<UploadedFile> = Vec::new();
     let mut file_path: Option<String> = None;
 
-    while let Some(field) = multipart.next_field().await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("multipart read error: {}", e),
-        )
-    })? {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| crate::routes::route_error(format!("multipart read error: {e}")))?
+    {
         let name = field.name().map(|s| s.to_string()).unwrap_or_default();
         let file_name = field.file_name().map(|s| s.to_string()).unwrap_or_default();
         let content_type = field
@@ -56,10 +38,7 @@ pub async fn upload_image(
         // 无文件名的字段视为文本字段（如 filePath），直接读取并跳过白名单校验。
         if file_name.is_empty() {
             let text = field.text().await.map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("multipart read text error: {}", e),
-                )
+                crate::routes::route_error(format!("multipart read text error: {e}"))
             })?;
             if name == "filePath" && file_path.is_none() {
                 file_path = Some(text);
@@ -69,26 +48,20 @@ pub async fn upload_image(
 
         // 文件字段：内容类型白名单（防任意文件上传）+ 大小上限。
         if !ALLOWED_IMAGE_TYPES.contains(&content_type.as_str()) {
-            return Err(api_error(
-                StatusCode::UNSUPPORTED_MEDIA_TYPE,
-                &format!(
-                    "unsupported content type '{content_type}' — allowed: {ALLOWED_IMAGE_TYPES:?}"
-                ),
-            ));
+            return Err(crate::routes::route_error(format!(
+                "unsupported content type '{content_type}' — allowed: {ALLOWED_IMAGE_TYPES:?}"
+            )));
         }
 
-        let data = field.bytes().await.map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("multipart read bytes error: {}", e),
-            )
-        })?;
+        let data = field
+            .bytes()
+            .await
+            .map_err(|e| crate::routes::route_error(format!("multipart read bytes error: {e}")))?;
         // 单字段大小上限（防内存/对象存储耗尽）。
         if data.len() > MAX_FIELD_BYTES {
-            return Err(api_error(
-                StatusCode::PAYLOAD_TOO_LARGE,
-                &format!("file exceeds the {MAX_FIELD_BYTES}-byte limit"),
-            ));
+            return Err(crate::routes::route_error(format!(
+                "file exceeds the {MAX_FIELD_BYTES}-byte limit"
+            )));
         }
 
         let size = data.len();

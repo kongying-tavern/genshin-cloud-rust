@@ -2,7 +2,7 @@
 
 > Переписывание бэкенда «空荧酒馆 Genshin Map» на Rust с синхронизацией
 > функций с эталонной реализацией на Java
-> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
+> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)).
 
 Это раздел документации на русском языке. Бэкенд представляет собой Cargo
 workspace из четырёх пакетов (`utils → database → functions → router`) на

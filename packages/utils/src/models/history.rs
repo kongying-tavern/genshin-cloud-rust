@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use crate::{
     models::wrapper::Pagination,
@@ -7,7 +6,7 @@ use crate::{
 };
 
 /// 历史记录排序枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum HistorySort {
     #[serde(rename = "updateTime+")]
     UpdateTimeAsc,
@@ -16,7 +15,7 @@ pub enum HistorySort {
 }
 
 /// 历史记录分页查询请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListRequest {
     /// 创建时间结束时间
@@ -40,7 +39,7 @@ pub struct HistoryListRequest {
 }
 
 /// 单条历史记录 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryItemVO {
     pub version: i64,
@@ -65,7 +64,7 @@ pub struct HistoryItemVO {
 }
 
 /// 历史记录列表响应
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListResponse {
     pub total: usize,

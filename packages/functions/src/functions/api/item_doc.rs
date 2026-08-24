@@ -26,12 +26,15 @@ use super::item::{item_to_vo, marker_count_map, type_id_map};
 /// single page (index 0). Served from the result cache — no DB scan on a
 /// warm hit.
 pub async fn do_list_page_bin_md5(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<Vec<BinaryMd5Vo>>> {
+    // 可见性（Java ItemDoc）：低等级用户拿不到高等级分组的 md5。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = item_result().await?;
     Ok(CommonResponse::new(Ok(entries
         .iter()
+        .filter(|e| allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.vo.clone())
         .collect())))
 }
@@ -40,13 +43,23 @@ pub async fn do_list_page_bin_md5(
 ///
 /// Returns the GZIP-compressed JSON bytes for the page whose MD5 matches.
 /// Served from the result cache — no DB scan on a warm hit.
-pub async fn do_list_page_bin(_auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+    // 与 md5 清单同口径的角色过滤：知道 md5 也不能取到越权分组。
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let entries = item_result().await?;
     entries
         .iter()
-        .find(|e| e.vo.md5 == md5)
+        .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.bytes.clone())
         .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
+}
+
+/// Cache key 形如 `item:{flag}` —— 解析其中的 flag。
+fn entry_flag(key: &str) -> i32 {
+    key.split(':')
+        .nth(1)
+        .and_then(|f| f.parse().ok())
+        .unwrap_or(-1)
 }
 
 /// Compute (and cache) the full item page set.

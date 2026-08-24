@@ -5,7 +5,7 @@
 > 简体中文文档索引 · [English](../en/README.md) · [繁體中文](../zht/README.md)
 
 本项目是「空荧酒馆·原神地图」后端服务的 Rust 实现，目标是与 Java 参考实现
-（[`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)）
+（[`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)）
 保持功能同步，同时在性能、部署体验与类型安全上有所改进。
 
 技术栈基于 `axum` + `sea-orm` + `PostgreSQL` + `redis` + `minio`，工作区划分为

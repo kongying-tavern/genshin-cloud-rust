@@ -2,7 +2,7 @@
 
 > The Rust rewrite of the "空荧酒馆 Genshin Map" backend, feature-synced with
 > the Java reference implementation
-> ([`java-genshin-map-cloud`](https://github.com/kongying-tavern/java-genshin-map-cloud)).
+> ([`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud)).
 
 This is the English documentation section. The backend is organized as a
 four-package Cargo workspace (`utils → database → functions → router`) built on
@@ -32,7 +32,7 @@ guides when you start contributing.
 | [Building](./guides/building.md) | Prerequisites, `just init` / `just build` / `just dev`, the `.env` file, the local docker-compose stack, and the CI workflows. |
 | [API Reference](./guides/api-reference.md) | The API domains the router exposes (area, icon, item, marker, notice, score, system, ...), grouped by purpose. |
 | [Commit Convention](./guides/commit-message-convention.md) | The `celestia-devtools` gitmoji convention enforced by the commit-msg hook, with the common gitmoji cheatsheet and skip overrides. |
-| [Java Sync Roadmap](./guides/sync-with-java-roadmap.md) | The priority order for porting features from `java-genshin-map-cloud`, with the key entity/feature and complexity estimate for each step. |
+| [Java Sync Roadmap](./guides/sync-with-java-roadmap.md) | The priority order for porting features from `genshin-map-cloud`, with the key entity/feature and complexity estimate for each step. |
 | [Domain Sync Template](./guides/domain-sync-template.md) | The five-layer pattern for porting one Java domain to Rust, with a concrete `area` mini-example. |
 
 ### Designs

@@ -1,12 +1,11 @@
-pub mod api;
-pub(crate) mod system;
-pub(crate) mod ws;
+mod api;
+mod system;
+mod ws;
 
-use crate::middlewares::{ApiError, api_error};
 use anyhow::Result;
 
 use axum::{
-    Router,
+    Json, Router,
     extract::DefaultBodyLimit,
     http::StatusCode,
     middleware::from_extractor,
@@ -14,10 +13,46 @@ use axum::{
     routing::{get, post},
 };
 
-/// 将 handler 返回的错误映射为 500 响应：
+use _utils::models::CommonResponse;
+
+/// Handler 统一错误响应类型：HTTP 200 + R 包装（Java `RestException` 契约）。
+///
+/// Java 侧 `@RestControllerAdvice` 对 `GenshinApiException` 与兜底 `Throwable`
+/// 都返回 HTTP 200 的 `R{errorStatus, message, data}`；前端 axios 只从 2xx 响应
+/// 体读取 `data.error`/`data.message` 展示业务文案（非 2xx 走 axios 错误分支，
+/// 只能拿到 "Request failed with status code xxx"）。因此这里保持 200 + JSON，
+/// 鉴权失败（401/403）不走本类型，仍返回真实状态码以触发前端登出。
+pub type RouteError = (StatusCode, Json<CommonResponse<()>>);
+
+/// 业务错误的 R 包装：HTTP 200 + `{error:true, errorStatus:500, message}`。
+fn route_error(message: impl Into<String>) -> RouteError {
+    (
+        StatusCode::OK,
+        Json(
+            CommonResponse::<()>::new(Err(anyhow::anyhow!(message.into())))
+                .with_status(StatusCode::INTERNAL_SERVER_ERROR.as_u16()),
+        ),
+    )
+}
+
+/// 携带真实 HTTP 状态码的 R 包装错误（用于 401/403 等需要前端按状态码
+/// 触发登出的分支；正文仍是 JSON R 结构）。
+pub fn status_error(code: u16, message: impl Into<String>) -> RouteError {
+    let status = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    (
+        status,
+        Json(
+            CommonResponse::<()>::new(Err(anyhow::anyhow!(message.into())))
+                .with_status(status.as_u16()),
+        ),
+    )
+}
+
+/// 将 handler 返回的错误映射为统一 R 包装：
 /// - 业务错误（如 "Item not found"，由 `anyhow!("...")` 产生）保留原文返回给客户端；
-/// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息，避免泄露内部细节。
-pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> ApiError {
+/// - SQL/DB/Redis/MinIO/IO 等内部错误只记日志，向客户端返回通用消息（Java 的
+///   「请求失败」），避免泄露内部细节。
+pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> RouteError {
     let err: anyhow::Error = e.into();
     let detail = format!("{err}");
     let chain = err
@@ -40,10 +75,9 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> ApiError {
     ];
     if INTERNAL_KEYWORDS.iter().any(|kw| chain.contains(kw)) {
         tracing::error!("internal server error: {detail}");
-        api_error(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error")
-    } else {
-        api_error(StatusCode::INTERNAL_SERVER_ERROR, &detail)
+        return route_error("请求失败");
     }
+    route_error(detail)
 }
 
 pub async fn router() -> Result<Router> {
@@ -52,8 +86,6 @@ pub async fn router() -> Result<Router> {
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .route("/ws/{user_id}", get(ws::ws_handler))
-        // 前端契约：wss 连接 userId 走 query（/ws?userId=...）
-        .route("/ws", get(ws::ws_handler_query))
         // The domain endpoints live under /api/* (Java contract — the
         // frontend's production build and direct clients call these paths).
         // They are ALSO merged at the root: the Vite dev proxy rewrites
@@ -62,18 +94,11 @@ pub async fn router() -> Result<Router> {
         .merge(api::router().await?)
         .nest("/api", api::router().await?)
         .nest_service("/cdn", cdn_proxy())
-        .fallback(|| async { api_error(StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
+        .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(cors_layer())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
         .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
-
-    // DEV-only：DEBUG 环境变量开启时才挂载 OpenAPI 文档路由（默认关闭）。
-    let ret = if crate::openapi::debug_enabled() {
-        ret.merge(crate::openapi::router())
-    } else {
-        ret
-    };
 
     Ok(ret)
 }
@@ -120,17 +145,7 @@ fn cors_layer() -> tower_http::cors::CorsLayer {
 }
 
 /// JWKS 公钥分发端点（`GET /.well-known/jwks.json`），无鉴权。
-#[utoipa::path(
-    get,
-    path = "/.well-known/jwks.json",
-    tag = "auth",
-    summary = "JWKS 公钥分发",
-    responses(
-        (status = 200, description = "RSA 公钥 JWKS（HS256 模式下为空 keys）", body = Object),
-        (status = 500, description = "服务器内部错误", body = String),
-    ),
-)]
-pub(crate) async fn jwks() -> axum::response::Response {
+async fn jwks() -> axum::response::Response {
     match _functions::functions::system::oauth::do_jwks().await {
         Ok(v) => axum::Json(v).into_response(),
         Err(e) => (
@@ -179,6 +194,17 @@ fn cdn_proxy() -> axum::Router {
     use axum::response::{IntoResponse, Response};
     use std::time::Duration;
 
+    // Whitelist for the `u=` image proxy. The initial URL AND every redirect
+    // hop must stay on this list (or the configured CDN upstream host) —
+    // otherwise a 30x from a whitelisted host could drag the proxy into
+    // internal addresses (redirect-based SSRF).
+    const IMG_PROXY_ALLOWED_HOSTS: [&str; 4] = [
+        "ddns.minemc.top",
+        "assets.yuanshen.site",
+        "tiles.yuanshen.site",
+        "v3.yuanshen.site",
+    ];
+
     // 上游挂起时不能无限等待：连接 5s、整体 15s 超时。
     let client = std::sync::Arc::new(
         reqwest::Client::builder()
@@ -187,6 +213,33 @@ fn cdn_proxy() -> axum::Router {
             .build()
             .expect("build cdn client"),
     );
+    // Strict client for the user-influenced img-proxy only: every redirect
+    // hop is re-validated against the whitelist. The generic CDN client above
+    // keeps default redirect handling for its operator-configured upstream,
+    // which may legitimately bounce across domains.
+    let img_client = {
+        let allowed: std::sync::Arc<[String]> =
+            std::sync::Arc::new(IMG_PROXY_ALLOWED_HOSTS.map(String::from));
+        let upstream = cdn_upstream();
+        let upstream_host = url_host(&upstream);
+        reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                // Custom policies get no automatic loop cap — enforce one.
+                if attempt.previous().len() >= 10 {
+                    return attempt.error("too many redirects");
+                }
+                let host = attempt.url().host_str().unwrap_or_default();
+                if allowed.iter().any(|a| a == host) || upstream_host.as_deref() == Some(host) {
+                    attempt.follow()
+                } else {
+                    attempt.stop()
+                }
+            }))
+            .build()
+            .expect("build img proxy client")
+    };
     let upstream = cdn_upstream();
     let dadian_override = dadian_config_file();
 
@@ -195,6 +248,7 @@ fn cdn_proxy() -> axum::Router {
             move |State(client): State<std::sync::Arc<reqwest::Client>>,
                   req: Request<axum::body::Body>| {
                 let client = client.clone();
+                let img_client = img_client.clone();
                 let upstream = upstream.clone();
                 let dadian_override = dadian_override.clone();
                 async move {
@@ -241,12 +295,7 @@ fn cdn_proxy() -> axum::Router {
                         let decoded = urlencoding::decode(u).unwrap_or_default().into_owned();
                         let host = url_host(&decoded);
                         let upstream_host = url_host(&upstream);
-                        let allowed: [&str; 4] = [
-                            "ddns.minemc.top",
-                            "assets.yuanshen.site",
-                            "tiles.yuanshen.site",
-                            "v3.yuanshen.site",
-                        ];
+                        let allowed: [&str; 4] = IMG_PROXY_ALLOWED_HOSTS;
                         let host_allowed = host.as_deref().is_some_and(|h| {
                             allowed.contains(&h) || upstream_host.as_deref() == Some(h)
                         });
@@ -258,7 +307,7 @@ fn cdn_proxy() -> axum::Router {
                                 .unwrap()
                                 .into_response();
                         }
-                        match client.get(&decoded).send().await {
+                        match img_client.get(&decoded).send().await {
                             Ok(resp) => {
                                 let body = resp.bytes().await.unwrap_or_default();
                                 return Response::builder()

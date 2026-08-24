@@ -1,13 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use utoipa::ToSchema;
 
 use crate::{models::wrapper::Pagination, types::HiddenFlag};
 use serde_json::Value;
 
 /// 点位物品关联（Java `MarkerItemLinkVo`；前端按 `itemList` 过滤/渲染点位，
 /// 缺失会导致任何点位都无法显示）。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerItemLinkVo {
     pub item_id: i64,
@@ -18,7 +17,7 @@ pub struct MarkerItemLinkVo {
 }
 
 /// 点位对外返回 VO
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerVO {
     pub version: i64,
@@ -52,7 +51,7 @@ pub struct MarkerVO {
 }
 
 /// 空响应（会序列化为 {}）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerEmptyResponse {}
 
@@ -71,7 +70,7 @@ pub struct MarkerIdListResponse {
 }
 
 /// 列表响应（带总数）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerListResponse {
     pub total: usize,
@@ -125,7 +124,7 @@ pub struct MarkerRequest {
 }
 
 /// 点位筛选查询请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerFilterRequest {
     /// 地区 ID 列表
@@ -137,7 +136,7 @@ pub struct MarkerFilterRequest {
 }
 
 /// 点位添加请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerAddRequest {
     /// 点位说明
@@ -168,7 +167,7 @@ pub struct MarkerAddRequest {
 }
 
 /// 点位更新请求模型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerUpdateData {
     /// 点位说明
@@ -201,7 +200,7 @@ pub struct MarkerUpdateData {
 }
 
 /// 点位调整配置枚举 - 属性类型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MarkerTweakConfigPropEnum {
     Content,
@@ -219,7 +218,7 @@ pub enum MarkerTweakConfigPropEnum {
 }
 
 /// 点位调整配置枚举 - 调整类型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MarkerTweakConfigTypeEnum {
     Append,
@@ -244,7 +243,7 @@ pub enum MarkerTweakConfigTypeEnum {
 }
 
 /// 数据值枚举
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TweakValue {
     AnythingArray(Vec<Option<serde_json::Value>>),
@@ -258,7 +257,7 @@ pub enum TweakValue {
 }
 
 /// 调整配置数据
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TweakMeta {
     /// 物品关联
@@ -274,7 +273,7 @@ pub struct TweakMeta {
 }
 
 /// 点位调整配置
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerTweakConfig {
     /// 调整配置数据，此项根据调整方法类型使用不同的数据字段
@@ -287,7 +286,7 @@ pub struct MarkerTweakConfig {
 }
 
 /// 点位调整请求
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarkerTweakRequest {
     /// 点位 ID 列表

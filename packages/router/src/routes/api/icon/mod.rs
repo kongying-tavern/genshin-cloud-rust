@@ -1,8 +1,8 @@
-pub(crate) mod add;
-pub(crate) mod delete;
-pub(crate) mod get_single;
-pub(crate) mod list;
-pub(crate) mod update;
+mod add;
+mod delete;
+mod get_single;
+mod list;
+mod update;
 
 use anyhow::Result;
 

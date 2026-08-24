@@ -1,15 +1,13 @@
-use _utils::models::CommonResponse;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{extract::Json, response::IntoResponse};
 
-use crate::middlewares::{ApiError, AppJson, ExtractAdmin, api_error};
+use crate::middlewares::ExtractAdmin;
 use _utils::models::wrapper::Pagination;
 use _utils::types::DeviceSort;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceListParams {
     #[serde(flatten)]
@@ -28,23 +26,11 @@ pub struct DeviceListParams {
 
 /// 获取用户设备
 /// POST /device/list
-#[utoipa::path(
-    post,
-    path = "/system/device/list",
-    tag = "system",
-    summary = "获取用户设备",
-    request_body = DeviceListParams,
-    responses(
-        (status = 200, description = "设备分页列表", body = inline(CommonResponse<serde_json::Value>)),
-        (status = 401, description = "未登录或无权访问"),
-        (status = 500, description = "服务器内部错误", body = String),
-    ),
-)]
 #[tracing::instrument(skip(auth))]
 pub async fn list(
     ExtractAdmin(auth): ExtractAdmin,
-    AppJson(payload): AppJson<DeviceListParams>,
-) -> Result<impl IntoResponse, ApiError> {
+    Json(payload): Json<DeviceListParams>,
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let size_raw = payload
         .pagination
         .as_ref()
@@ -73,7 +59,7 @@ pub async fn list(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceUpdateParams {
     /// ID
@@ -83,26 +69,14 @@ pub struct DeviceUpdateParams {
 
 /// 更新用户设备信息
 /// POST /device/update
-#[utoipa::path(
-    post,
-    path = "/system/device/update",
-    tag = "system",
-    summary = "更新用户设备信息",
-    request_body = DeviceUpdateParams,
-    responses(
-        (status = 200, description = "更新结果", body = inline(CommonResponse<utoipa::TupleUnit>)),
-        (status = 401, description = "未登录或无权访问"),
-        (status = 500, description = "服务器内部错误", body = String),
-    ),
-)]
 #[tracing::instrument(skip(auth))]
 pub async fn update(
     ExtractAdmin(auth): ExtractAdmin,
-    AppJson(payload): AppJson<DeviceUpdateParams>,
-) -> Result<impl IntoResponse, ApiError> {
+    Json(payload): Json<DeviceUpdateParams>,
+) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let status = payload
         .status
-        .ok_or_else(|| api_error(StatusCode::BAD_REQUEST, "status required"))?;
+        .ok_or_else(|| crate::routes::route_error("status required"))?;
     match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

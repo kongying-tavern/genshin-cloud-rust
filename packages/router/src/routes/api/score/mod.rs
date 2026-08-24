@@ -1,5 +1,5 @@
-pub(crate) mod data;
-pub(crate) mod generate;
+mod data;
+mod generate;
 
 use anyhow::Result;
 use axum::{Router, routing::post};

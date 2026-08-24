@@ -1,6 +1,6 @@
-pub(crate) mod add;
-pub(crate) mod delete;
-pub(crate) mod list;
+mod add;
+mod delete;
+mod list;
 
 use anyhow::Result;
 use axum::{

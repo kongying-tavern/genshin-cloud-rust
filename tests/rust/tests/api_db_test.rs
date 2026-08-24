@@ -1253,6 +1253,18 @@ async fn area_and_item_doc_business_assertions() {
         "expires_in is the 15-day TTL in seconds"
     );
     assert_ne!(issue.jti, uuid::Uuid::nil(), "jti is issued");
+    // Java 契约：env / message 必为字符串（测试进程未设 APP_ENV → 默认 dev），
+    // 序列化为 null 会破坏前端 SysToken 契约（回归：两者曾为 None → null）。
+    assert_eq!(
+        issue.env,
+        Some("dev".to_string()),
+        "response env defaults to dev when APP_ENV is unset"
+    );
+    assert_eq!(
+        issue.message,
+        Some(String::new()),
+        "response message is an empty string, not null"
+    );
 
     // Wire contract: serialized response uses the Java field names the
     // frontend SysToken consumes (userId/userRoles camelCase).
@@ -1261,6 +1273,8 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(issue_json["refresh_token"], issue.refresh_token);
     assert_eq!(issue_json["userId"], serde_json::json!(uid_issue));
     assert_eq!(issue_json["userRoles"][0], "MAP_USER");
+    assert_eq!(issue_json["env"], "dev");
+    assert_eq!(issue_json["message"], "");
     assert_eq!(issue_json["jti"], issue.jti.to_string());
 
     // Decoded payload contract (S2): token_type claims, distinct jti, sub =
@@ -1371,6 +1385,9 @@ async fn area_and_item_doc_business_assertions() {
     assert_ne!(r2.jti, r1.jti, "new jti");
     assert_eq!(r2.user_id, uid_refresh);
     assert_eq!(r2.user_roles, vec!["MAP_USER".to_string()]);
+    // 与登录响应同一 Java 契约：refresh 签发的响应 env / message 也是字符串。
+    assert_eq!(r2.env, Some("dev".to_string()));
+    assert_eq!(r2.message, Some(String::new()));
     let r2_access_claims = verify_token(&r2.access_token)
         .await
         .expect("verify rotated access");
