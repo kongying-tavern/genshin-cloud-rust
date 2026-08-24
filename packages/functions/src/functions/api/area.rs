@@ -26,6 +26,7 @@ use _utils::{
 // 新增地区
 pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
+    let db = &DB_CONN.wait().pg_conn;
     let now = chrono::Utc::now().naive_utc();
 
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
@@ -44,13 +45,16 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
         content: Set(payload.content),
         icon_id: Set(icon_id),
         parent_id: Set(payload.parent_id),
-        is_final: Set(payload.is_final),
+        // Java createArea：新地区恒为末端（客户端传入的 isFinal 被忽略）。
+        is_final: Set(true),
         hidden_flag: Set(payload.hidden_flag),
         sort_index: Set(payload.sort_index),
         special_flag: Set(payload.special_flag),
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(db).await?;
+    // Java createArea：父级（>0）因新增子级不再是末端。
+    set_parent_is_final(db, payload.parent_id, false).await?;
     Ok(CommonResponse::new(Ok(res.id)))
 }
 
@@ -60,10 +64,22 @@ pub async fn do_update(
     payload: AreaUpdateRequest,
 ) -> Result<CommonResponse<EmptyResponse>> {
     auth.require_non_anonymous()?;
+    // Java updateArea：指定的父节点无效（自己挂到自己下面）。
+    if payload.area.parent_id == payload.id {
+        return Err(anyhow!("指定的父节点无效"));
+    }
+    let db = &DB_CONN.wait().pg_conn;
     let item = area_model::Entity::find_safety_by_id(payload.id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(db)
         .await?;
     let item = item.ok_or(anyhow!("Area not found"))?;
+
+    // Java updateArea：父级变化时，新父级不再是末端，旧父级按剩余子级重算。
+    let old_parent_id = item.parent_id;
+    if old_parent_id != payload.area.parent_id {
+        set_parent_is_final(db, payload.area.parent_id, false).await?;
+        recalc_is_final(db, old_parent_id).await?;
+    }
 
     let mut am: area_model::ActiveModel = item.into();
     am.name = Set(payload.area.name);
@@ -72,15 +88,47 @@ pub async fn do_update(
     am.icon_id =
         Set(resolve_icon_id(payload.area.icon_id, payload.area.icon_tag.as_deref()).await?);
     am.parent_id = Set(payload.area.parent_id);
-    am.is_final = Set(payload.area.is_final);
+    // Java updateAreaIsFinal(area)：本地区是否末端按子级数量重算，
+    // 客户端传入的 isFinal 被忽略。
+    am.is_final = Set(is_leaf(db, payload.id).await?);
     am.hidden_flag = Set(payload.area.hidden_flag);
     am.sort_index = Set(payload.area.sort_index);
     am.special_flag = Set(payload.area.special_flag);
 
-    area_model::Entity::update_safety(am)?
-        .exec(&DB_CONN.wait().pg_conn)
-        .await?;
+    area_model::Entity::update_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
+}
+
+/// 该地区是否为末端（无非删除子级）。Java updateAreaIsFinal(area) 的判定。
+async fn is_leaf(db: &sea_orm::DatabaseConnection, area_id: i64) -> Result<bool> {
+    let children = area_model::Entity::find_safety()
+        .filter(area_model::Column::ParentId.eq(area_id))
+        .count(db)
+        .await?;
+    Ok(children == 0)
+}
+
+/// Java updateAreaIsFinal(parentId, isFinal)：直接设置地区（父级）的末端标志。
+/// parentId <= 0（如根级 -1）表示无父级，跳过。
+async fn set_parent_is_final(
+    db: &sea_orm::DatabaseConnection,
+    parent_id: i64,
+    is_final: bool,
+) -> Result<()> {
+    if parent_id <= 0 {
+        return Ok(());
+    }
+    area_model::Entity::update_many()
+        .col_expr(area_model::Column::IsFinal, Expr::value(is_final))
+        .filter(area_model::Column::Id.eq(parent_id))
+        .exec(db)
+        .await?;
+    Ok(())
+}
+
+/// Java recalculateAreaIsFinal：按剩余非删除子级数量重算末端标志。
+async fn recalc_is_final(db: &sea_orm::DatabaseConnection, area_id: i64) -> Result<()> {
+    set_parent_is_final(db, area_id, is_leaf(db, area_id).await?).await
 }
 
 // 列表
@@ -199,17 +247,7 @@ pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Em
     }
 
     // Java deleteArea 收尾：重算父级 isFinal（无剩余子级 → 叶子）
-    if parent_area_id > 0 {
-        let remaining = area_model::Entity::find_safety()
-            .filter(area_model::Column::ParentId.eq(parent_area_id))
-            .count(db)
-            .await?;
-        area_model::Entity::update_many()
-            .col_expr(area_model::Column::IsFinal, Expr::value(remaining == 0))
-            .filter(area_model::Column::Id.eq(parent_area_id))
-            .exec(db)
-            .await?;
-    }
+    recalc_is_final(db, parent_area_id).await?;
     Ok(CommonResponse::new(Ok(EmptyResponse {})))
 }
 

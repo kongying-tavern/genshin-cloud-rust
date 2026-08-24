@@ -411,7 +411,7 @@ async fn area_and_item_doc_business_assertions() {
             icon_id: 0,
             icon_tag: None,
             parent_id: seeded_area_id,
-            is_final: false,
+            is_final: None,
             hidden_flag: HiddenFlag::Hidden,
             sort_index: 1,
             special_flag: 0,
@@ -423,6 +423,28 @@ async fn area_and_item_doc_business_assertions() {
     .expect("area add payload");
     let new_id = add_resp;
     assert!(new_id != seeded_area_id, "new area gets a distinct id");
+
+    // Java 契约：isFinal 由后端计算——新地区恒为末端（客户端不传/传任意值
+    // 均被忽略），父级因新增子级不再是末端（回归：isFinal 曾是必填字段，
+    // 前端不传直接 422）。
+    let seeded_after = area_fns::do_get(auth.clone(), seeded_area_id)
+        .await
+        .expect("area do_get seeded after add")
+        .data
+        .expect("area get payload");
+    assert!(
+        !seeded_after.is_final,
+        "parent is no longer a leaf once a child is added"
+    );
+    let new_area = area_fns::do_get(auth.clone(), new_id)
+        .await
+        .expect("area do_get new after add")
+        .data
+        .expect("area get payload");
+    assert!(
+        new_area.is_final,
+        "newly added area is always a leaf regardless of the client field"
+    );
 
     let after = area_fns::do_list(
         auth.clone(),
@@ -449,7 +471,7 @@ async fn area_and_item_doc_business_assertions() {
             icon_id: 0,
             icon_tag: None,
             parent_id: seeded_area_id,
-            is_final: false,
+            is_final: None,
             hidden_flag: HiddenFlag::Visible,
             sort_index: 2,
             special_flag: 0,
@@ -484,7 +506,7 @@ async fn area_and_item_doc_business_assertions() {
                 icon_id: 0,
                 icon_tag: None,
                 parent_id: -1,
-                is_final: false,
+                is_final: None,
                 hidden_flag: HiddenFlag::Visible,
                 sort_index: 0,
                 special_flag: 0,

@@ -22,7 +22,12 @@ pub struct AreaRequest {
     /// 无父级则为 -1
     pub parent_id: i64,
     /// 是否为末端地区
-    pub is_final: bool,
+    ///
+    /// Java 契约：**非客户端可填字段**——`createArea` 强制新地区为末端、
+    /// `updateArea` 按子级数量重算、父级随增删子级自动维护，客户端传入值
+    /// 一律被忽略。仅为兼容仍携带该字段的旧客户端而保留解析（可选）。
+    #[serde(default)]
+    pub is_final: Option<bool>,
     /// 权限屏蔽标记
     #[serde(default)]
     pub hidden_flag: HiddenFlag,
