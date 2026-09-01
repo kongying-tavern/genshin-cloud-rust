@@ -56,7 +56,6 @@ a content domain.
 | Score | `/api/score` | Per-user contribution scoring (score_stat aggregate). |
 | Notice | `/api/notice` | In-app announcements and broadcast messages. |
 | History | `/api/history` | Audit history of edits to content entities. |
-| Route | `/api/route` | Curated in-game routes (e.g. farming paths). |
 | Resources | `/api/res` | Static resource references (versioned asset pointers). |
 
 ## System — accounts, devices, invitations, OAuth

@@ -29,7 +29,6 @@ pub async fn do_register(
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
     remark: Option<String>,
-    role_id: Option<SystemUserRole>,
     username: String,
     password: String,
 ) -> Result<CommonResponse<i64>> {
@@ -50,10 +49,12 @@ pub async fn do_register(
     let am = sys_user_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
+        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(0)),
+        updater_id: Set(Some(0)),
         del_flag: Set(false),
 
         username: Set(username),
@@ -62,7 +63,10 @@ pub async fn do_register(
         qq: Set(None),
         phone: Set(None),
         logo: Set(logo),
-        role_id: Set(role_id.unwrap_or(SystemUserRole::MapUser)),
+        // Java SysUserService.registerUser 恒以 MAP_USER 落库：注册接口虽归
+        // MAP_MANAGER 使用，但管理员也不能借注册直接造出高权账号（越权面）。
+        // 请求中的 roleId 一律忽略；提权只能走 /system/user/update（仅 Admin）。
+        role_id: Set(SystemUserRole::MapUser),
         access_policy: Set(access_policy.map(_utils::types::AccessPolicyList)),
         remark: Set(Some(remark.unwrap_or_default())),
     };
@@ -107,10 +111,12 @@ pub async fn do_register_qq(
     let am = sys_user_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
+        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(0)),
+        updater_id: Set(Some(0)),
         del_flag: Set(false),
 
         username: Set(username),
@@ -189,6 +195,8 @@ pub async fn do_update(
     let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
     let old_role = m.role_id;
     let mut am: sys_user_model::ActiveModel = m.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
 
     if let Some(ap) = access_policy {
         // access_policy 是风控/运营管控字段：仅 Admin 可修改。非 Admin（含本人
@@ -276,6 +284,8 @@ pub async fn do_update_password(
     }
 
     let mut am: sys_user_model::ActiveModel = m.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(user_id));
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
         .map_err(|_| (500, "Internal server error".to_string()))?);
     sys_user_model::Entity::update_safety(am)
@@ -300,6 +310,8 @@ pub async fn do_update_password_by_admin(
         .await?;
     let m = m.ok_or(anyhow!("User not found"))?;
     let mut am: sys_user_model::ActiveModel = m.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(_auth.info.id));
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
     sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     // 管理员重置密码后吊销该用户全部会话，旧 token 一律失效（无旧密码

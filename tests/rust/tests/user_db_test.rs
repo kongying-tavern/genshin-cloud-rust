@@ -190,4 +190,196 @@ async fn user_db_round_trip() {
         gone.is_none(),
         "soft-deleted row must be filtered out by find_safety"
     );
+
+    // ── Archive slot-row model (Java SysUserArchiveService) ─────────────────
+    // 归档行以软删用户为属主不影响断言（实体 DDL 不建外键）。
+    use _database::models::system::sys_user_archive as archive_model;
+    use _functions::functions::system::archive as archive_fns;
+    use sea_orm::{ColumnTrait, QueryFilter};
+
+    recreate_archive_table(db)
+        .await
+        .expect("recreate sys_user_archive");
+    let auth = stub_auth();
+
+    // 首次保存：新建槽位行，data = [entry]，返回 true
+    let body = serde_json::json!({"Data_KYJG": 1});
+    let saved = archive_fns::do_save(auth.clone(), id, 0, None, body.clone())
+        .await
+        .expect("first save")
+        .data
+        .expect("bool payload");
+    assert_eq!(saved, serde_json::json!(true));
+    let rows = archive_model::Entity::find_safety()
+        .filter(archive_model::Column::UserId.eq(id))
+        .all(db)
+        .await
+        .expect("fetch rows");
+    assert_eq!(rows.len(), 1, "one row per user+slot");
+    let data = rows[0].data.as_array().expect("data is an array");
+    assert_eq!(data.len(), 1);
+    assert_eq!(
+        data[0]["archive"],
+        serde_json::json!({"Data_KYJG":1}).to_string()
+    );
+    assert!(
+        data[0]["time"].as_i64().unwrap_or(0) > 0,
+        "entry time is a ms number"
+    );
+
+    // 审计字段：新增时 create/update 两组全部设置
+    assert_eq!(rows[0].creator_id, Some(id));
+    assert_eq!(rows[0].updater_id, Some(id));
+    assert!(rows[0].update_time.is_some(), "update_time set on insert");
+
+    // 幂等：与最新一条一致 → false，不新增条目
+    let dup = archive_fns::do_save(auth.clone(), id, 0, None, body.clone())
+        .await
+        .expect("dup save")
+        .data
+        .expect("bool payload");
+    assert_eq!(dup, serde_json::json!(false));
+
+    // 再存 5 条不同内容：头插 + 上限 5（共 6 条不同 → 挤掉最旧 1 条）
+    for i in 2..=6 {
+        archive_fns::do_save(
+            auth.clone(),
+            id,
+            0,
+            None,
+            serde_json::json!({"Data_KYJG": i}),
+        )
+        .await
+        .expect("save variant");
+    }
+    // 最新在前
+    let last = archive_fns::do_get_last(auth.clone(), id, 0)
+        .await
+        .expect("get last")
+        .data
+        .expect("payload")
+        .expect("latest entry");
+    assert_eq!(last.history_index, 1);
+    assert_eq!(
+        last.archive,
+        serde_json::json!({"Data_KYJG": 6}).to_string()
+    );
+
+    let history = archive_fns::do_get_history(auth.clone(), id, 0)
+        .await
+        .expect("get history")
+        .data
+        .expect("slot vo");
+    assert_eq!(history.archive.len(), 5, "history capped at 5");
+    assert_eq!(
+        history.archive[0].archive,
+        serde_json::json!({"Data_KYJG": 6}).to_string(),
+        "newest first"
+    );
+    assert_eq!(
+        history.archive[4].archive,
+        serde_json::json!({"Data_KYJG": 2}).to_string()
+    );
+    for (i, vo) in history.archive.iter().enumerate() {
+        assert_eq!(vo.history_index, (i + 1) as i64, "historyIndex is 1-based");
+    }
+
+    // 脏数据兼容：同 user+slot 再插一行、update_time 更新 → 取值命中最新行
+    archive_model::Entity::find_safety()
+        .filter(archive_model::Column::UserId.eq(id))
+        .one(db)
+        .await
+        .expect("fetch original row")
+        .expect("row exists");
+    let loser = archive_model::ActiveModel {
+        id: NotSet,
+        version: sea_orm::ActiveValue::Set(0),
+        create_time: sea_orm::ActiveValue::Set(chrono::Utc::now().naive_utc()),
+        update_time: sea_orm::ActiveValue::Set(Some(
+            chrono::Utc::now().naive_utc() + chrono::Duration::seconds(60),
+        )),
+        creator_id: sea_orm::ActiveValue::Set(Some(id)),
+        updater_id: sea_orm::ActiveValue::Set(Some(id)),
+        del_flag: sea_orm::ActiveValue::Set(false),
+        name: sea_orm::ActiveValue::Set(None),
+        slot_index: sea_orm::ActiveValue::Set(0),
+        user_id: sea_orm::ActiveValue::Set(id),
+        data: sea_orm::ActiveValue::Set(serde_json::json!([{
+            "archive": "\"dirty winner\"",
+            "time": 1,
+        }])),
+    };
+    archive_model::Entity::insert(loser)
+        .exec(db)
+        .await
+        .expect("seed dirty duplicate row");
+    let dirty_last = archive_fns::do_get_last(auth.clone(), id, 0)
+        .await
+        .expect("get last with dirty rows")
+        .data
+        .expect("payload")
+        .expect("entry from winner row");
+    assert_eq!(dirty_last.archive, "\"dirty winner\"");
+
+    // 恢复：弹出最新一条并返回（historyIndex=1）；胜出的脏行仅 1 条，
+    // 弹出后 data=[]（其 update_time 被刷新，继续作为取值命中行）
+    let removed = archive_fns::do_restore_slot(auth.clone(), id, 0)
+        .await
+        .expect("restore")
+        .data
+        .expect("removed entry");
+    assert_eq!(removed.archive, "\"dirty winner\"");
+    assert_eq!(removed.history_index, 1);
+    let after = archive_fns::do_get_history(auth.clone(), id, 0)
+        .await
+        .expect("history after restore")
+        .data
+        .expect("slot vo after restore");
+    assert_eq!(after.archive.len(), 0, "winner row popped to zero entries");
+
+    // 重命名 + 删除槽位（RBoolean）；缺失槽位按 Java 文案报错
+    assert!(
+        archive_fns::do_rename_by_slot(auth.clone(), id, 1, "新档名".into())
+            .await
+            .is_err(),
+        "rename a missing slot errors (槽位不存在)"
+    );
+    archive_fns::do_save(
+        auth.clone(),
+        id,
+        1,
+        Some("存档一".into()),
+        serde_json::json!({}),
+    )
+    .await
+    .expect("save slot 1 with name");
+    let renamed = archive_fns::do_rename_by_slot(auth.clone(), id, 1, "新档名".into())
+        .await
+        .expect("rename")
+        .data
+        .expect("bool payload");
+    assert!(renamed, "rename returns RBoolean true");
+    let deleted = archive_fns::do_delete_slot(auth.clone(), id, 1)
+        .await
+        .expect("delete slot")
+        .data
+        .expect("bool payload");
+    assert!(deleted, "delete returns RBoolean true");
+    let missing = archive_fns::do_get_history(auth.clone(), id, 1).await;
+    assert!(missing.is_err(), "deleted slot reports 槽位不存在");
+}
+
+/// Recreate the `sys_user_archive` table (self-contained, no FK ordering).
+async fn recreate_archive_table(db: &sea_orm::DatabaseConnection) -> anyhow::Result<()> {
+    use _database::models::system::sys_user_archive;
+    let schema = _database::default_schema();
+    db.execute_unprepared(&format!(
+        r#"DROP TABLE IF EXISTS "{schema}"."sys_user_archive" CASCADE"#
+    ))
+    .await?;
+    let schema = Schema::new(sea_orm::DbBackend::Postgres);
+    let stmt: TableCreateStatement = schema.create_table_from_entity(sys_user_archive::Entity);
+    db.execute_unprepared(&stmt.to_string(sea_orm::sea_query::PostgresQueryBuilder))
+        .await?;
+    Ok(())
 }

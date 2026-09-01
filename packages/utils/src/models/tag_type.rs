@@ -71,6 +71,8 @@ pub struct TagTypeListResponse {
     pub total: i64,
     #[serde(rename = "record")]
     pub list: Vec<TagTypeVO>,
+    /// 页大小（Java PageListVo 契约）
+    pub size: i64,
 }
 
 /// 标签类型新增响应

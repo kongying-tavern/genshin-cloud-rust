@@ -29,7 +29,7 @@ jobs:
 
       - name: Login to GHCR
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           # 发布目标为官方组织命名空间（kongying-tavern）：
@@ -40,7 +40,7 @@ jobs:
 
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # 官方组织命名空间（无论 workflow 在 fork 还是官方仓库触发）
           images: ghcr.io/kongying-tavern/genshin-cloud-rust
@@ -54,7 +54,7 @@ jobs:
             type=raw,value=latest,enable=${{ github.event_name == 'push' }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile

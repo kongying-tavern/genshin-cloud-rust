@@ -23,7 +23,7 @@ use _utils::{
             MarkerAddRequest, MarkerItemLinkVo, MarkerTweakConfigPropEnum, MarkerTweakRequest,
             MarkerUpdateData,
         },
-        marker::{MarkerEmptyResponse, MarkerListResponse, MarkerVO},
+        marker::{MarkerListResponse, MarkerVO},
         wrapper::{CommonResponse, Pagination},
     },
 };
@@ -395,13 +395,14 @@ pub async fn do_tweak(
                     },
                     MarkerTweakConfigPropEnum::ItemList => {
                         for tweak in tweaks {
-                            tweak_item_list(db, *marker_id, tweak).await?;
+                            tweak_item_list(db, auth.info.id, *marker_id, tweak).await?;
                         }
                     },
                 }
             }
 
-            // 通过 ActiveModelBehavior 设置 updater 与 update_time；确保携带版本信息
+            // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+            am.updater_id = Set(Some(auth.info.id));
             marker_model::Entity::update_safety(am)?.exec(db).await?;
             touched_ids.push(*marker_id);
         }
@@ -480,6 +481,7 @@ fn parse_item_entries(item_list: &[Option<serde_json::Value>]) -> Vec<(i64, i32)
 /// TrimLeft / TrimRight（只保留列出的关联）。
 async fn tweak_item_list(
     db: &sea_orm::DatabaseConnection,
+    operator_id: i64,
     marker_id: i64,
     tweak: &_utils::models::marker::MarkerTweakConfig,
 ) -> Result<()> {
@@ -507,18 +509,22 @@ async fn tweak_item_list(
     match tweak.marker_tweak_config_type {
         MarkerTweakConfigTypeEnum::Replace => {
             // 软删现有全部关联，然后插入新列表
-            for (_item_id, link) in existing_map.drain() {
+            for (_item_id, mut link) in existing_map.drain() {
+                // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+                link.updater_id = Some(operator_id);
                 mil_model::Entity::delete_safety(link.into())?
                     .exec(db)
                     .await?;
             }
             for (item_id, count) in entries {
-                insert_item_link(db, marker_id, item_id, count).await?;
+                insert_item_link(db, operator_id, marker_id, item_id, count).await?;
             }
         },
         MarkerTweakConfigTypeEnum::RemoveLeft | MarkerTweakConfigTypeEnum::RemoveRight => {
             for (item_id, _count) in entries {
-                if let Some(link) = existing_map.remove(&item_id) {
+                if let Some(mut link) = existing_map.remove(&item_id) {
+                    // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+                    link.updater_id = Some(operator_id);
                     mil_model::Entity::delete_safety(link.into())?
                         .exec(db)
                         .await?;
@@ -530,7 +536,7 @@ async fn tweak_item_list(
         MarkerTweakConfigTypeEnum::Append | MarkerTweakConfigTypeEnum::Prepend => {
             for (item_id, count) in entries {
                 if !existing_map.contains_key(&item_id) {
-                    insert_item_link(db, marker_id, item_id, count).await?;
+                    insert_item_link(db, operator_id, marker_id, item_id, count).await?;
                 }
             }
         },
@@ -539,9 +545,10 @@ async fn tweak_item_list(
             let keep: HashSet<i64> = entries.iter().map(|(id, _)| *id).collect();
             for (item_id, link) in existing_map.iter() {
                 if !keep.contains(item_id) {
-                    mil_model::Entity::delete_safety(link.clone().into())?
-                        .exec(db)
-                        .await?;
+                    let mut lam: mil_model::ActiveModel = link.clone().into();
+                    // 审计字段：软删也是修改，设置 update 组
+                    lam.updater_id = Set(Some(operator_id));
+                    mil_model::Entity::delete_safety(lam)?.exec(db).await?;
                 }
             }
         },
@@ -563,9 +570,11 @@ async fn tweak_item_list(
                     }
                     let mut am: mil_model::ActiveModel = link.clone().into();
                     am.count = Set(count);
+                    // 审计字段：修改时设置 update 组
+                    am.updater_id = Set(Some(operator_id));
                     mil_model::Entity::update_safety(am)?.exec(db).await?;
                 } else {
-                    insert_item_link(db, marker_id, item_id, count).await?;
+                    insert_item_link(db, operator_id, marker_id, item_id, count).await?;
                 }
             }
         },
@@ -576,6 +585,7 @@ async fn tweak_item_list(
 
 async fn insert_item_link<C: sea_orm::ConnectionTrait>(
     db: &C,
+    operator_id: i64,
     marker_id: i64,
     item_id: i64,
     count: i32,
@@ -585,10 +595,11 @@ async fn insert_item_link<C: sea_orm::ConnectionTrait>(
         version: Set(0),
         // id 为 IDENTITY 列：NotSet 走自增，避免多条插入共用 id=0 撞主键
         id: sea_orm::ActiveValue::NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(operator_id)),
+        updater_id: Set(Some(operator_id)),
         del_flag: Set(false),
         item_id: Set(item_id),
         marker_id: Set(marker_id),
@@ -596,6 +607,40 @@ async fn insert_item_link<C: sea_orm::ConnectionTrait>(
     };
     mil_model::Entity::insert(am).exec(db).await?;
     Ok(())
+}
+
+/// Java createMarker 的 itemList 去重（Collectors.toMap：同 itemId 保留最后一次）。
+fn dedup_item_entries(entries: Vec<(i64, i32)>) -> Vec<(i64, i32)> {
+    let mut order: Vec<i64> = Vec::new();
+    let mut map: std::collections::HashMap<i64, i32> = std::collections::HashMap::new();
+    for (item_id, count) in entries {
+        if !map.contains_key(&item_id) {
+            order.push(item_id);
+        }
+        map.insert(item_id, count);
+    }
+    order.into_iter().map(|id| (id, map[&id])).collect()
+}
+
+/// Java `JsonUtils.merge`：新数据中为 null 的键从旧数据删除，其余替换；
+/// 新数据整体缺省（None）时保持旧数据不变。
+fn merge_extra(
+    old: Option<serde_json::Value>,
+    new: Option<&std::collections::HashMap<String, Option<serde_json::Value>>>,
+) -> Option<serde_json::Value> {
+    let new = new?;
+    let mut obj = old.and_then(|v| v.as_object().cloned()).unwrap_or_default();
+    for (k, v) in new {
+        match v {
+            Some(val) => {
+                obj.insert(k.clone(), val.clone());
+            },
+            None => {
+                obj.remove(k);
+            },
+        }
+    }
+    Some(serde_json::Value::Object(obj))
 }
 
 pub async fn do_add_single(
@@ -609,17 +654,21 @@ pub async fn do_add_single(
     let active = marker_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
+        // 保留字段：业务默认空字符串（仅兼容历史数据读取）
+        marker_stamp: Set(Some(String::new())),
         marker_title: Set(Some(payload.marker_title)),
         position: Set(payload.position),
         content: Set(payload.content.or(Some(String::new()))),
         picture: Set(payload.picture),
-        marker_creator_id: Set(auth.info.id),
+        // Java createMarker：markerCreatorId 取请求值（BeanUtils 直接拷贝）
+        marker_creator_id: Set(payload.marker_creator_id),
         picture_creator_id: Set(payload.picture_creator_id),
         video_path: Set(payload.video_path),
         refresh_time: Set(payload.refresh_time.unwrap_or(0)),
@@ -627,13 +676,13 @@ pub async fn do_add_single(
         extra: Set(payload
             .extra
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::json!({})))),
-        ..Default::default()
     };
 
     let res = active.insert(db).await?;
-    // item_list 落库（parse_item_entries 支持裸数字 / {id|itemId, count}）
-    for (item_id, count) in parse_item_entries(&payload.item_list) {
-        insert_item_link(db, res.id, item_id, count).await?;
+    // item_list 落库（parse_item_entries 支持裸数字 / {id|itemId, count}）；
+    // Java createMarker 按 itemId 去重（重复提交取最后一次）
+    for (item_id, count) in dedup_item_entries(parse_item_entries(&payload.item_list)) {
+        insert_item_link(db, auth.info.id, res.id, item_id, count).await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
     // 直接返回裸 id，前端期望 data 为 number
@@ -659,21 +708,33 @@ pub async fn do_add_single(
 pub async fn do_update_single(
     auth: AuthInfo,
     payload: MarkerUpdateData,
-) -> Result<CommonResponse<MarkerEmptyResponse>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
     let m = marker_model::Entity::find_safety_by_id(payload.id)
         .one(db)
         .await?;
-    let m = m.ok_or(anyhow!("Marker not found"))?;
+    let Some(m) = m else {
+        // Java：实体不存在时 updateById 影响行数为 0，经乐观锁分支同文案报错
+        return Err(anyhow!("该点位已更新，请重新提交"));
+    };
+    let old_extra = m.extra.clone();
+    let old_version = m.version;
     let mut am: marker_model::ActiveModel = m.into();
 
     if let Some(content) = payload.content {
         am.content = Set(Some(content));
     }
-    if let Some(extra) = payload.extra {
-        am.extra = Set(Some(serde_json::to_value(extra)?));
+    // Java JsonUtils.merge：新数据中为 null 的键从旧数据删除，其余替换
+    am.extra = Set(merge_extra(old_extra, payload.extra.as_ref()));
+    // 乐观锁（Java @Version）：携带版本时先比对当前库内版本，冲突同文案报错；
+    // update_safety 的 version 条件更新兜底并发窗口。
+    if let Some(v) = payload.version {
+        if v != old_version {
+            return Err(anyhow!("该点位已更新，请重新提交"));
+        }
+        am.version = Set(v);
     }
     am.marker_title = Set(Some(payload.marker_title));
     am.picture = Set(payload.picture);
@@ -687,6 +748,8 @@ pub async fn do_update_single(
         am.video_path = Set(Some(video_path));
     }
 
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
     marker_model::Entity::update_safety(am)?.exec(db).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
@@ -697,13 +760,15 @@ pub async fn do_update_single(
         .filter(mil_model::Column::MarkerId.eq(payload.id))
         .all(&txn)
         .await?;
-    for link in existing {
+    for mut link in existing {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
             .exec(&txn)
             .await?;
     }
-    for (item_id, count) in parse_item_entries(&payload.item_list) {
-        insert_item_link(&txn, payload.id, item_id, count).await?;
+    for (item_id, count) in dedup_item_entries(parse_item_entries(&payload.item_list)) {
+        insert_item_link(&txn, auth.info.id, payload.id, item_id, count).await?;
     }
     txn.commit().await?;
 
@@ -724,108 +789,112 @@ pub async fn do_update_single(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
-/// 按 MarkerFilterRequest 的筛选条件收集命中点位 id 集合：
-/// - item_id_list：marker_item_link.item_id 命中
-/// - area_id_list：经 item.area_id 命中（marker 表无 area_id 列，经关联物品过滤）
-/// - type_id_list：经 item_type_link.type_id 命中（item 表无 type 列）
-/// - ���ε���ͬʱ����ʱȡ��������δ����ʱ���� None�����÷�����ȫ������
-async fn collect_filtered_marker_ids(
+/// Java `MarkerService.searchMarkerId` 的等价实现（对齐契约）：
+/// - areaIdList / itemIdList / typeIdList 三条件**互斥**，并存即报「条件冲突」；
+/// - 过滤发生在 **item.hidden_flag**（物品可见性），Java 不在此步过滤点位可见性；
+/// - 无任何条件、或物品集为空时返回**空列表**（Java 不做全量回退）；
+/// - 最终经 marker_item_link 映射为点位 ID（去重、升序）。
+async fn search_marker_ids(
     db: &sea_orm::DatabaseConnection,
     auth: &AuthInfo,
     payload: &MarkerFilterRequest,
-) -> Result<Option<HashSet<i64>>> {
-    // 可见性（Java selectIdListFilterByHiddenFlag）：按调用者角色过滤
-    // marker.hidden_flag —— 无此过滤时隐藏/测试服点位会泄露给普通用户。
+) -> Result<Vec<i64>> {
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let mut item_ids: Option<HashSet<i64>> = None;
-    if let Some(ids) = &payload.item_id_list {
-        item_ids = Some(ids.iter().copied().collect());
+
+    let is_area = payload.area_id_list.as_ref().is_some_and(|v| !v.is_empty());
+    let is_item = payload.item_id_list.as_ref().is_some_and(|v| !v.is_empty());
+    let is_type = payload.type_id_list.as_ref().is_some_and(|v| !v.is_empty());
+    if (is_area && is_item) || (is_area && is_type) || (is_type && is_item) {
+        return Err(anyhow!("条件冲突"));
     }
-    if let Some(area_ids) = &payload.area_id_list {
-        let mut area_items: HashSet<i64> = HashSet::new();
-        for chunk in area_ids.chunks(1000) {
+    if !is_area && !is_item && !is_type {
+        return Ok(vec![]);
+    }
+
+    // 三互斥条件下确定参与映射的物品 ID 集合（均带 item.hidden_flag 过滤）
+    let mut item_id_set: HashSet<i64> = HashSet::new();
+    if is_area || is_item {
+        let source_ids: Vec<i64> = if is_area {
+            payload.area_id_list.as_deref().unwrap_or_default().to_vec()
+        } else {
+            payload.item_id_list.as_deref().unwrap_or_default().to_vec()
+        };
+        let column = if is_area {
+            item_model::Column::AreaId
+        } else {
+            item_model::Column::Id
+        };
+        for chunk in source_ids.chunks(1000) {
             for it in item_model::Entity::find_safety()
-                .filter(item_model::Column::AreaId.is_in(chunk))
+                .filter(column.is_in(chunk))
+                .filter(item_model::Column::HiddenFlag.is_in(allowed.clone()))
+                .select_only()
+                .column(item_model::Column::Id)
+                .into_tuple::<i64>()
                 .all(db)
                 .await?
             {
-                area_items.insert(it.id);
+                item_id_set.insert(it);
             }
         }
-        item_ids = match item_ids {
-            Some(mut prev) => {
-                prev.retain(|id| area_items.contains(id));
-                Some(prev)
-            },
-            None => Some(area_items),
-        };
-    }
-    if let Some(type_ids) = &payload.type_id_list {
-        let mut type_items: HashSet<i64> = HashSet::new();
+    } else {
+        // typeIdList → item_type_link → item（Java：类型映射为空直接返回空列表）
+        let type_ids = payload.type_id_list.as_deref().unwrap_or_default();
+        let mut linked: HashSet<i64> = HashSet::new();
         for chunk in type_ids.chunks(1000) {
             for it in itl_model::Entity::find_safety()
                 .filter(itl_model::Column::TypeId.is_in(chunk))
+                .select_only()
+                .column(itl_model::Column::ItemId)
+                .into_tuple::<i64>()
                 .all(db)
                 .await?
             {
-                type_items.insert(it.item_id);
+                linked.insert(it);
             }
         }
-        item_ids = match item_ids {
-            Some(mut prev) => {
-                prev.retain(|id| type_items.contains(id));
-                Some(prev)
-            },
-            None => Some(type_items),
-        };
-    }
-    let Some(item_ids) = item_ids else {
-        return Ok(None);
-    };
-    let mut marker_ids: HashSet<i64> = HashSet::new();
-    let item_vec: Vec<i64> = item_ids.into_iter().collect();
-    for chunk in item_vec.chunks(1000) {
-        for l in mil_model::Entity::find_safety()
-            .filter(mil_model::Column::ItemId.is_in(chunk))
-            .all(db)
-            .await?
-        {
-            marker_ids.insert(l.marker_id);
+        if linked.is_empty() {
+            return Ok(vec![]);
+        }
+        let linked_vec: Vec<i64> = linked.into_iter().collect();
+        for chunk in linked_vec.chunks(1000) {
+            for it in item_model::Entity::find_safety()
+                .filter(item_model::Column::Id.is_in(chunk))
+                .filter(item_model::Column::HiddenFlag.is_in(allowed.clone()))
+                .select_only()
+                .column(item_model::Column::Id)
+                .into_tuple::<i64>()
+                .all(db)
+                .await?
+            {
+                item_id_set.insert(it);
+            }
         }
     }
-    // 只保留调用者可见 flag 的点位
-    retain_visible_markers(db, marker_ids, &allowed).await
-}
 
-/// 过滤 marker_ids：仅保留 hidden_flag 在 allowed 集合内的点位。
-async fn retain_visible_markers(
-    db: &sea_orm::DatabaseConnection,
-    mut ids: HashSet<i64>,
-    allowed: &[i32],
-) -> Result<Option<HashSet<i64>>> {
-    if ids.is_empty() {
-        return Ok(Some(ids));
+    if item_id_set.is_empty() {
+        return Ok(vec![]);
     }
-    let id_vec: Vec<i64> = ids.iter().copied().collect();
-    let mut visible: HashSet<i64> = HashSet::new();
-    for chunk in id_vec.chunks(1000) {
-        for mid in marker_model::Entity::find_safety()
-            .filter(marker_model::Column::Id.is_in(chunk))
-            .filter(marker_model::Column::HiddenFlag.is_in(allowed.to_vec()))
+    let mut marker_ids: HashSet<i64> = HashSet::new();
+    let item_vec: Vec<i64> = item_id_set.into_iter().collect();
+    for chunk in item_vec.chunks(1000) {
+        for marker_id in mil_model::Entity::find_safety()
+            .filter(mil_model::Column::ItemId.is_in(chunk))
             .select_only()
-            .column(marker_model::Column::Id)
+            .column(mil_model::Column::MarkerId)
             .into_tuple::<i64>()
             .all(db)
             .await?
         {
-            visible.insert(mid);
+            marker_ids.insert(marker_id);
         }
     }
-    ids = visible;
-    Ok(Some(ids))
+    let mut ids: Vec<i64> = marker_ids.into_iter().collect();
+    ids.sort_unstable();
+    Ok(ids)
 }
 
 pub async fn do_get_id(
@@ -833,25 +902,9 @@ pub async fn do_get_id(
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<i64>>> {
     let db = &DB_CONN.wait().pg_conn;
-    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-
-    // itemIdList / areaIdList / typeIdList 任一命中即按条件过滤（多条件取交集）
-    if let Some(ids) = collect_filtered_marker_ids(db, &auth, &payload).await? {
-        let mut v: Vec<i64> = ids.into_iter().collect();
-        v.sort_unstable();
-        return Ok(CommonResponse::new(Ok(v)));
-    }
-
-    // 回退：返回调用者可见的所有 marker id（按角色过滤 hidden_flag）。
-    // select_only + into_tuple：只取 id 列，不物化整行模型。
-    let mut ids: Vec<i64> = marker_model::Entity::find_safety()
-        .filter(marker_model::Column::HiddenFlag.is_in(allowed))
-        .select_only()
-        .column(marker_model::Column::Id)
-        .into_tuple::<i64>()
-        .all(db)
-        .await?;
-    ids.sort_unstable();
+    // Java searchMarkerId：条件互斥 + 物品侧可见性过滤 + 空条件返回空列表。
+    // 此处不过滤点位可见性（与 Java 一致）；list_byinfo 载入阶段会再过滤。
+    let ids = search_marker_ids(db, &auth, &payload).await?;
     Ok(CommonResponse::new(Ok(ids)))
 }
 
@@ -862,24 +915,9 @@ pub async fn do_get_list_by_info(
     let db = &DB_CONN.wait().pg_conn;
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
-    // 重用 do_get_id 的逻辑获取 id 列表，然后查询模型
-    let ids = match collect_filtered_marker_ids(db, &auth, &payload).await? {
-        Some(ids) => {
-            let mut v: Vec<i64> = ids.into_iter().collect();
-            v.sort_unstable();
-            v
-        },
-        None => {
-            marker_model::Entity::find_safety()
-                .filter(marker_model::Column::HiddenFlag.is_in(allowed))
-                .select_only()
-                .column(marker_model::Column::Id)
-                .into_tuple::<i64>()
-                .all(db)
-                .await?
-        },
-    };
-
+    // Java searchMarker = searchMarkerId + listMarkerById：
+    // 先按条件（物品侧过滤）取点位 ID，再按点位可见性载入详情。
+    let ids = search_marker_ids(db, &auth, &payload).await?;
     if ids.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
     }
@@ -893,6 +931,7 @@ pub async fn do_get_list_by_info(
     for chunk in ids.chunks(10000) {
         let items = marker_model::Entity::find_safety()
             .filter(marker_model::Column::Id.is_in(chunk))
+            .filter(marker_model::Column::HiddenFlag.is_in(allowed.clone()))
             .all(db)
             .await?;
         user_ids.extend(items.iter().filter_map(|m| m.creator_id));
@@ -980,21 +1019,25 @@ pub async fn do_get_page(
     .with_users(users))
 }
 
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerEmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
-    let m = marker_model::Entity::find_safety_by_id(id).one(db).await?;
-    let m = m.ok_or(anyhow!("Marker not found"))?;
-    let mut am: marker_model::ActiveModel = m.into();
-    am.del_flag = Set(true);
-    marker_model::Entity::delete_safety(am)?.exec(db).await?;
-
+    // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）
+    if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
+        let mut am: marker_model::ActiveModel = m.into();
+        am.del_flag = Set(true);
+        // 审计字段：软删也是修改，设置 update 组
+        am.updater_id = Set(Some(auth.info.id));
+        marker_model::Entity::delete_safety(am)?.exec(db).await?;
+    }
     // 级联软删该 marker 的 item 关联
     let item_links = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(id))
         .all(db)
         .await?;
-    for link in item_links {
+    for mut link in item_links {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
             .exec(db)
             .await?;
@@ -1009,7 +1052,9 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerE
         )
         .all(db)
         .await?;
-    for linkage in linkages {
+    for mut linkage in linkages {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        linkage.updater_id = Some(auth.info.id);
         linkage_model::Entity::delete_safety(linkage.into())?
             .exec(db)
             .await?;
@@ -1032,5 +1077,5 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<MarkerE
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(MarkerEmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }

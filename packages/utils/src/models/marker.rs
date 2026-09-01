@@ -172,6 +172,10 @@ pub struct MarkerAddRequest {
 pub struct MarkerUpdateData {
     /// 点位说明
     pub content: Option<String>,
+    /// 乐观锁版本号（Java `@Version` 契约）：携带时按该版本做条件更新，
+    /// 冲突返回「该点位已更新，请重新提交」；缺省时按库中当前版本更新。
+    #[serde(default)]
+    pub version: Option<i64>,
     /// 额外字段
     pub extra: Option<HashMap<String, Option<serde_json::Value>>>,
     /// 权限屏蔽标记

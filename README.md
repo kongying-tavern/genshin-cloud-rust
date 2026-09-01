@@ -134,9 +134,11 @@ usage.
 `/cdn/img-proxy` 白名单转发，dadian 配置由 `CDN_DADIAN_CONFIG` 提供本地
 兜底（`/cdn/dadian-preview.json.bz2`）。
 
-This backend implements the same API contract as the Java side (every
-`/api/*` route is aligned one by one) and serves the Kongying Tavern frontend
-projects directly:
+This backend implements the same API contract as the Java side and serves the
+Kongying Tavern frontend projects directly (the vast majority of `/api/*`
+routes are aligned one by one; the Java `route` / `punctuate` /
+`punctuate_audit` domains are **intentionally not provided** — see
+`docs/zhs/guides/sync-with-java-roadmap.md`):
 
 | Frontend repo | Relationship |
 | --- | --- |

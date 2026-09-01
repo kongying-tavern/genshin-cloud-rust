@@ -66,4 +66,6 @@ pub struct IconTypeListResponse {
     pub total: i64,
     #[serde(rename = "record")]
     pub items: Vec<IconTypeVO>,
+    /// 页大小（Java PageListVo 契约）
+    pub size: i64,
 }

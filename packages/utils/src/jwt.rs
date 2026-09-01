@@ -297,6 +297,11 @@ pub struct Claims {
     pub token_type: Option<String>,
 }
 
+/// Access token 有效期：15 天。
+/// Java `JwtAccessToken` 为 1800 秒（30 分钟），本工作线在 JWT 加固迭代中
+/// 有意放宽为 15 天（各签发点 `generate_token(..., days(15))` 同值）。
+/// 该常量同时用作 Redis `jwt:access:` 会话键 TTL 与响应 `expires_in` ——
+/// 三处必须同源，否则 Redis 键会先于 JWT 过期，令牌被误判为已吊销。
 pub static EXPIRED_APPEND_DURATION: chrono::Duration = chrono::Duration::days(15);
 
 /// Refresh token 有效期：与 refresh JWT exp（30 天）保持一致。

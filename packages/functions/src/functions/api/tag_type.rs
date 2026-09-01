@@ -7,12 +7,14 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::{DB_CONN, models::tag::tag_type as tag_type_model};
+use _database::{
+    DB_CONN,
+    models::tag::{tag_type as tag_type_model, tag_type_link as ttl_model},
+};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse,
         tag_type::{
             TagTypeBaseRequest, TagTypeListRequest, TagTypeListResponse, TagTypeUpdateRequest,
             TagTypeVO,
@@ -37,18 +39,22 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<Commo
     let am = tag_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         name: Set(payload.name),
         parent_id: Set(payload.parent_id),
-        is_final: Set(payload.is_final),
+        // Java withIsFinal(true)：新增节点无子级，必为末端
+        is_final: Set(true),
         sort_index: Set(Some(0)),
     };
 
     let res = tag_type_model::Entity::insert(am).exec(db).await?;
+    // 父级不再是末端（Java updateTagTypeIsFinal）
+    set_parent_is_final(db, payload.parent_id, false).await;
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
@@ -58,23 +64,38 @@ pub async fn do_add(auth: AuthInfo, payload: TagTypeBaseRequest) -> Result<Commo
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-/// 更新标签类型
+/// 更新标签类型（Java updateTagType：自环校验 + 父级 isFinal 联动 + 自身重算）
 pub async fn do_update(
     auth: AuthInfo,
     payload: TagTypeUpdateRequest,
-) -> Result<CommonResponse<EmptyResponse>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
+    if payload.id == payload.base.parent_id {
+        return Err(anyhow!("标签类型ID不允许与父ID相同，会造成自身父子"));
+    }
 
-    let t = tag_type_model::Entity::find_safety_by_id(payload.id)
+    let Some(t) = tag_type_model::Entity::find_safety_by_id(payload.id)
         .one(db)
-        .await?;
-    let t = t.ok_or(anyhow!("TagType not found"))?;
+        .await?
+    else {
+        return Ok(CommonResponse::new(Ok(false)));
+    };
+    // 父级变化时联动新旧父级的末端标志
+    if t.parent_id != payload.base.parent_id {
+        set_parent_is_final(db, payload.base.parent_id, false).await;
+        recalc_parent_is_final(db, t.parent_id, true).await;
+    }
     let mut am: tag_type_model::ActiveModel = t.into();
 
     am.name = Set(payload.base.name);
     am.parent_id = Set(payload.base.parent_id);
-    am.is_final = Set(payload.base.is_final);
+    // Java updateTagTypeIsFinal(tagType)：无子级才是末端
+    let children = tag_type_model::Entity::find_safety()
+        .filter(tag_type_model::Column::ParentId.eq(payload.id))
+        .count(db)
+        .await?;
+    am.is_final = Set(children == 0);
 
     tag_type_model::Entity::update_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
@@ -83,7 +104,7 @@ pub async fn do_update(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 标签类型列表（分页 + 模糊搜索 + 父级过滤）
@@ -101,15 +122,22 @@ pub async fn do_list(
     if let Some(parent_id) = payload.parent_id {
         query = query.filter(tag_type_model::Column::ParentId.eq(parent_id));
     }
-    // typeIdList 语义：[-1] 返回根类型（parent_id=-1），[nodeId] 返回其子级（parent_id IN）
-    if let Some(type_list) = payload.type_id_list
-        && !type_list.is_empty()
-    {
-        if type_list.contains(&-1) {
+    // typeIdList 语义（Java listTagType）：null → 根分类（parent_id=-1，不回退
+    // 全量）；[-1] → 根分类；[nodeId] → 其子级（parent_id IN）
+    match payload.type_id_list {
+        None => {
             query = query.filter(tag_type_model::Column::ParentId.eq(-1));
-        } else {
-            query = query.filter(tag_type_model::Column::ParentId.is_in(type_list));
-        }
+        },
+        Some(type_list) if !type_list.is_empty() => {
+            if type_list.contains(&-1) {
+                query = query.filter(tag_type_model::Column::ParentId.eq(-1));
+            } else {
+                query = query.filter(tag_type_model::Column::ParentId.is_in(type_list));
+            }
+        },
+        Some(_) => {
+            query = query.filter(tag_type_model::Column::ParentId.eq(-1));
+        },
     }
 
     let size = payload.page.size.unwrap_or(10).min(200) as u64;
@@ -136,26 +164,118 @@ pub async fn do_list(
         })
         .collect();
 
-    Ok(CommonResponse::new(Ok(TagTypeListResponse { total, list })))
+    Ok(CommonResponse::new(Ok(TagTypeListResponse {
+        total,
+        list,
+        size: size as i64,
+    })))
 }
 
-/// 软删除标签类型
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+/// 删除标签类型（Java deleteTagType：递归删除整棵子树 + 标签类型关联 +
+/// 父级 isFinal 重算）
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
-    let t = tag_type_model::Entity::find_safety_by_id(id)
+    let Some(t) = tag_type_model::Entity::find_safety_by_id(id)
         .one(db)
-        .await?;
-    let t = t.ok_or(anyhow!("TagType not found"))?;
-    let mut am: tag_type_model::ActiveModel = t.into();
-    am.del_flag = Set(true);
-    tag_type_model::Entity::delete_safety(am)?.exec(db).await?;
+        .await?
+    else {
+        return Ok(CommonResponse::new(Ok(false)));
+    };
+    let parent_id = t.parent_id;
+
+    let mut now: Vec<i64> = vec![id];
+    while !now.is_empty() {
+        for chunk in now.chunks(1000) {
+            // 标签类型关联（tag → type）
+            for l in ttl_model::Entity::find()
+                .filter(ttl_model::Column::TypeId.is_in(chunk))
+                .all(db)
+                .await?
+            {
+                let mut am: ttl_model::ActiveModel = l.into();
+                am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
+                ttl_model::Entity::update_safety(am)?.exec(db).await?;
+            }
+            // 类型本体
+            for tt in tag_type_model::Entity::find_safety()
+                .filter(tag_type_model::Column::Id.is_in(chunk))
+                .all(db)
+                .await?
+            {
+                let mut am: tag_type_model::ActiveModel = tt.into();
+                am.del_flag = Set(true);
+                // 审计字段：软删也是修改，设置 update 组
+                am.updater_id = Set(Some(auth.info.id));
+                tag_type_model::Entity::delete_safety(am)?.exec(db).await?;
+            }
+        }
+        let mut children: Vec<i64> = Vec::new();
+        for chunk in now.chunks(1000) {
+            children.extend(
+                tag_type_model::Entity::find_safety()
+                    .filter(tag_type_model::Column::ParentId.is_in(chunk))
+                    .select_only()
+                    .column(tag_type_model::Column::Id)
+                    .into_tuple::<i64>()
+                    .all(db)
+                    .await?,
+            );
+        }
+        now = children;
+    }
+    recalc_parent_is_final(db, parent_id, false).await;
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 父级存在（id > 0）时直接设置 isFinal（Java updateTagTypeIsFinal）。
+async fn set_parent_is_final(db: &sea_orm::DatabaseConnection, parent_id: i64, is_final: bool) {
+    if parent_id <= 0 {
+        return;
+    }
+    let _: Result<()> = async {
+        let Some(mut am): Option<tag_type_model::ActiveModel> =
+            tag_type_model::Entity::find_safety_by_id(parent_id)
+                .one(db)
+                .await?
+                .map(|m| m.into())
+        else {
+            return Ok(());
+        };
+        am.is_final = Set(is_final);
+        tag_type_model::Entity::update_safety(am)?.exec(db).await?;
+        Ok(())
+    }
+    .await;
+}
+
+/// 父级 isFinal 重算（Java recalculateTagTypeIsFinal）。
+async fn recalc_parent_is_final(
+    db: &sea_orm::DatabaseConnection,
+    parent_id: i64,
+    before_modify: bool,
+) {
+    if parent_id == 0 {
+        return;
+    }
+    let count = tag_type_model::Entity::find_safety()
+        .filter(tag_type_model::Column::ParentId.eq(parent_id))
+        .count(db)
+        .await
+        .unwrap_or(0);
+    let target = if before_modify {
+        count == 1
+    } else {
+        count == 0
+    };
+    set_parent_is_final(db, parent_id, target).await;
 }

@@ -9,8 +9,8 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN, models::item::item as item_model, models::item::item_type as item_type_model,
-    models::item::item_type_link as link_model,
+    DB_CONN, models::area::item_area_public as common_item_model, models::item::item as item_model,
+    models::item::item_type as item_type_model, models::item::item_type_link as link_model,
     models::marker::marker_item_link as marker_link_model,
 };
 use _utils::{
@@ -93,7 +93,7 @@ pub async fn do_update(
     auth: AuthInfo,
     edit_same: bool,
     payload: Vec<ItemUpdateData>,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<bool>> {
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
@@ -127,7 +127,7 @@ pub async fn do_update(
             return Err(anyhow!("Item not found"));
         }
         for id in target_ids {
-            update_one(db, id, &p).await?;
+            update_one(db, auth.info.id, id, &p).await?;
         }
     }
     super::binary_doc::invalidate_item_doc_cache().await;
@@ -136,14 +136,21 @@ pub async fn do_update(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 更新单个物品及其类型关联（`typeIdList` 全量替换）。
-async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateData) -> Result<()> {
+async fn update_one(
+    db: &sea_orm::DatabaseConnection,
+    operator_id: i64,
+    id: i64,
+    p: &ItemUpdateData,
+) -> Result<()> {
     let item = item_model::Entity::find_safety_by_id(id).one(db).await?;
     let item = item.ok_or(anyhow!("Item not found"))?;
     let mut am: item_model::ActiveModel = item.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(operator_id));
 
     am.icon_id = Set(resolve_icon_id(p.icon_id, p.icon_tag.as_deref()).await?);
 
@@ -177,6 +184,8 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
     for link in old_links {
         let mut lam: link_model::ActiveModel = link.into();
         lam.del_flag = Set(true);
+        // 审计字段：软删也是修改，设置 update 组
+        lam.updater_id = Set(Some(operator_id));
         link_model::Entity::update_safety(lam)?.exec(&txn).await?;
     }
     for t in &p.type_id_list {
@@ -184,10 +193,11 @@ async fn update_one(db: &sea_orm::DatabaseConnection, id: i64, p: &ItemUpdateDat
         let active = link_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(operator_id)),
+            updater_id: Set(Some(operator_id)),
             del_flag: Set(false),
 
             type_id: Set(*t),
@@ -300,7 +310,21 @@ pub async fn do_join_type(
         .await?
         .is_none()
     {
-        return Err(anyhow!("ItemType not found: {type_id}"));
+        return Err(anyhow!("类型ID错误"));
+    }
+    // Java ItemService.joinItemsInType：全部 itemId 必须存在，否则「物品ID存在错误」
+    {
+        let ids: Vec<i64> = payload.clone();
+        let existing: std::collections::HashSet<i64> = item_model::Entity::find_safety()
+            .filter(item_model::Column::Id.is_in(ids))
+            .all(db)
+            .await?
+            .into_iter()
+            .map(|m| m.id)
+            .collect();
+        if payload.iter().any(|id| !existing.contains(id)) {
+            return Err(anyhow!("物品ID存在错误"));
+        }
     }
     for item_id in payload {
         // 该 item 已存在此 type 的 link 则跳过（追加语义，不再覆盖其他类型关联）
@@ -316,10 +340,11 @@ pub async fn do_join_type(
         let active = link_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(auth.info.id)),
+            updater_id: Set(Some(auth.info.id)),
             del_flag: Set(false),
 
             type_id: Set(type_id),
@@ -368,16 +393,31 @@ pub async fn do_get_list_by_id(
     Ok(CommonResponse::new(Ok(arr)))
 }
 
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
-    let item = item_model::Entity::find_safety_by_id(id).one(db).await?;
-    let item = item.ok_or(anyhow!("Item not found"))?;
+    let Some(item) = item_model::Entity::find_safety_by_id(id).one(db).await? else {
+        // Java deleteItem：不存在的 id 返回 data:false（200 + R）
+        return Ok(CommonResponse::new(Ok(false)));
+    };
+
+    // Java ItemService：公共物品（item_common 命中）不允许删除
+    let is_common = common_item_model::Entity::find_safety()
+        .filter(common_item_model::Column::ItemId.eq(id))
+        .count(db)
+        .await?
+        > 0;
+    if is_common {
+        return Err(anyhow!("不允许删除公共物品"));
+    }
+
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
+    // 审计字段：软删也是修改，设置 update 组
+    am.updater_id = Set(Some(auth.info.id));
     item_model::Entity::delete_safety(am)?.exec(db).await?;
-    // 清理 item_type_link 关联（软删）；
-    // marker_item_link 保持不动（Java 语义未清理，点位侧关联由点位删除时处理）。
+
+    // 清理 item_type_link 关联（软删）
     link_model::Entity::update_many()
         .col_expr(
             link_model::Column::DelFlag,
@@ -386,13 +426,30 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
         .filter(link_model::Column::ItemId.eq(id))
         .exec(db)
         .await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+
+    // Java ItemService：同步清理 marker_item_link（Java 为物理删除，此处软删）
+    marker_link_model::Entity::update_many()
+        .col_expr(
+            marker_link_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(marker_link_model::Column::ItemId.eq(id))
+        .exec(db)
+        .await?;
+
+    // Java ItemController：删除成功后同时清 item 缓存与 marker 缓存
+    super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(())))
+    super::super::ws::ws_broadcast_debounced(
+        "MarkerBinaryPurged",
+        serde_json::Value::Null,
+        super::super::ws::PURGE_DEBOUNCE_WINDOW,
+    );
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 // 复制物品到指定地区（简单实现：复制记录并关联相同类型）
@@ -424,12 +481,14 @@ pub async fn do_copy_to_area(
             // 复制为新行：IDENTITY 列走自增（显式 Set(0) 会在第二次复制时撞主键）
             am.id = NotSet;
             am.area_id = Set(area_id);
-            am.create_time = Set(chrono::Utc::now().naive_utc());
-            am.update_time = Set(None);
-            // 新行乐观锁从 0 起步，创建/更新人归 None（与 do_add 语义一致）
+            // 审计字段：新增时 create/update 两组全部设置（复制人即操作者）
+            let copy_now = chrono::Utc::now().naive_utc();
+            am.create_time = Set(copy_now);
+            am.update_time = Set(Some(copy_now));
+            // 新行乐观锁从 0 起步
             am.version = Set(0);
-            am.creator_id = Set(None);
-            am.updater_id = Set(None);
+            am.creator_id = Set(Some(auth.info.id));
+            am.updater_id = Set(Some(auth.info.id));
             let res = am.insert(&DB_CONN.wait().pg_conn).await?;
             let new_id = res.id;
             // 复制类型关联
@@ -441,10 +500,11 @@ pub async fn do_copy_to_area(
                 let active = link_model::ActiveModel {
                     version: Set(0),
                     id: NotSet,
+                    // 审计字段：新增时 create/update 两组全部设置
                     create_time: Set(chrono::Utc::now().naive_utc()),
-                    update_time: Set(None),
-                    creator_id: Set(None),
-                    updater_id: Set(None),
+                    update_time: Set(Some(chrono::Utc::now().naive_utc())),
+                    creator_id: Set(Some(auth.info.id)),
+                    updater_id: Set(Some(auth.info.id)),
                     del_flag: Set(false),
 
                     type_id: Set(l.type_id),
@@ -473,10 +533,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     let active = item_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
         name: Set(payload.name),
@@ -501,7 +562,8 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     let res = active.insert(&DB_CONN.wait().pg_conn).await?;
     let new_id = res.id;
 
-    // 插入类型关联前校验类型存在（item_type 表），缺失的类型跳过
+    // 插入类型关联前校验类型存在（item_type 表）：
+    // Java ItemService 对不存在的类型抛「类型ID错误」，不做静默跳过。
     if !payload.type_id_list.is_empty() {
         let existing: std::collections::HashSet<i64> = item_type_model::Entity::find_safety()
             .filter(item_type_model::Column::Id.is_in(payload.type_id_list.clone()))
@@ -510,18 +572,19 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
             .into_iter()
             .map(|t| t.id)
             .collect();
+        if payload.type_id_list.iter().any(|t| !existing.contains(t)) {
+            return Err(anyhow!("类型ID错误"));
+        }
         for t in &payload.type_id_list {
-            if !existing.contains(t) {
-                continue;
-            }
             let now = chrono::Utc::now().naive_utc();
             let active = link_model::ActiveModel {
                 version: Set(0),
                 id: NotSet,
+                // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),
-                update_time: Set(None),
-                creator_id: Set(None),
-                updater_id: Set(None),
+                update_time: Set(Some(now)),
+                creator_id: Set(Some(auth.info.id)),
+                updater_id: Set(Some(auth.info.id)),
                 del_flag: Set(false),
 
                 type_id: Set(*t),

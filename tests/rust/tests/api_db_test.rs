@@ -466,7 +466,7 @@ async fn area_and_item_doc_business_assertions() {
         auth.clone(),
         AreaAddRequest {
             name: "Third Area".into(),
-            code: None,
+            code: Some("A3".into()),
             content: None,
             icon_id: 0,
             icon_tag: None,
@@ -739,7 +739,8 @@ async fn area_and_item_doc_business_assertions() {
     let ua = "test-agent/1.0";
 
     // 1) same_last_ip: first login from ip_a succeeds and registers the device;
-    //    a second login from ip_b is rejected.
+    //    a second login from ip_b also succeeds — Java checkDeviceAccess only
+    //    flags the audit log / token message, it never rejects the login.
     seed_user(
         db,
         "policy_same_ip",
@@ -762,11 +763,12 @@ async fn area_and_item_doc_business_assertions() {
     assert!(
         oauth_fns::oauth_password_login("policy_same_ip".into(), "pw123".into(), ip_b, ua.into())
             .await
-            .is_err(),
-        "same_last_ip policy must reject a different IP"
+            .is_ok(),
+        "same_last_ip violation is a warning (Java-compatible), login still succeeds"
     );
 
-    // 2) dev:block_disallow_device: a disabled device entry blocks login.
+    // 2) dev:block_disallow_device: a disabled device entry flags the login
+    //    (audit log / token message) but does not reject it, matching Java.
     let seed_user2 = seed_user(
         db,
         "policy_block_dev",
@@ -802,8 +804,8 @@ async fn area_and_item_doc_business_assertions() {
             "evil-agent".into(),
         )
         .await
-        .is_err(),
-        "dev:block_disallow_device must reject a blocked device"
+        .is_ok(),
+        "dev:block_disallow_device violation is a warning (Java-compatible), login still succeeds"
     );
 
     // 3) scope mapping: "all"/"" → All, unknown → error.
@@ -1635,9 +1637,9 @@ async fn area_and_item_doc_business_assertions() {
         eprintln!("skipping revocation assertions (no reachable Redis): kick is a no-op");
     }
 
-    // ── Assertion 14: refresh enforces access_policy WITHOUT consuming the
-    //    token. A bound user refreshing from a different IP is rejected before
-    //    the GETDEL rotation, so the legit owner can still refresh in-place. ─
+    // ── Assertion 14: refresh evaluates access_policy like Java — a violation
+    //    from a different IP only warns, the refresh still succeeds and the
+    //    returned pair stays usable (in-place rotation on the next refresh). ──
     let ip_pa = "10.80.5.1:5678".parse::<std::net::SocketAddr>().unwrap();
     let ip_pb = "10.80.5.2:5678".parse::<std::net::SocketAddr>().unwrap();
     seed_user(
@@ -1657,23 +1659,22 @@ async fn area_and_item_doc_business_assertions() {
     )
     .await
     .expect("policy-bound login from ip_pa");
-    let err = oauth_fns::oauth_refresh(
+    let pr2 = oauth_fns::oauth_refresh(
         pr1.refresh_token.clone(),
         ip_pb,
         "policy-refresh/1.0".into(),
     )
     .await
-    .expect_err("refresh from a different IP must be rejected by the policy");
-    assert!(err.to_string().contains("Access denied"), "got: {err}");
-    // The refresh token was NOT consumed by the rejected attempt: a refresh
-    // from the bound IP still succeeds (in both Redis and degraded modes).
+    .expect("policy violation on refresh warns through (Java-compatible)");
+    // The rotated pair keeps working: a follow-up refresh from the bound IP
+    // succeeds (in both Redis rotation and degraded no-rotation modes).
     oauth_fns::oauth_refresh(
-        pr1.refresh_token.clone(),
+        pr2.refresh_token.clone(),
         ip_pa,
         "policy-refresh/1.0".into(),
     )
     .await
-    .expect("token survives the policy-rejected refresh and rotates in-place");
+    .expect("rotated refresh token stays usable in-place");
 
     // ── Assertion 15: device block revokes the user's sessions (coarse-
     //    grained, all devices). Blocking a device must kill the already-issued
