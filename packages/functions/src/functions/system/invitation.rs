@@ -140,10 +140,11 @@ pub async fn do_update(
         let am = inv_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
+            update_time: Set(Some(now)),
             creator_id: Set(Some(auth.info.id)),
-            updater_id: Set(None),
+            updater_id: Set(Some(auth.info.id)),
             del_flag: Set(false),
             code: Set(c),
             username: Set(username),
@@ -161,10 +162,11 @@ pub async fn do_update(
     let am = inv_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
+        update_time: Set(Some(now)),
         creator_id: Set(Some(auth.info.id)),
-        updater_id: Set(None),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         code: Set(code.to_string()),
         username: Set(username),
@@ -271,10 +273,12 @@ pub async fn do_consume(
     let user_am = sys_user_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
+        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(0)),
+        updater_id: Set(Some(0)),
         del_flag: Set(false),
 
         username: Set(username),
@@ -311,8 +315,10 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
         .one(db)
         .await?
         .ok_or_else(|| anyhow!("Invitation not found"))?;
-    inv_model::Entity::delete_safety(inv.into())?
-        .exec(db)
-        .await?;
+    let mut am: inv_model::ActiveModel = inv.into();
+    am.del_flag = Set(true);
+    // 审计字段：软删也是修改，设置 update 组
+    am.updater_id = Set(Some(_auth.info.id));
+    inv_model::Entity::delete_safety(am)?.exec(db).await?;
     Ok(CommonResponse::new(Ok(())))
 }

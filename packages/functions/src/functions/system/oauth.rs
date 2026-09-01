@@ -123,6 +123,8 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
         // 已有登记：仅刷新 IP / 最近登录时间。status（封禁状态）随
         // `dev.into()` 原样保留，不因成功登录被静默重置为 0。
         let mut am: models::system::sys_user_device::ActiveModel = dev.into();
+        // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+        am.updater_id = Set(Some(user_id));
         am.ipv4 = Set(Some(ip.ip().to_string()));
         am.last_login_time = Set(Some(now));
         models::system::sys_user_device::Entity::update_safety(am)?
@@ -135,10 +137,11 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
     let am = models::system::sys_user_device::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(user_id)),
+        updater_id: Set(Some(user_id)),
         del_flag: Set(false),
         user_id: Set(Some(user_id)),
         device_id: Set(user_agent.to_string()),
@@ -280,9 +283,13 @@ async fn oauth_password_login_inner(
         return Err(anyhow!("Invalid username or password"));
     }
 
-    // 身份验证通过后，按用户的 access_policy 校验登录环境
+    // 身份验证通过后，按用户的 access_policy 校验登录环境。
+    // Java `AuthorizationServerConfiguration.checkDeviceAccess`：策略不命中只
+    // 影响提示信息与审计日志，登录仍然成功 —— 对齐为「警告放行」而非拒绝。
     let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(item.id, &policy, ip, user_agent).await?;
+    if let Err(e) = check_access_policy(item.id, &policy, ip, user_agent).await {
+        tracing::warn!(user_id = item.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     issue_token(&item).await
 }
@@ -381,16 +388,18 @@ const LOGIN_RATE_LIMIT_WINDOW_SECS: u64 = 60;
 static LOGIN_FAILURES: Lazy<std::sync::Mutex<std::collections::HashMap<String, (u32, i64)>>> =
     Lazy::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
 
-/// 清理早于当前窗口的限流条目。条目只对当前窗口计数（跨窗口在下次
-/// 访问时本就会被重置），直接移除过期条目可防止 `LOGIN_FAILURES`
-/// 按唯一 IP 无限累积。
-fn sweep_stale_login_failures(
-    map: &mut std::collections::HashMap<String, (u32, i64)>,
-    window: i64,
-) {
-    map.retain(|_, (_, entry_window)| *entry_window >= window);
+/// 清理窗口已过期的限流条目（防止 `LOGIN_FAILURES` 按唯一 IP 无限累积）。
+fn sweep_stale_login_failures(map: &mut std::collections::HashMap<String, (u32, i64)>, now: i64) {
+    map.retain(|_, (_, window_start)| {
+        now.saturating_sub(*window_start) < LOGIN_RATE_LIMIT_WINDOW_SECS as i64
+    });
 }
 
+/// 进程内兜底的滚动窗口语义：自**首次失败**起 60 秒内持续计数，与 Redis
+/// 侧 `SET NX EX 60` + INCR 的滚动 TTL 对齐。此前的「时钟分钟桶」实现
+///（`now / 60` 分桶）会在分钟边界把计数清零——5 次失败跨过整分后第 6 次
+/// 放行（CI 无 Redis 走本路径时为确定性抖动源）。
+///
 /// Redis 侧失败计数。返回 `None` 表示 Redis 不可用/命令失败，由调用方降级
 /// 到进程内 HashMap。
 ///
@@ -454,13 +463,12 @@ async fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
 /// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
 fn check_login_rate_limit_local(ip: SocketAddr) -> Result<()> {
     let now = chrono::Utc::now().timestamp();
-    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
-    sweep_stale_login_failures(&mut map, window);
+    sweep_stale_login_failures(&mut map, now);
     // 同 login_failure_count_redis：key 仅取 IP 不含临时端口
-    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
-    if entry.1 != window {
-        *entry = (0, window);
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, now));
+    if now.saturating_sub(entry.1) >= LOGIN_RATE_LIMIT_WINDOW_SECS as i64 {
+        *entry = (0, now);
     }
     if entry.0 >= LOGIN_RATE_LIMIT_PER_MINUTE {
         return Err(anyhow!(
@@ -481,13 +489,12 @@ async fn record_login_failure(ip: SocketAddr) {
 /// 进程内 HashMap 兜底实现（Redis 不可用时的降级路径）。
 fn record_login_failure_local(ip: SocketAddr) {
     let now = chrono::Utc::now().timestamp();
-    let window = now / LOGIN_RATE_LIMIT_WINDOW_SECS as i64;
     let mut map = LOGIN_FAILURES.lock().unwrap();
-    sweep_stale_login_failures(&mut map, window);
+    sweep_stale_login_failures(&mut map, now);
     // 同 check_login_rate_limit_local：key 仅取 IP 不含临时端口
-    let entry = map.entry(ip.ip().to_string()).or_insert((0, window));
-    if entry.1 != window {
-        *entry = (0, window);
+    let entry = map.entry(ip.ip().to_string()).or_insert((0, now));
+    if now.saturating_sub(entry.1) >= LOGIN_RATE_LIMIT_WINDOW_SECS as i64 {
+        *entry = (0, now);
     }
     entry.0 += 1;
 }
@@ -504,10 +511,12 @@ async fn record_login_log(
     models::system::sys_action_log::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置；操作者即登录主体
+        //（未知用户名的失败登录记 0）
         create_time: Set(chrono::Utc::now().naive_utc()),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(chrono::Utc::now().naive_utc())),
+        creator_id: Set(Some(user_id.unwrap_or(0))),
+        updater_id: Set(Some(user_id.unwrap_or(0))),
         del_flag: Set(false),
         user_id: Set(user_id),
         ipv4: Set(Some(ip.ip().to_string())),
@@ -670,13 +679,14 @@ pub async fn oauth_refresh(
         .ok_or_else(|| anyhow::anyhow!("User not found"))?;
     let vo: SysUserVO = user.clone().into();
 
-    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：策略违规直接拒绝
-    // 且**不消耗** refresh token —— 校验在下方 GETDEL 轮换之前，合法机主在原
-    // 环境仍可刷新，被偷的 refresh 在异地/异设备上无法续命（否则绑定策略只
-    // 挡登录、旧 refresh 可在 30 天窗口内无限轮换，策略形同虚设）。
+    // 与登录一致地校验 access_policy（IP / 设备绑定策略）：对齐 Java
+    // `checkDeviceAccess`（token enhancer 对所有签发路径生效）—— 策略违规
+    // 只影响审计日志与提示信息，登录/刷新仍然成功（「警告放行」）。
     // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
     let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    check_access_policy(user.id, &policy, ip, &user_agent).await?;
+    if let Err(e) = check_access_policy(user.id, &policy, ip, &user_agent).await {
+        tracing::warn!(user_id = user.id, error = %e, "access policy violation (allowed through, Java-compatible)");
+    }
 
     // 降级策略（与 oauth_parse_token 一致，补齐与密码登录 issue_token 的
     // 对齐，M1）：

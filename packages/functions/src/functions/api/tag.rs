@@ -40,10 +40,11 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
     let am = tag_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         tag: Set(payload.tag),
         icon_id: Set(payload.icon_id),
@@ -78,6 +79,8 @@ pub async fn do_update(
     let old_tag = t.tag.clone();
     let new_tag = payload.base.tag;
     let mut am: tag_model::ActiveModel = t.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
 
     am.tag = Set(new_tag.clone());
     am.icon_id = Set(payload.base.icon_id);
@@ -173,6 +176,8 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     let t = t.ok_or(anyhow!("Tag not found"))?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
+    // 审计字段：软删也是修改，设置 update 组
+    am.updater_id = Set(Some(auth.info.id));
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast_debounced(
@@ -199,12 +204,32 @@ pub async fn do_update_type(
         .await?
         .ok_or_else(|| anyhow!("Tag not found"))?;
 
+    // Java TagService.updateTypeInTag：typeIdList 中存在未创建的类型即报错
+    if !payload.type_id_list.is_empty() {
+        let existing: std::collections::HashSet<i64> =
+            _database::models::tag::tag_type::Entity::find_safety()
+                .filter(
+                    _database::models::tag::tag_type::Column::Id
+                        .is_in(payload.type_id_list.clone()),
+                )
+                .all(db)
+                .await?
+                .into_iter()
+                .map(|t| t.id)
+                .collect();
+        if payload.type_id_list.iter().any(|t| !existing.contains(t)) {
+            return Err(anyhow!("类型ID错误"));
+        }
+    }
+
     // 删除该 tag 的旧关联
     let links = ttl_model::Entity::find_safety()
         .filter(ttl_model::Column::TagName.eq(&payload.tag))
         .all(db)
         .await?;
-    for link in links {
+    for mut link in links {
+        // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
+        link.updater_id = Some(auth.info.id);
         ttl_model::Entity::delete_safety(link.into())?
             .exec(db)
             .await?;
@@ -215,10 +240,11 @@ pub async fn do_update_type(
         ttl_model::Entity::insert(ttl_model::ActiveModel {
             version: Set(0),
             id: NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(auth.info.id)),
+            updater_id: Set(Some(auth.info.id)),
             del_flag: Set(false),
             type_id: Set(type_id),
             tag_name: Set(payload.tag.clone()),
@@ -254,10 +280,11 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
     tag_model::Entity::insert(tag_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         tag: Set(tag_name),
         icon_id: Set(0),
@@ -284,9 +311,20 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
         .filter(tag_model::Column::Tag.eq(&tag_name))
         .one(db)
         .await?
-        .ok_or(anyhow!("Tag not found"))?;
+        .ok_or(anyhow!("无删除的标签"))?;
+    // Java deleteTag：先删 tag_type_link 再删 tag，避免悬空关联
+    ttl_model::Entity::update_many()
+        .col_expr(
+            ttl_model::Column::DelFlag,
+            sea_orm::sea_query::Expr::value(true),
+        )
+        .filter(ttl_model::Column::TagName.eq(&tag_name))
+        .exec(db)
+        .await?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
+    // 审计字段：软删也是修改，设置 update 组
+    am.updater_id = Set(Some(auth.info.id));
     tag_model::Entity::delete_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast_debounced(
@@ -312,6 +350,8 @@ pub async fn do_update_by_name(
         .await?
         .ok_or(anyhow!("Tag not found"))?;
     let mut am: tag_model::ActiveModel = t.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
     am.icon_id = Set(icon_id);
     tag_model::Entity::update_safety(am)?.exec(db).await?;
     super::binary_doc::invalidate_doc_cache().await;

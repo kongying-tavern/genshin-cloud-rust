@@ -16,7 +16,8 @@
 //! - notice.validTimeStart/End: ms number and ISO string both accepted.
 //! - marker_linkage.link_action: uppercase enum strings ("TRIGGER_ALL").
 //! - item.iconStyleType: numeric 0-3 from the frontend.
-//! - sys_user_archive.data: dual shape (legacy object array vs JSON string).
+//! - sys_user_archive.data: newest-first history array (numeric ms `time`),
+//!   legacy string-time entries and old bare-string writes all parse.
 //! - sys_user.password: `{bcrypt}`-prefixed storage (68 chars).
 //! - area add request: the frontend form carries no isFinal (server-computed).
 
@@ -29,7 +30,7 @@ use _utils::models::{
     marker::{MarkerItemLinkVo, MarkerVO},
     marker_link::MarkerLinkVO,
     notice::{NoticeAddRequest, NoticeChannel, NoticeVO},
-    system::{ArchiveSlotVo, SysArchiveSlotVo, SysArchiveVo},
+    system::{SysArchiveSlotVo, SysArchiveVo},
 };
 use _utils::types::{
     AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
@@ -364,13 +365,44 @@ fn sys_user_password_prefix() {
 // 7. sys_user_archive.data — dual shape: legacy object array vs JSON string
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Mirrors `functions::system::archive::entity_to_slot_vo`: a `data` column
-/// that is a JSON *string* is used as-is; anything else (legacy arrays) is
-/// re-serialized back to text.
-fn read_archive_data(data: &serde_json::Value) -> String {
-    data.as_str()
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| serde_json::to_string(data).unwrap_or_default())
+/// 存档历史条目（镜像 `functions::system::archive::ArchiveEntry`）。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+struct ArchiveEntry {
+    time: i64,
+    archive: String,
+}
+
+/// Mirrors `functions::system::archive::parse_entries`: `data` is the
+/// newest-first history array; numeric or numeric-string `time` both parse;
+/// a bare JSON string (old Rust writes) degrades to a single time-less entry.
+fn parse_archive_entries(data: &serde_json::Value) -> Vec<ArchiveEntry> {
+    let mut ret = Vec::new();
+    let Some(arr) = data.as_array() else {
+        if let Some(text) = data.as_str() {
+            ret.push(ArchiveEntry {
+                time: 0,
+                archive: text.to_string(),
+            });
+        }
+        return ret;
+    };
+    for v in arr {
+        let time = v
+            .get("time")
+            .and_then(|t| match t {
+                serde_json::Value::Number(n) => n.as_i64(),
+                serde_json::Value::String(s) => s.trim().parse::<i64>().ok(),
+                _ => None,
+            })
+            .unwrap_or(0);
+        let archive = match v.get("archive") {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(other) if !other.is_null() => serde_json::to_string(other).unwrap_or_default(),
+            _ => String::new(),
+        };
+        ret.push(ArchiveEntry { time, archive });
+    }
+    ret
 }
 
 /// Mirrors `functions::system::archive::extract_archive` (PUT save body):
@@ -385,37 +417,52 @@ fn extract_archive(body: &serde_json::Value) -> String {
 
 #[test]
 fn archive_data_dual_shape() {
-    // 1) New-write shape (audit): data = a JSON string whose *content* is the
-    //    archive JSON text. Read path must yield the inner text verbatim.
+    // 1) New-write shape: data = newest-first history array; `time` is a
+    //    millisecond NUMBER (Java Timestamp NUMBER_INT wire contract).
     let inner = r#"{"Data_KYJG":123,"Preference":{},"Time_KYJG":1754280000000}"#;
-    let stored_new = serde_json::Value::String(inner.to_string());
-    assert_eq!(read_archive_data(&stored_new), inner);
+    let stored_new = serde_json::json!([{
+        "archive": inner,
+        "time": 1754280000001_u64,
+    }]);
+    let entries = parse_archive_entries(&stored_new);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].time, 1754280000001);
+    assert_eq!(entries[0].archive, inner);
+    // entry serializes with numeric time (ms timestamp contract)
+    let wire = serde_json::to_value(&entries[0]).expect("serialize entry");
+    assert!(wire["time"].is_u64());
+    assert_eq!(wire["archive"], inner);
 
-    // 2) Legacy shape (audit, 16 rows): data = object array
-    //    `[{"archive":"{...}","time":<str|num>}]` — time mixes strings and
-    //    numbers, but the read path never parses it (opaque passthrough).
+    // 2) Legacy shape (audit, 16 rows): data = object array with `time` as
+    //    numeric STRING mixed with numbers — the parser accepts both.
     let legacy = r#"[{"archive":"{\"a\":1}","time":"1754280000000"},{"archive":"{\"a\":2}","time":1754280000001}]"#;
     let legacy_value: serde_json::Value =
         serde_json::from_str(legacy).expect("legacy array parses");
-    let read_back: serde_json::Value = serde_json::from_str(&read_archive_data(&legacy_value))
-        .expect("re-serialized data reparses");
-    assert_eq!(
-        read_back, legacy_value,
-        "legacy object-array shape must round-trip through the fallback"
-    );
+    let entries = parse_archive_entries(&legacy_value);
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].time, 1754280000000);
+    assert_eq!(entries[1].time, 1754280000001);
+    assert_eq!(entries[0].archive, "{\"a\":1}");
 
-    // 3) ArchiveSlotVo wire keys (Java contract: slotIndex/time/archive).
-    let vo = ArchiveSlotVo {
-        slot_index: 1,
+    // 3) Old-Rust shape: data = bare JSON string -> single time-less entry.
+    let old_rust = serde_json::Value::String(inner.to_string());
+    let entries = parse_archive_entries(&old_rust);
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].time, 0);
+    assert_eq!(entries[0].archive, inner);
+
+    // 4) SysArchiveVo wire keys (Java contract: time/archive/historyIndex).
+    let vo = SysArchiveVo {
         time: 1754280000000.0,
         archive: inner.to_string(),
+        history_index: 1,
     };
-    let json = serde_json::to_value(&vo).expect("serialize ArchiveSlotVo");
-    assert_eq!(json["slotIndex"], 1);
+    let json = serde_json::to_value(&vo).expect("serialize SysArchiveVo");
     assert_eq!(json["time"], 1754280000000.0_f64);
     assert_eq!(json["archive"], inner);
+    assert_eq!(json["historyIndex"], 1);
     assert_eq!(
-        serde_json::from_value::<ArchiveSlotVo>(json).expect("deserialize ArchiveSlotVo"),
+        serde_json::from_value::<SysArchiveVo>(json).expect("deserialize SysArchiveVo"),
         vo
     );
 
@@ -431,12 +478,12 @@ fn archive_data_dual_shape() {
         archive: vec![SysArchiveVo {
             time: 1754280000001.0,
             archive: inner.to_string(),
-            history_index: 0,
+            history_index: 1,
         }],
     };
     let g = serde_json::to_value(&group).expect("serialize SysArchiveSlotVo");
     assert_eq!(g["slotIndex"], 1);
-    assert_eq!(g["archive"][0]["historyIndex"], 0);
+    assert_eq!(g["archive"][0]["historyIndex"], 1);
     assert_eq!(g["archive"][0]["archive"], inner);
 
     // 5) PUT body compat: wrapper body extracts `archive`; raw body is

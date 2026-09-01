@@ -92,10 +92,11 @@ pub async fn do_generate_score(
         let am = score_stat_model::ActiveModel {
             version: Set(0),
             id: sea_orm::ActiveValue::NotSet,
+            // 审计字段：新增时 create/update 两组全部设置（行主即贡献者）
             create_time: Set(now),
-            update_time: Set(None),
+            update_time: Set(Some(now)),
             creator_id: Set(Some(user_id)),
-            updater_id: Set(None),
+            updater_id: Set(Some(user_id)),
             del_flag: Set(false),
             scope: Set(scope.clone()),
             span: Set(span_name.clone()),

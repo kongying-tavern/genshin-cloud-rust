@@ -138,10 +138,11 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
         models.push(iap_model::ActiveModel {
             version: Set(0),
             id: sea_orm::ActiveValue::NotSet,
+            // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
-            update_time: Set(None),
-            creator_id: Set(None),
-            updater_id: Set(None),
+            update_time: Set(Some(now)),
+            creator_id: Set(Some(auth.info.id)),
+            updater_id: Set(Some(auth.info.id)),
             del_flag: Set(false),
             item_id: Set(item_id),
         });

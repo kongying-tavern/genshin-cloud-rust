@@ -97,6 +97,8 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
     let old_status = d.status;
     let mut am: device_model::ActiveModel = d.into();
     am.status = Set(status);
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(_auth.info.id));
     device_model::Entity::update_safety(am)?.exec(db).await?;
 
     // 封禁/解封状态变化后吊销该用户**全部** Redis 会话（粗粒度：踢全端，不

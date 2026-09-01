@@ -203,10 +203,11 @@ async fn ensure_admin_account(db: &sea_orm::DatabaseConnection) -> Result<()> {
     sys_user_entity::Entity::insert(sys_user_entity::ActiveModel {
         version: Set(0),
         id: sea_orm::ActiveValue::NotSet,
+        // 审计字段：新增时 create/update 两组全部设置（系统引导，操作者记 0）
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(0)),
+        updater_id: Set(Some(0)),
         del_flag: Set(false),
         username: Set(username.clone()),
         password: Set(_utils::bcrypt::generate_storage_password(&password)?),

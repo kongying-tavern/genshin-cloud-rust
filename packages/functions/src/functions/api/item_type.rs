@@ -52,14 +52,28 @@ async fn refresh_is_final(db: &sea_orm::DatabaseConnection, type_id: i64) -> Res
 pub async fn do_update(
     auth: AuthInfo,
     payload: ItemTypeUpdateData,
-) -> Result<CommonResponse<EmptyResponse>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
+    // Java updateItemType：禁止自身父子（同文案）
+    if payload.id == payload.parent_id {
+        return Err(anyhow!("物品类型ID不允许与父ID相同，会造成自身父子"));
+    }
     let item = item_type_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
-    let item = item.ok_or(anyhow!("ItemType not found"))?;
+    let Some(item) = item else {
+        return Ok(CommonResponse::new(Ok(false)));
+    };
+
+    // 父级变化时联动新旧父级的末端标志（Java updateItemTypeIsFinal 语义）
+    if item.parent_id != payload.parent_id {
+        set_parent_is_final(&DB_CONN.wait().pg_conn, payload.parent_id, false).await;
+        recalc_parent_is_final(&DB_CONN.wait().pg_conn, item.parent_id, true).await;
+    }
 
     let mut am: item_type_model::ActiveModel = item.into();
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
 
     // icon_tag -> icon_id
     am.icon_id = Set(resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?);
@@ -69,7 +83,12 @@ pub async fn do_update(
     }
     am.content = Set(payload.content);
     am.parent_id = Set(payload.parent_id);
-    am.is_final = Set(payload.is_final);
+    // Java updateItemTypeIsFinal(entity)：无子级才是末端（请求值被重算覆盖）
+    let children = item_type_model::Entity::find_safety()
+        .filter(item_type_model::Column::ParentId.eq(payload.id))
+        .count(&DB_CONN.wait().pg_conn)
+        .await?;
+    am.is_final = Set(children == 0);
     am.hidden_flag = Set(payload.hidden_flag);
     if let Some(si) = payload.sort_index {
         am.sort_index = Set(si.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
@@ -84,7 +103,7 @@ pub async fn do_update(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 // 将一组类型（typeId 列表）移动到目标类型下（更新 item_type.parent_id）
@@ -92,7 +111,7 @@ pub async fn do_move_to_target(
     auth: AuthInfo,
     target_type_id: i64,
     payload: Vec<i64>,
-) -> Result<CommonResponse<EmptyResponse>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
@@ -103,6 +122,10 @@ pub async fn do_move_to_target(
         ));
     }
     let db = &DB_CONN.wait().pg_conn;
+    // Java moveItemType：目标类型不得在移动集合内（防自身父子，同文案）
+    if payload.contains(&target_type_id) {
+        return Err(anyhow!("物品类型ID不允许与父ID相同，会造成自身父子"));
+    }
     // 校验目标类型存在
     if item_type_model::Entity::find_safety_by_id(target_type_id)
         .one(db)
@@ -112,16 +135,21 @@ pub async fn do_move_to_target(
         return Err(anyhow!("ItemType not found: {target_type_id}"));
     }
     // 记录被移动类型的原父级，移动后重算 is_final。
+    // Java selectList(in ids)：集合中不存在的类型静默跳过。
     let mut old_parents: Vec<i64> = Vec::new();
     for type_id in payload {
-        let item = item_type_model::Entity::find_safety_by_id(type_id)
+        let Some(item) = item_type_model::Entity::find_safety_by_id(type_id)
             .one(db)
             .await?
-            .ok_or_else(|| anyhow!("ItemType not found: {type_id}"))?;
+        else {
+            continue;
+        };
         if item.parent_id != target_type_id {
             old_parents.push(item.parent_id);
             let mut am: item_type_model::ActiveModel = item.into();
             am.parent_id = Set(target_type_id);
+            // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+            am.updater_id = Set(Some(auth.info.id));
             item_type_model::Entity::update_safety(am)?.exec(db).await?;
         }
     }
@@ -135,7 +163,50 @@ pub async fn do_move_to_target(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
+}
+
+/// 父级存在（id > 0）时直接设置 isFinal（Java updateItemTypeIsFinal）。
+async fn set_parent_is_final(db: &sea_orm::DatabaseConnection, parent_id: i64, is_final: bool) {
+    if parent_id <= 0 {
+        return;
+    }
+    let _: Result<()> = async {
+        let Some(mut am): Option<item_type_model::ActiveModel> =
+            item_type_model::Entity::find_safety_by_id(parent_id)
+                .one(db)
+                .await?
+                .map(|m| m.into())
+        else {
+            return Ok(());
+        };
+        am.is_final = Set(is_final);
+        item_type_model::Entity::update_safety(am)?.exec(db).await?;
+        Ok(())
+    }
+    .await;
+}
+
+/// 父级 isFinal 重算（Java recalculateItemTypeIsFinal）。
+async fn recalc_parent_is_final(
+    db: &sea_orm::DatabaseConnection,
+    parent_id: i64,
+    before_modify: bool,
+) {
+    if parent_id == 0 {
+        return;
+    }
+    let count = item_type_model::Entity::find_safety()
+        .filter(item_type_model::Column::ParentId.eq(parent_id))
+        .count(db)
+        .await
+        .unwrap_or(0);
+    let target = if before_modify {
+        count == 1
+    } else {
+        count == 0
+    };
+    set_parent_is_final(db, parent_id, target).await;
 }
 
 pub async fn do_get_list(
@@ -150,27 +221,42 @@ pub async fn do_get_list(
         .filter(item_type_model::Column::HiddenFlag.is_in(allowed));
     // self=1 查询子级（前端唯一用法，body typeIdList: [-1] 取根 / [nodeId] 取子级）；
     // self=0 按 Java 语义查询自身（typeIdList 含 -1 不过滤，否则 id IN typeIdList）
-    if let Some(type_list) = payload.type_id_list
-        && !type_list.is_empty()
-    {
-        if self_flag {
-            // typeIdList 语义（物品类型树）：[-1] 返回根类型（parent_id=-1 或自指顶层），
-            // [nodeId] 返回其子级（parent_id IN typeIdList）
-            if type_list.contains(&-1) {
-                query = query.filter(
-                    sea_orm::Condition::any()
-                        .add(item_type_model::Column::ParentId.eq(-1))
-                        .add(
-                            Expr::col(item_type_model::Column::ParentId)
-                                .equals(item_type_model::Column::Id),
-                        ),
-                );
-            } else {
-                query = query.filter(item_type_model::Column::ParentId.is_in(type_list));
-            }
-        } else if !type_list.contains(&-1) {
-            query = query.filter(item_type_model::Column::Id.is_in(type_list));
+    // Java listItemType 空 typeIdList 语义：self=0（查自身）→ 空页；self=1
+    //（查子级）→ 根分类（parent IN [-1]）。均不做全量回退。
+    let type_list = payload.type_id_list.clone().unwrap_or_default();
+    if type_list.is_empty() {
+        if !self_flag {
+            return Ok(CommonResponse::new(Ok(ItemTypeListResponse {
+                total: 0,
+                items: vec![],
+                size: Ord::min(payload.page.size.unwrap_or(10), 200) as i64,
+            })));
         }
+        query = query.filter(
+            sea_orm::Condition::any()
+                .add(item_type_model::Column::ParentId.eq(-1))
+                .add(
+                    Expr::col(item_type_model::Column::ParentId)
+                        .equals(item_type_model::Column::Id),
+                ),
+        );
+    } else if self_flag {
+        // typeIdList 语义（物品类型树）：[-1] 返回根类型（parent_id=-1 或自指顶层），
+        // [nodeId] 返回其子级（parent_id IN typeIdList）
+        if type_list.contains(&-1) {
+            query = query.filter(
+                sea_orm::Condition::any()
+                    .add(item_type_model::Column::ParentId.eq(-1))
+                    .add(
+                        Expr::col(item_type_model::Column::ParentId)
+                            .equals(item_type_model::Column::Id),
+                    ),
+            );
+        } else {
+            query = query.filter(item_type_model::Column::ParentId.is_in(type_list));
+        }
+    } else if !type_list.contains(&-1) {
+        query = query.filter(item_type_model::Column::Id.is_in(type_list));
     }
 
     let size_raw = payload.page.size.unwrap_or(10);
@@ -206,6 +292,7 @@ pub async fn do_get_list(
     let body = ItemTypeListResponse {
         total: total as i64,
         items: items_val,
+        size: size as i64,
     };
     Ok(CommonResponse::new(Ok(body)))
 }
@@ -278,9 +365,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
     // 软删自身与所有后代
     for tid in &to_delete {
         if let Some(model) = all.iter().find(|t| t.id == *tid) {
-            item_type_model::Entity::delete_safety(model.clone().into())?
-                .exec(db)
-                .await?;
+            let mut am: item_type_model::ActiveModel = model.clone().into();
+            am.del_flag = Set(true);
+            // 审计字段：软删也是修改，设置 update 组
+            am.updater_id = Set(Some(auth.info.id));
+            item_type_model::Entity::delete_safety(am)?.exec(db).await?;
         }
     }
 
@@ -326,10 +415,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     let active = item_type_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
-        creator_id: Set(None),
-        updater_id: Set(None),
+        update_time: Set(Some(now)),
+        creator_id: Set(Some(auth.info.id)),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
         icon_id: Set(icon_id),

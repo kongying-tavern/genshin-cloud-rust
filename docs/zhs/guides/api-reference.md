@@ -20,7 +20,6 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | marker | `/marker` | 打点（marker）的增删改查、single、tweak |
 | marker_link | `/marker_link` | 打点之间的关联关系 |
 | notice | `/notice` | 公告管理 |
-| route | `/route` | 路线（route）管理 |
 | history | `/history` | 历史版本列表 |
 | cache | `/cache` | 按域的缓存刷新（area/item/marker/icon_tag/notice 等） |
 
@@ -44,6 +43,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 ## 系统域
 
 挂在 `/system` 下（`router/src/routes/system/`）：
+
 
 | 域 | 说明 |
 | --- | --- |

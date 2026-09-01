@@ -134,7 +134,6 @@ pub async fn register(
             payload.access_policy,
             payload.logo,
             payload.remark,
-            payload.role_id,
             payload.username,
             payload.password,
         )
@@ -256,9 +255,10 @@ pub async fn delete(
 
 /// 用户信息(批量查询)
 /// POST /user/info/list
+/// Java authorities-filter 将本端点划给 MAP_MANAGER
 #[tracing::instrument(skip(auth))]
 pub async fn list(
-    ExtractAdmin(auth): ExtractAdmin,
+    ExtractManager(auth): ExtractManager,
     Json(payload): Json<UserListParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(

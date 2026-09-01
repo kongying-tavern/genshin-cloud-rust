@@ -23,26 +23,43 @@ use _utils::{
     },
 };
 
+/// 新增/编辑地区共用的入参守卫（Java createArea/updateArea 前置校验）：
+/// name 与 code 不能为空；content 空值默认转为空字符串。
+fn guard_area_request(req: &AreaAddRequest) -> Result<(String, String, String)> {
+    let name = req.name.trim().to_string();
+    if name.is_empty() {
+        return Err(anyhow!("地区名称不能为空"));
+    }
+    let code = req.code.as_deref().map(str::trim).unwrap_or("");
+    if code.is_empty() {
+        return Err(anyhow!("地区代码不能为空"));
+    }
+    let content = req.content.clone().unwrap_or_default();
+    Ok((name, code.to_string(), content))
+}
+
 // 新增地区
 pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let now = chrono::Utc::now().naive_utc();
+    let (name, code, content) = guard_area_request(&payload)?;
 
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = area_model::ActiveModel {
         version: Set(0),
         id: NotSet,
+        // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
-        update_time: Set(None),
+        update_time: Set(Some(now)),
         creator_id: Set(Some(auth.info.id)),
-        updater_id: Set(None),
+        updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
-        name: Set(payload.name),
-        code: Set(payload.code),
-        content: Set(payload.content),
+        name: Set(name),
+        code: Set(Some(code)),
+        content: Set(Some(content)),
         icon_id: Set(icon_id),
         parent_id: Set(payload.parent_id),
         // Java createArea：新地区恒为末端（客户端传入的 isFinal 被忽略）。
@@ -68,6 +85,7 @@ pub async fn do_update(
     if payload.area.parent_id == payload.id {
         return Err(anyhow!("指定的父节点无效"));
     }
+    let (name, code, content) = guard_area_request(&payload.area)?;
     let db = &DB_CONN.wait().pg_conn;
     let item = area_model::Entity::find_safety_by_id(payload.id)
         .one(db)
@@ -82,9 +100,11 @@ pub async fn do_update(
     }
 
     let mut am: area_model::ActiveModel = item.into();
-    am.name = Set(payload.area.name);
-    am.code = Set(payload.area.code);
-    am.content = Set(payload.area.content);
+    // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
+    am.updater_id = Set(Some(auth.info.id));
+    am.name = Set(name);
+    am.code = Set(Some(code));
+    am.content = Set(Some(content));
     am.icon_id =
         Set(resolve_icon_id(payload.area.icon_id, payload.area.icon_tag.as_deref()).await?);
     am.parent_id = Set(payload.area.parent_id);
