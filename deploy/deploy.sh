@@ -59,7 +59,7 @@ echo "[INFO] 等待健康检查 ..."
 HOST_PORT="$(grep -E '^HOST_PORT=' "$ENV_FILE" | cut -d= -f2)"
 HOST_PORT="${HOST_PORT:-8101}"
 ok=0
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if docker compose ps gcs-backend | grep -q healthy; then
     echo "[OK] gcs-backend 已就绪：http://127.0.0.1:${HOST_PORT}"
     echo "     健康检查：curl -s http://127.0.0.1:${HOST_PORT}/.well-known/jwks.json"

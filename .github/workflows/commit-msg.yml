@@ -24,7 +24,10 @@ permissions:
 
 jobs:
   lint:
-    name: Lint commit messages
+    # This name IS the branch-protection required context. GitHub registers
+    # the check run under the job name alone (not "workflow / job"), so it
+    # must stay exactly "Commit Message Lint / Lint commit messages".
+    name: Commit Message Lint / Lint commit messages
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

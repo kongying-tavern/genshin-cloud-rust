@@ -1,0 +1,55 @@
+name: Hygiene
+
+# Static checks for the repo's own plumbing: workflow syntax (actionlint) and
+# shell scripts (shellcheck), so CI config and deploy scripts cannot rot
+# silently. Non-blocking (not in the branch-protection required contexts).
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: hygiene-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint --version
+
+      - name: Run actionlint
+        run: ./actionlint -color
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # shellcheck is preinstalled on ubuntu-latest runners.
+      - name: Run shellcheck on all shell scripts
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find . -type f -name '*.sh' -not -path './target/*' -not -path './node_modules/*')
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No shell scripts found."
+            exit 0
+          fi
+          printf 'Checking:\n%s\n' "${scripts[@]}"
+          shellcheck "${scripts[@]}"

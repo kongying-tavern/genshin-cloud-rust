@@ -103,70 +103,11 @@ jobs:
       - name: Run DB-backed tests
         run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --no-fail-fast
 
-  # Lints both the PR title (the squash-merge subject) and every commit in
-  # the PR/push range, mirroring celestia-island/celestia-devtools'
-  # commit-msg-lint.yml. Inlined onto a GitHub-hosted runner because the
-  # reusable workflow targets the org's self-hosted runners, which are not
-  # registered for this repository — every delegated run queued forever and
-  # blocked all merges (required check).
-  commit-msg:
-    # Must match the branch-protection required context exactly (the
-    # delegated reusable workflow reported as "Commit Message Lint /
-    # Lint commit messages"; keeping the old name keeps protection green).
-    name: Commit Message Lint / Lint commit messages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-
-      - name: Install celestia-devtools
-        run: pip install git+https://github.com/celestia-island/celestia-devtools.git@master
-
-      - name: Lint PR title (squash merge subject)
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          set -o pipefail
-          [ -n "$(printf '%s' "$PR_TITLE" | tr -d '[:space:]')" ] || { echo "empty PR title"; exit 1; }
-          echo "PR title: $PR_TITLE"
-          printf '%s\n' "$PR_TITLE" | celestia-devtools commit-msg-lint check --stdin-subjects
-
-      - name: Lint all commits in the PR
-        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
-        env:
-          BASE_NAME: ${{ github.event.pull_request.base.ref }}
-        run: |
-          set -o pipefail
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          BASE_REF="$(git rev-parse --verify -q "origin/${BASE_NAME}" || echo "${{ github.event.pull_request.base.sha }}")"
-          MERGE_BASE="$(git merge-base "$BASE_REF" "$HEAD_SHA" 2>/dev/null || echo "$BASE_REF")"
-          RANGE="${MERGE_BASE}..${HEAD_SHA}"
-          echo "Linting commits in range: $RANGE"
-          git log --format='%s' "$RANGE" | celestia-devtools commit-msg-lint check --stdin-subjects
-
-      - name: Lint all new commits on push
-        if: github.event_name == 'push'
-        run: |
-          set -o pipefail
-          BEFORE="${{ github.event.before }}"
-          AFTER="${{ github.event.after }}"
-          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || [ -z "$BEFORE" ]; then
-            RANGE="$AFTER"
-          else
-            RANGE="${BEFORE}..${AFTER}"
-          fi
-          echo "Linting commits in range: $RANGE"
-          git log --format='%s' "$RANGE" | celestia-devtools commit-msg-lint check --stdin-subjects
+  # Commit-message linting lives in commit-msg.yml (standalone workflow).
+  # It used to be inlined here as a job with the required-check context name
+  # "Commit Message Lint / Lint commit messages"; commit-msg.yml's job carries
+  # that exact name (GitHub registers check runs under the job name alone),
+  # so branch protection stays green with only the standalone workflow.
 
   secrets-scan:
     name: Secrets Scan

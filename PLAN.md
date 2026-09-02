@@ -102,8 +102,9 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
    squash 合并时标题即 master 上的提交 subject，这是硬闸门。
 3. **CI 全绿**：fmt-check、clippy `-D warnings`、cargo check、cargo test、
    commit-msg lint（含 PR title）、secrets scan。
-4. **CHANGELOG**：user-facing 变更必须在 `Unreleased` 下加条目（按 PR 分组，
-   不再按「dev branch」堆叠）。
+4. **变更历史**：不维护 CHANGELOG 文件（2026-09-02 起与工作区规范对齐，
+   见 `AGENTS.md` §3）——合并的 PR（squash 提交 + PR 描述）即变更日志，
+   发布说明写在 git tag + GitHub Releases。
 5. **文档同步**：改动涉及行为/API 时，zhs 与 en 文档**同 PR 更新**（防止 D1 类漂移）。
 6. **测试**：新业务逻辑至少带 domain 级测试；涉及 SQL 的带 DB 集成测试（M1 基建就位后强制）。
 7. **合并方式**：默认 **squash**；仅大型多提交特性（每 commit 均过 lint）允许 merge commit。

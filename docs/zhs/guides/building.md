@@ -64,10 +64,17 @@ JWT_SECRET=<openssl rand -base64 48>
 
 ## CI（GitHub Actions）
 
-`.github/workflows/` 下有三个工作流：
+`.github/workflows/` 下有八个工作流：
 
-- **`rust.yml`**：构建与 `clippy` 检查。
-- **`test.yml`**：`cargo test` 全工作区测试。
+- **`rust.yml`**：`cargo fmt --check` / `check` / `clippy -D warnings` /
+  `build --release`，外加按根 `Cargo.toml` 声明的 `rust-version` 做 MSRV 检查。
+- **`test.yml`**：`cargo test` 全工作区测试（ubuntu/windows 矩阵）、Postgres
+  DB 集成测试、`trufflehog` 密钥扫描。
+- **`commit-msg.yml`**：PR 标题与每个提交主题的 gitmoji 规范 lint。
+- **`deny.yml`**：cargo-deny 依赖安全/许可证/来源检查，另每周定时扫新公告。
+- **`hygiene.yml`**：actionlint（workflow 语法）+ shellcheck（shell 脚本）。
+- **`coverage.yml`**：cargo-llvm-cov 覆盖率报告（仅供参考，不做阈值门禁）。
+- **`docker.yml`**：构建并推送 GHCR 生产镜像。
 - **`docs.yml`**：文档构建/部署。
 
 本地 `just ci` 即为 CI 的等价命令，提交前跑一遍可避免流水线红灯。
