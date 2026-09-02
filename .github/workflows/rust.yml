@@ -53,3 +53,45 @@ jobs:
 
       - name: Build
         run: cargo build --workspace --release
+
+  # Verifies the declared MSRV (rust-version in the root Cargo.toml) still
+  # compiles the workspace, so a dependency bump cannot silently raise the
+  # floor. RUSTUP_TOOLCHAIN pins the toolchain explicitly: the repo's
+  # rust-toolchain.toml (channel = "stable") would otherwise win.
+  msrv:
+    name: MSRV check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve declared MSRV
+        id: msrv
+        run: |
+          set -euo pipefail
+          MSRV="$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          [ -n "$MSRV" ] || { echo "rust-version not found in Cargo.toml"; exit 1; }
+          echo "version=$MSRV" >> "$GITHUB_OUTPUT"
+          echo "Declared MSRV: $MSRV"
+
+      - name: Install Rust (${{ steps.msrv.outputs.version }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Check with MSRV toolchain
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
+        run: cargo check --workspace --all-targets

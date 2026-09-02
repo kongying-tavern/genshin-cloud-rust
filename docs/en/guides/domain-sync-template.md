@@ -155,4 +155,3 @@ fn area_entity_table_name_matches_java() {
 - [ ] `do_list` supports `hidden_flag` filtering where the Java side does
 - [ ] Route handlers registered in the parent `routes/api/mod.rs`
 - [ ] Smoke test asserts table name + key columns
-- [ ] `CHANGELOG.md` entry added under the relevant section

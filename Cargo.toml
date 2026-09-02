@@ -16,6 +16,10 @@ publish = false
 
 version = "0.2.0"
 edition = "2024"
+# Declared MSRV — verified by the "MSRV check" job in rust.yml. Bump only
+# with an explicit reason (dependency floor raised), never opportunistically.
+# Current floor: sqlx 0.9 requires rustc 1.94 (the time crate needs 1.88).
+rust-version = "1.94"
 
 [workspace.dependencies]
 anyhow = { version = "^1", features = ["backtrace"] }

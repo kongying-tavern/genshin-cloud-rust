@@ -1,0 +1,77 @@
+name: Coverage
+
+# Test coverage via cargo-llvm-cov on the workspace (DB-backed tests
+# self-skip without GCS_TEST_DB, so this measures unit + non-DB integration
+# tests). Informational only: the report goes to the job summary and an
+# lcov artifact; no threshold gating.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: true
+
+jobs:
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run tests with coverage
+        run: |
+          set -o pipefail
+          cargo llvm-cov --workspace --lcov --output-path lcov.info 2>&1 | tee llvm-cov.txt
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo '### Coverage'
+            echo '```'
+            sed -n '/^ *File  *Regions /,$p' llvm-cov.txt || cat llvm-cov.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload lcov artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: warn

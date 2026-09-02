@@ -27,7 +27,6 @@ Closes #
 - [ ] `cargo fmt --check` passes
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings` passes
 - [ ] `cargo test --workspace` passes
-- [ ] CHANGELOG entry added (if user-facing change)
 - [ ] Documentation updated (if applicable)
 
 ## Breaking Changes

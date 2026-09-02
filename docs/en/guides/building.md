@@ -90,15 +90,20 @@ with a public `s3:GetObject` policy if they do not yet exist.
 
 ## CI
 
-GitHub Actions mirrors the local `just ci` flow across three workflows under
+GitHub Actions mirrors the local `just ci` flow and adds repo hygiene under
 `.github/workflows/`:
 
 | Workflow | What it does |
 | --- | --- |
-| `rust.yml` | On push/PR to `master`/`dev`: `cargo fmt --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets`, `cargo build --workspace --release`. Uses `dtolnay/rust-toolchain@stable` + `sccache`. |
-| `test.yml` | Multi-OS matrix (`ubuntu-latest`, `windows-latest`): unit tests (`--lib`) + integration tests (`--tests`); plus a `commit-msg` job that lints every commit subject against the gitmoji convention with `celestia-devtools commit-msg-lint`, and a `trufflehog` secrets scan. |
+| `rust.yml` | On push/PR to `master`: `cargo fmt --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets` (with `-D warnings`), `cargo build --workspace --release`, plus an MSRV check against the `rust-version` declared in the root `Cargo.toml`. Uses `dtolnay/rust-toolchain` + `sccache`. |
+| `test.yml` | Multi-OS matrix (`ubuntu-latest`, `windows-latest`): unit tests (`--lib`) + integration tests (`--tests`), a Postgres-backed DB-integration job, and a `trufflehog` secrets scan. |
+| `commit-msg.yml` | Lints the PR title and every commit subject in the PR/push range against the gitmoji convention with `celestia-devtools commit-msg-lint`. |
+| `deny.yml` | `cargo-deny` advisories/licenses/sources check on push/PR plus a weekly scheduled sweep for newly disclosed advisories. |
+| `hygiene.yml` | `actionlint` for workflow syntax and `shellcheck` for the shell scripts. |
+| `coverage.yml` | `cargo-llvm-cov` coverage report (job summary + lcov artifact); informational, no threshold gate. |
+| `docker.yml` | Builds and pushes the production image to GHCR on `master`/tags. |
 | `docs.yml` | On changes under `docs/**`: builds the multilingual site with `lagrange` and deploys to GitHub Pages. |
 
-Note: CI runs clippy **without** `-D warnings` until the pre-existing lints
-documented in `CHANGELOG.md` are resolved; `just clippy-strict` is the local
-strict variant for new code.
+Note: CI runs clippy with `-D warnings` across the whole workspace; the
+changelog convention was retired in favor of merged PRs as the change history
+(see `AGENTS.md`).

@@ -95,5 +95,4 @@ catch the violation.
 The `master` branch rejects direct merge commits: contributions land as a
 single **squashed** commit so the history stays linear and every subject
 satisfies the hook. The CI `commit-msg` job lints the full commit range of a
-PR, so squash-merging a clean PR is the safe path. See `CHANGELOG.md` for the
-background on the master-merge-guard.
+PR, so squash-merging a clean PR is the safe path.
