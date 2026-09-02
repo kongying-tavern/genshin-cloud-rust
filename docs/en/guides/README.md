@@ -15,9 +15,9 @@ migration, so they can run against the same database.
 | Layer | Technology |
 | --- | --- |
 | Web framework | [`axum`](https://crates.io/crates/axum) 0.8 (macros, json, query, multipart, ws) |
-| ORM | [`sea-orm`](https://crates.io/crates/sea-orm) 1.x over PostgreSQL via `sqlx` |
+| ORM | [`sea-orm`](https://crates.io/crates/sea-orm) 2.0 (RC) over PostgreSQL via `sqlx` |
 | Cache | [`redis`](https://crates.io/crates/redis) 1.x (tokio runtime) |
-| Object storage | [`minio`](https://crates.io/crates/minio) 0.3 (S3-compatible) |
+| Object storage | [`minio`](https://crates.io/crates/minio) 0.4 (S3-compatible) |
 | Auth | [`jsonwebtoken`](https://crates.io/crates/jsonwebtoken) 10 + [`bcrypt`](https://crates.io/crates/bcrypt) 0.19 |
 | Runtime | [`tokio`](https://crates.io/crates/tokio) 1.x (multi-thread) |
 | Logging | [`tracing`](https://crates.io/crates/tracing) + `tracing-subscriber`, `env_logger` shim |

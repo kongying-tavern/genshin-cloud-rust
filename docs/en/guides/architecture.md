@@ -22,7 +22,7 @@ packages/
 | `utils` (`_utils`) | Foundation. No knowledge of HTTP or business rules. | `db_operations::SafeEntityTrait` + `impl_safe_operation!` macro, `jwt::AuthInfo`, `bcrypt`, DTO/VO types under `src/models/` and `src/types/`. |
 | `database` (`_database`) | Persistence. Holds the single `DB_CONN` global. | sea-orm entities grouped by domain (`models/{area,icon,item,marker,common,system}/`), `init_db_conn()` builds the `DatabaseConnectionMap { pg_conn, redis_conn, minio_conn }`. |
 | `functions` (`_functions`) | Business logic. Pure async functions, no HTTP types. | `functions/api/<domain>.rs` (one file per content domain), `functions/system/{oauth,user}.rs`. |
-| `router` (`_router`) | HTTP edge. The only crate that imports `axum`. | `routes/api/<domain>/` (one module per verb), `routes/system/`, `middlewares/{auth,ip,user_agent}_extrator.rs`, `main.rs`. |
+| `router` (`_router`) | HTTP edge. The only crate that imports `axum`. | `routes/api/<domain>/` (one module per verb), `routes/system/`, `middlewares/{admin,auth,ip,role,user_agent}_extrator.rs`, `main.rs`. |
 
 Because the lower crates never import `axum`, the business logic stays fully
 testable without spinning up an HTTP server — the per-domain smoke tests in
@@ -102,9 +102,13 @@ Both are provisioned in `database::init_db_conn()` and live on the same
 
 - **Redis** (`redis_conn`) — hot cache for the read-heavy front-end APIs.
 
-The `cache` domain (`routes/api/cache/`) serves precomputed area, item,
-icon-tag, marker, marker-link, and notice snapshots straight from Redis so
-the map client can bootstrap without hitting PostgreSQL.
+It stores the OAuth session entries (`jwt:access:*` / `jwt:refresh:*`, which
+power token lookup, kick-out, and revocation), backs the login rate limiter,
+and holds the BinaryMD5 second-level result cache (`binmd5:result:*` with
+epoch-based invalidation; see
+[BinaryMD5 archive export](../designs/binarymd5-archive-export.md)). The
+admin `cache` domain (`routes/api/cache/`) exposes DELETE endpoints that
+flush these caches.
 
 - **MinIO** (`minio_conn`) — S3-compatible object storage. On startup the
 

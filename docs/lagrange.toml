@@ -4,4 +4,4 @@ description = "Genshin Map Cloud — Rust backend, feature-synced with the Java 
 
 [languages]
 default = "en"
-order = ["en", "zhs", "zht", "ja", "ko", "fr", "es", "ru", "ar", "de", "pt"]
+order = ["en", "zh-chs", "zh-cht"]

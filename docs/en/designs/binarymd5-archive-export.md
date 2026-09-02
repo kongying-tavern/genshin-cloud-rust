@@ -1,9 +1,9 @@
 # BinaryMD5 Archive Export — Compressed Bulk Read for Client Cold-Start
 
-> Domains: `marker_doc`, `item_doc`, `marker_link_doc`. Pipeline core:
-> `functions/api/binary_doc.rs`. Java counterpart: `CompressUtils` +
-> `DigestUtils`, `*DaoImpl.refresh*BinaryList`, and the `neverRefreshCacheManager`
-> Caffeine cache; served by `*DocController`.
+> Domains: `marker_doc`, `item_doc`, `marker_link_doc`, `icon_doc`,
+> `tag_doc`. Pipeline core: `functions/api/binary_doc.rs`. Java counterpart:
+> `CompressUtils` + `DigestUtils`, `*DaoImpl.refresh*BinaryList`, and the
+> `neverRefreshCacheManager` Caffeine cache; served by `*DocController`.
 
 ## Why this pipeline exists
 
@@ -125,17 +125,21 @@ per-flag grouping. Two views are exposed:
 
 precomputed server-side so the client does not have to rebuild it.
 
-Tags use the same single-blob shape.
+Icons (`icon_doc.rs`) and tags (`tag_doc.rs`) use the same single-blob shape:
+the whole set is one GZIP blob served by `all_bin_md5` / `all_bin`, with no
+paging and no grouping.
 
 ## Two endpoints per domain
 
-Every `*_doc` domain exposes the same pair of endpoints. The first is what the
-client polls; the second is what it downloads only when an MD5 changed.
+Every `*_doc` domain exposes the same pair of endpoints: the first is what the
+client polls; the second is what it downloads only when an MD5 changed. The
+linkage domain exposes the pair twice — once for the `list` view and once for
+the `graph` view.
 
 | Endpoint | Returns | Purpose |
 | --- | --- | --- |
-| `list_page_bin_md5` (markers/items) or `all_*_bin_md5` (linkages) | `Vec<BinaryMd5Vo>` of `{ md5, time }` | Cheap poll. Client diffs `md5` against its cache. |
-| `list_page_bin/{md5}` (markers/items) or `all_*_bin` (linkages) | raw `application/octet-stream` bytes | The compressed blob. `md5` is the content address. |
+| `list_page_bin_md5` (markers/items), `all_bin_md5` (icons/tags), or `all_list_bin_md5` / `all_graph_bin_md5` (linkages) | `Vec<BinaryMd5Vo>` of `{ md5, time }` | Cheap poll. Client diffs `md5` against its cache. |
+| `list_page_bin/{md5}` (markers/items), `all_bin` (icons/tags), or `all_list_bin` / `all_graph_bin` (linkages) | raw `application/octet-stream` bytes | The compressed blob. `md5` is the content address. |
 
 `BinaryMd5Vo` is defined in `binary_doc.rs`:
 
@@ -154,15 +158,28 @@ browser) without conditional-request negotiation.
 
 ## Caching: what Rust does today vs. Java
 
-This is the one place the port is knowingly behind Java, and the code calls it
-out explicitly in the comments of `item_doc.rs::do_list_page_bin_md5`:
+Rust used to regenerate every page on each request; it now caches at two
+levels, both implemented in `binary_doc.rs`:
 
-> NOTE: compressed bytes are discarded here — in the Java impl they are cached
-> in Caffeine keyed by md5. Without an in-process cache, the `list_page_bin`
-> handler regenerates on demand. A cache layer (Redis or moka) should be added
-> for production performance.
+- **In-process moka cache.** `get_or_compute(key, compute)` stores each
 
-Concretely:
+`CachedPage { md5, time, bytes }` in a moka cache (10,000-entry capacity,
+3600s TTL) keyed by an explicit domain + group/page string (`item:0`,
+`marker:0:123`, `link:graph`). The cached `time` stays stable while an entry
+is alive, so the timestamps in the md5 list do not churn between requests.
+
+- **Redis second-level cache.** A result-level cache under `binmd5:result:*`
+
+shares the computed page sets across replicas, so a warm replica serves the
+pages without re-scanning the database. Invalidation bumps a versioned epoch
+(`binmd5:epoch`), which makes every replica drop its stale copy at once; old
+keys simply age out of the TTL window.
+
+Invalidation is wired to the admin surface: `POST /app/trigger/update` and the
+`DELETE /api/cache/{item,marker,marker_link}` endpoints flush every cached
+page (in-process + Redis across replicas) and broadcast a purge event over the
+WebSocket layer. The remaining `/api/cache/*` sub-routes are honest no-ops
+until their domains grow a cache layer.
 
 - **Java** precomputes every page into Caffeine's `neverRefreshCacheManager`
 
@@ -170,29 +187,15 @@ Concretely:
 `refresh*BinaryList` job runs after a write). Both `list_page_bin_md5` and
 `list_page_bin/{md5}` are then O(1) hashmap reads.
 
-- **Rust today** computes `serialize_compress_md5` on every request. The
+- **Rust today** computes each page lazily on the first request of a TTL
 
-`list_page_bin_md5` handler regenerates all pages just to collect their MD5s;
-the `list_page_bin/{md5}` handler regenerates all pages again, computes each
-one's MD5, and returns the matching blob.
+window and serves it from moka (and Redis) afterwards, instead of Java's
+write-time precomputation. That trade keeps cold paths correct — the bytes
+are deterministic, so the MD5s always match — while bounding staleness by
+the TTL and the explicit flush endpoints.
 
-This is correct (the bytes are deterministic, so the MD5s match) but expensive
-under load: every cold-start request recompresses the whole marker table. The
-shape of the fix is already constrained:
-
-- A **moka** in-process cache keyed by `md5` mirrors Caffeine most directly and
-
-fits the single-process deployment.
-
-- A **Redis** cache fits the multi-instance deployment and shares naturally
-
-with the existing `redis_conn` in `DatabaseConnectionMap`. The `bz2doc` MinIO
-bucket is also already provisioned (see
-[the architecture guide](../guides/architecture.md)) as an object-storage
-alternative for the cold blobs.
-
-Either way the `serialize_compress_md5 → (bytes, md5)` split is the seam: the
-cache lookup plugs in right after it, and nothing downstream needs to change.
+The `serialize_compress_md5 → (bytes, md5)` split is the seam the cache plugs
+into: the lookup wraps it directly, and nothing downstream needed to change.
 
 ## Why MD5-over-compressed and not MD5-over-JSON
 

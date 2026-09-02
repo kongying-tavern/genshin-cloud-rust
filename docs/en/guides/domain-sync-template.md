@@ -133,8 +133,9 @@ pub async fn router() -> Result<Router> {
 At minimum, assert the entity table name matches the Java side and that the
 `hidden_flag` / `version` columns exist (see
 `tests/rust/tests/area/area_domain_test.rs`). These are compile-time + value
-assertions and need no database connection. Add DB-backed integration tests
-under `#[ignore]` once the docker-compose harness is wired up.
+assertions and need no database connection. DB-backed integration tests live
+in `tests/rust/tests/*_db_test.rs` and self-skip unless `GCS_TEST_DB` is set
+(see `tests/docker/docker-compose.e2e.yml` and the CI `DB integration` job).
 
 ```rust
 # [test]
