@@ -14,7 +14,7 @@
 
 <div align="center">
 
-**简体中文** · [English](./docs/en/guides/README.md)
+**简体中文** · [English](./docs/en/README.md)
 
 </div>
 
@@ -121,8 +121,9 @@ usage.
 
 ## 前端联动 / Frontend Integration
 
-本后端实现与 Java 侧一致的 API 契约（`/api/*` 全量路由已逐条对齐），直接
-服务空荧酒馆的前端项目：
+本后端实现与 Java 侧一致的 API 契约，直接服务空荧酒馆的前端项目（绝大多数
+`/api/*` 路由已逐条对齐；Java 的 `route` / `punctuate` / `punctuate_audit`
+域**有意不提供**——见 `docs/zh-chs/guides/sync-with-java-roadmap.md`）：
 
 | 前端仓库 | 关系 |
 | --- | --- |
@@ -138,7 +139,7 @@ This backend implements the same API contract as the Java side and serves the
 Kongying Tavern frontend projects directly (the vast majority of `/api/*`
 routes are aligned one by one; the Java `route` / `punctuate` /
 `punctuate_audit` domains are **intentionally not provided** — see
-`docs/zhs/guides/sync-with-java-roadmap.md`):
+`docs/zh-chs/guides/sync-with-java-roadmap.md`):
 
 | Frontend repo | Relationship |
 | --- | --- |
@@ -209,10 +210,8 @@ packages/
 Full architecture, design decisions, and guides live under `docs/`
 (multilingual):
 
-- **[简体中文文档](./docs/zhs/README.md)** — 架构、构建、API 参考、Java 同步路线图
-- **[English docs](./docs/en/README.md)** — architecture, building, API
-
-reference, Java-sync roadmap
+- **[简体中文文档](./docs/zh-chs/README.md)** — 架构、构建、API 参考、Java 同步路线图
+- **[English docs](./docs/en/README.md)** — architecture, building, API reference, Java-sync roadmap
 
 ## 提交规范 / Commit Convention
 
@@ -228,14 +227,14 @@ This project follows the celestia-island org
 The [`celestia-devtools`](https://github.com/celestia-island/celestia-devtools)
 commit-msg hook enforces this on every `git commit`.
 
-详见 / See: [提交规范](./docs/zhs/guides/commit-message-convention.md) /
+详见 / See: [提交规范](./docs/zh-chs/guides/commit-message-convention.md) /
 [Commit Convention](./docs/en/guides/commit-message-convention.md)
 
 ## 迭代工作流 / Iteration Workflow
 
 `master` 是唯一主线，受分支保护：**任何补丁都必须以 PR 形式合入**。
 从最新 master 切主题分支（`feat/`、`fix/`、`test/`、`docs/`、`refactor/`、
-`chore/`），PR 标题同样遵循 gitmoji 规范（squash 合并时标题即合并提交），
+`chore/`），PR 标题同样遵循 gitmoji 规范（squash 合并后 PR 标题即合并提交的主题），
 CI 全绿后经 `celestia-devtools pr-merge`（或 `gh()` 代理函数）squash 合并，
 合并后删除分支。历史 `dev` 分支已封存为 tag `archive/dev-snapshot`。
 

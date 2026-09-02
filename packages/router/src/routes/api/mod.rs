@@ -15,7 +15,7 @@ pub mod marker_link;
 pub mod marker_link_doc;
 pub mod notice;
 pub mod res;
-// 已弃用（对齐决策，见 docs/zhs/guides/sync-with-java-roadmap.md）：
+// 已弃用（对齐决策，见 docs/zh-chs/guides/sync-with-java-roadmap.md）：
 // Java 的 /api/route（RouteController）与 /api/punctuate、/api/punctuate_audit
 // 三域不在本后端提供；route 模块与路由挂载因此保持注释状态。
 // pub mod route;

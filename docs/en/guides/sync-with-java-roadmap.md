@@ -19,7 +19,8 @@ two domains, plus three pieces of non-trivial infrastructure:
 - **Binary archive export** (`*_doc` endpoints): large datasets are serialized,
 
 GZIP-compressed, and keyed by BinaryMD5 so the client can incrementally sync.
-Two-tier cache on the Java side (Caffeine → ported to `moka` in-process).
+Java caches them in Caffeine; the Rust port uses a two-tier cache (in-process
+`moka` plus a Redis second level).
 
 - **Crowd-sourced punctuate workflow**: user marker submissions → staging
 
@@ -43,17 +44,17 @@ current status.
 | --- | --- | --- | --- | --- |
 | 1 | **area + marker** (reference samples) | `Area`, `Marker`, `hiddenFlag`, `specialFlag`. Establishes the `SafeEntityTrait` pattern and the five-layer domain template every later port copies. | Medium | **Done** — used as the porting template |
 | 2 | **icon / item / tag families** | `Icon`, `IconType`, `IconTypeLink`, `Item`, `ItemType`, `ItemTypeLink`, plus the `Tag` / `TagType` taxonomy. Includes the `selectPageItemByCondition` `specialFlag` filter and copy/join/move_type. | Low–Medium | **Done** (covered by the `api_db` integration tests) |
-| 3 | **notice / route / history** | `Notice` (validity-sort rule), `Route`, `History`. `RouteVO` page/search/batch queries are wired. | Low–Medium | **Done** |
+| 3 | **notice / history (route excluded)** | `Notice` (validity-sort rule), `History`. The Java `Route` domain is deliberately not ported: the `route` entity stays in `models/common/` for schema parity, but the `/api/route` endpoints are not provided. | Low–Medium | **Done** |
 | 4 | **punctuate workflow + scoring** | `MarkerPunctuate` staging → `Marker` promotion (three-state audit, role-gated and transactional) and `ScoreStat` aggregation (field-weighted). | High | **Punctuate workflow deprecated** (the staging table stays for schema parity); **scoring done** |
 | 5 | **system (user / role / device / invitation)** | `SysUser`, `SysUserArchive`, `SysUserDevice` (login-anomaly detection), `SysUserInvitation`, `SysActionLog`, role listing, archive rename/delete_slot. | Medium | **Done** — device registration + access-policy checks are wired |
-| 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc`, with an in-process moka cache (300s TTL) and refresh endpoints. | High | **Done** |
-| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Done** — RS256 signing with RSA JWKS; **JWK rotation** via `JWT_RSA_VERIFY_KEYS` (historical public keys stay verifiable + published; see the rotation steps below). In HS256 mode the JWKS endpoint returns an empty key set (the HMAC secret is never disclosed) |
+| 6 | **BinaryMD5 archive export** | The GZIP-compressed, BinaryMD5-keyed producer for `item_doc` / `marker_doc` / `marker_link_doc` / `icon_doc` / `tag_doc`, with an in-process moka cache (3600s TTL) plus a Redis second level, and admin refresh endpoints. | High | **Done** |
+| 7 | **OAuth2 / JWKS** | `/oauth/token` (password / QQ / refresh_token / client_credentials), `/.well-known/jwks.json`, access-policy checks, scope mapping. | High | **Done** — RS256 signing with RSA JWKS; **JWK rotation** via `JWT_RSA_VERIFY_KEYS` (historical public keys stay verifiable + published; see the rotation steps below). In HS256 mode the JWKS endpoint returns an empty key set (the HMAC secret is never disclosed) |
 
 ## Current state
 
 - All seven batches are landed end-to-end (entity → DTO → business → route →
   test). Business assertions live in `tests/rust/tests/api_db_test.rs`
-  (live DB, CI `integration` job): area CRUD, item_doc BinaryMD5, marker
+  (live DB, CI `DB integration` job): area CRUD, `item_doc` BinaryMD5, marker
   tweak, OAuth policy/device/QQ login, JWKS, cache stability and refresh.
   (The punctuate audit is deprecated — its routes and models were removed;
   the `marker_punctuate` staging table remains part of the schema.)
@@ -64,8 +65,9 @@ current status.
 
 - Database schema deviations from the real database await data validation
   (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
-- Translation: only `docs/en` and `docs/zhs` are complete; the other 9
-  languages are skeletons.
+- Translation: the docs ship in three maintained languages — English
+  (`docs/en`), Simplified Chinese (`docs/zh-chs`), and Traditional Chinese
+  (`docs/zh-cht`).
 
 ## Rotating the JWT signing key (RS256)
 

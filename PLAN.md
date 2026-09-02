@@ -105,7 +105,7 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 4. **变更历史**：不维护 CHANGELOG 文件（2026-09-02 起与工作区规范对齐，
    见 `AGENTS.md` §3）——合并的 PR（squash 提交 + PR 描述）即变更日志，
    发布说明写在 git tag + GitHub Releases。
-5. **文档同步**：改动涉及行为/API 时，zhs 与 en 文档**同 PR 更新**（防止 D1 类漂移）。
+5. **文档同步**：改动涉及行为/API 时，zh-chs 与 en 文档**同 PR 更新**（繁体 zh-cht 亦应同步，防止 D1 类漂移）。
 6. **测试**：新业务逻辑至少带 domain 级测试；涉及 SQL 的带 DB 集成测试（M1 基建就位后强制）。
 7. **合并方式**：默认 **squash**；仅大型多提交特性（每 commit 均过 lint）允许 merge commit。
    合并一律走 `celestia-devtools pr-merge` 或 `gh()` 代理函数，杜绝裸 `gh pr merge --squash` 绕过校验。

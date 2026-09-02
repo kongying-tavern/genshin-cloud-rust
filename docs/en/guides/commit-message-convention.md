@@ -2,8 +2,9 @@
 
 This project enforces the `celestia-devtools` gitmoji convention. A
 `commit-msg` hook (installed by `just hooks`) validates every commit, and a
-CI job (`.github/workflows/test.yml` → `commit-msg`) re-checks the same rules
-on push. Commits that fail the check are rejected locally and will fail CI.
+standalone CI workflow (`.github/workflows/commit-msg.yml`) re-checks the
+same rules on push and on every PR. Commits that fail the check are rejected
+locally and will fail CI.
 
 ## The rules
 
@@ -87,12 +88,12 @@ CELESTIA_COMMIT_MSG_SKIP=1 git commit -m "..."
 ```
 
 Do not leave `CELESTIA_COMMIT_MSG_SKIP` exported in your shell — it would
-silently disable the hook for every subsequent commit and CI would still
+silently disable the hook for every subsequent commit, and CI would still
 catch the violation.
 
 ## Master branch policy
 
 The `master` branch rejects direct merge commits: contributions land as a
 single **squashed** commit so the history stays linear and every subject
-satisfies the hook. The CI `commit-msg` job lints the full commit range of a
-PR, so squash-merging a clean PR is the safe path.
+satisfies the hook. The CI commit-message workflow lints the full commit
+range of a PR, so squash-merging a clean PR is the safe path.

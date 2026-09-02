@@ -25,7 +25,7 @@ audience tier and by UI filter, not by a single permission check.
 
 | Document | What it explains |
 | --- | --- |
-| [BinaryMD5 Archive Export](./binarymd5-archive-export.md) | Why the map cold-starts from GZIP-compressed JSON blobs keyed by MD5, how markers are paged by `id / 3000` while items and linkages use single-blob variants, and where the Rust port still needs a cache layer. |
+| [BinaryMD5 Archive Export](./binarymd5-archive-export.md) | Why the map cold-starts from GZIP-compressed JSON blobs keyed by MD5, how markers are paged by `id / 3000` while items and linkages use single-blob variants, and how the two-level cache (in-process `moka` + Redis) keeps regeneration off the request path. |
 | [Hidden and Special Flags](./hidden-and-special-flags.md) | Why the project has three orthogonal visibility mechanisms — soft delete (`del_flag`), audience tier (`hidden_flag`), and UI bitmask (`special_flag`) — and how they compose. |
 
 ## Conventions
@@ -38,6 +38,7 @@ follow the parity in both directions.
 
 [`../guides/`](../guides/).
 
-- When a Rust file knowingly diverges from Java (e.g. the BinaryMD5 cache layer
+- When a Rust file knowingly diverges from Java (e.g. the BinaryMD5 cache layers
 
-is not yet ported), the note says so explicitly rather than papering over it.
+a TTL-bounded moka + Redis design under Java's never-refreshing Caffeine), the
+note says so explicitly rather than papering over it.

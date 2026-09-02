@@ -23,5 +23,3 @@
 
 ---
 
-语言切换 / Language switcher:
-[English](./README.md) · [简体中文](../zhs/SUMMARY.md) · [繁體中文](../zht/SUMMARY.md)

@@ -26,8 +26,8 @@ guides when you start contributing.
 
 | Guide | What it covers |
 | --- | --- |
-| [Detailed README](./guides/README.md) | Project overview, tech stack, quick start |
-| [Glossary](./guides/glossary.md) | Chinese-English domain terminology |
+| [Detailed README](./guides/README.md) | Project overview, tech stack, quick start. |
+| [Glossary](./guides/glossary.md) | Chinese-English domain terminology. |
 | [Architecture](./guides/architecture.md) | The four-package layering, request flow from axum to PostgreSQL, the `SafeEntityTrait` pattern, and Redis/MinIO integration points. |
 | [Building](./guides/building.md) | Prerequisites, `just init` / `just build` / `just dev`, the `.env` file, the local docker-compose stack, and the CI workflows. |
 | [API Reference](./guides/api-reference.md) | The API domains the router exposes (area, icon, item, marker, notice, score, system, ...), grouped by purpose. |
@@ -48,12 +48,8 @@ the port progresses.
 
 ## Other languages
 
-The documentation tree is multilingual and rendered with
-[`lagrange`](https://github.com/celestia-island/lagrange). English is the
-default language; the other translations are scaffolded and link back here
-until they are complete.
+The documentation tree ships in three maintained languages and is rendered
+with [`lagrange`](https://github.com/celestia-island/lagrange). English is the
+default language; Simplified and Traditional Chinese are kept in sync
+alongside it.
 
-[简体中文](../zhs/README.md) · **English** · [繁體中文](../zht/README.md) ·
-[日本語](../ja/README.md) · [한국어](../ko/README.md) · [Français](../fr/README.md) ·
-[Español](../es/README.md) · [Русский](../ru/README.md) · [العربية](../ar/README.md) ·
-[Deutsch](../de/README.md) · [Português](../pt/README.md)

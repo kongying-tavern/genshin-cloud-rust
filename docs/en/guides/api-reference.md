@@ -10,7 +10,11 @@ and payload fields, read the relevant module under
 All `/api/*` routes run behind the `ExtractAuthInfo` middleware, which parses
 the `Authorization: Bearer <jwt>` header into an `AuthInfo` threaded through
 every business function. The `/system/*` routes additionally require an
-authenticated session. The default body limit is 16 MiB.
+authenticated session (except the public invitation and QQ-registration
+endpoints), with the administrative verbs gated one level further by
+`ExtractAdmin`. The default body limit is 16 MiB. Server-pushed events
+(announcements, cache purges) are broadcast over the `/ws/{userId}`
+WebSocket endpoint.
 
 ## Map content — the map data the front-end renders
 
@@ -24,30 +28,38 @@ authenticated session. The default body limit is 16 MiB.
 | Item common | `/api/item_common` | Shared/cross-region item definitions reused across areas. |
 | Marker | `/api/marker` | The core entity — a single point of interest on the map. |
 | Marker link | `/api/marker_link` | Linkages between markers (e.g. "this cave entrance connects to that exit"). |
+| Tag | `/api/tag` | Free-form labels applied to markers for grouping. |
+| Tag type | `/api/tag_type` | Classification taxonomy for tags. |
 
 ## Compressed archive exports — BinaryMD5 bundles
 
 The `*_doc` domains serve GZIP-compressed archives the client downloads to
 bootstrap offline. The archives are GZIP-compressed JSON blobs keyed by the
-MD5 of the compressed bytes, generated on-the-fly from PostgreSQL by the
-Rust backend. A process-internal cache is planned to avoid regenerating on
-every request.
+MD5 of the compressed bytes, generated from PostgreSQL on a cache miss and
+then held in an in-process moka cache with a Redis second level shared
+across replicas.
 
 | Domain | Prefix | Purpose |
 | --- | --- | --- |
+| Icon doc | `/api/icon_doc` | Single-blob GZIP-compressed icon-archive download (`all_bin`). |
 | Item doc | `/api/item_doc` | Paginated GZIP-compressed item-archive download (`list_page_bin`). |
 | Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download. |
-| Marker link doc | `/api/marker_link_doc` | Paginated GZIP-compressed marker-link-archive download. |
+| Marker link doc | `/api/marker_link_doc` | Single-blob marker-link archives: flat list and adjacency graph (`all_list_bin` / `all_graph_bin`). |
+| Tag doc | `/api/tag_doc` | Single-blob GZIP-compressed tag-archive download (`all_bin`). |
 
-## Read-through cache — fast front-end bootstrap
+## Cache invalidation — admin refresh endpoints
 
-The `cache` domain serves precomputed snapshots straight from Redis so the
-map client can cold-start without hitting PostgreSQL. Each sub-route mirrors
-a content domain.
+The `cache` domain exposes admin-only `DELETE` endpoints (mirroring the Java
+`CacheService.clean*` surface) that flush server-side caches so clients
+refetch fresh data on their next poll. Each sub-route mirrors a content
+domain; today the item / marker / marker-link handlers flush the BinaryMD5
+caches (and broadcast a WebSocket purge event), while the remaining
+sub-routes are no-ops pending their cache layers. `POST /app/trigger/update`
+flushes every BinaryMD5 cache in one shot.
 
 | Domain | Prefix | Purpose |
 | --- | --- | --- |
-| Cache | `/api/cache/{area,common_item,icon_tag,item,marker,marker_link,notice}` | Hot, Redis-backed read views per content type. |
+| Cache | `/api/cache/{area,common_item,icon_tag,item,marker,marker_link,notice}` | Admin cache-refresh (DELETE) endpoints per content type. |
 
 ## Community workflow — scoring
 
@@ -70,7 +82,7 @@ Mounted under `/system/*`, these are the administration and account surface.
 | Invitation | `/system/invitation` | Invitation-code generation, consumption, listing. |
 | Archive | `/system/archive` | Per-user save-slot archives (get/put/save/rename/restore/delete). |
 | Action log | `/system/action_log` | Audit log of administrative actions. |
-| OAuth | `/oauth/token` | OAuth2 token issuance (JWT + JWKS, port in progress). |
+| OAuth | `/oauth/token` | OAuth2 token issuance (JWT + JWKS, RS256 or HS256; grants: password, QQ, refresh_token, client_credentials). |
 
 ## Notes on parity
 

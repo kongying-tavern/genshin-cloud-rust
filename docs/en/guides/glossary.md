@@ -6,7 +6,7 @@
 > actual Rust/Java identifiers in the codebase.
 > The project is a Rust rewrite of
 > [`genshin-map-cloud`](https://github.com/kongying-tavern/genshin-map-cloud).
-> Identifier names are kept in lockstep across both languages; where a name is
+> Identifier names are kept in lockstep across both codebases; where a name is
 > surprising (e.g. the misspelling of `Suprise`), it is preserved for parity
 > and called out here.
 
@@ -25,7 +25,7 @@ These are the tables that hold the map's actual data. All live under the
 | 图标 | icon (marker visual) | `icon` table | The picture drawn on top of a marker. Item → icon → marker is the rendering chain. |
 | 地区 | area (game region) | `area` table, `AreaVO` | A game region: 蒙德 (Mondstadt), 璃月 (Liyue), 稻妻 (Inazuma), 须弥 (Sumeru), 枫丹 (Fontaine), 纳塔 (Natlan), 至冬 (Snezhnaya), etc. Hierarchical via `parent_id`. |
 | 路线 | route (farming path) | `route` table | A predefined farming path drawn through multiple markers. Distinct from `marker_linkage`, which is a relationship edge. |
-| 神瞳 | Oculus (collectible type) | — (represented as an icon style) | Anemoculus (风神瞳), Geoculus (岩神瞳), Electroculus (雷神瞳), Dendroculus (草神瞳), Hydroculus (水神瞳), Pyroculus (火神瞳), Cryculus (冰神瞳). Not a separate table; modeled as items with a specific icon/style. |
+| 神瞳 | Oculus (collectible type) | — (represented as an icon style) | Anemoculus (风神瞳), Geoculus (岩神瞳), Electroculus (雷神瞳), Dendroculus (草神瞳), Hydroculus (水神瞳), Pyroculus (火神瞳), Cryoculus (冰神瞳). Not a separate table; modeled as items with a specific icon/style. |
 | 宝箱 | chest | — (item + icon) | Likewise modeled as an item/icon combination rather than its own table. |
 
 ## Tagging and categorization

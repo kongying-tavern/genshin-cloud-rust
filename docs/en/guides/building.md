@@ -7,7 +7,7 @@ variables, the local docker-compose stack, and how CI mirrors the same steps.
 
 | Tool | Why | Notes |
 | --- | --- | --- |
-| Rust (stable) | Compiles the workspace. | Pinned by `rust-toolchain.toml` (stable + `rustfmt` + `clippy`). Edition 2024. |
+| Rust (stable) | Compiles the workspace. | Pinned by `rust-toolchain.toml` (stable + `rustfmt` + `clippy`). Edition 2024, MSRV 1.94 (`rust-version` in the root `Cargo.toml`; `sqlx` 0.9 needs 1.94). |
 | [`just`](https://github.com/casey/just) | Task runner; the recommended entry point. | `justfile` imports `celestia-devtools.just`. |
 | Docker + `docker-compose` | Local Postgres, Redis, MinIO. | Use `dev.compose.yml`. |
 | `celestia-devtools` (Python) | Commit-msg hook + markdown formatting. | From [celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools). Install once with `pip install git+https://github.com/celestia-island/celestia-devtools.git` (or clone + `pip install -e .`). The repo vendors a trimmed copy as `celestia-devtools.just`; refresh with `celestia-devtools init --force`. |
@@ -105,5 +105,5 @@ GitHub Actions mirrors the local `just ci` flow and adds repo hygiene under
 | `docs.yml` | On changes under `docs/**`: builds the multilingual site with `lagrange` and deploys to GitHub Pages. |
 
 Note: CI runs clippy with `-D warnings` across the whole workspace; the
-changelog convention was retired in favor of merged PRs as the change history
-(see `AGENTS.md`).
+hand-maintained revision-history file was retired in favor of merged PRs as
+the change history (see `AGENTS.md`).
