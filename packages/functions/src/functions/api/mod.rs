@@ -16,7 +16,7 @@ pub mod marker_link;
 pub mod marker_link_doc;
 pub mod notice;
 pub mod res;
-// 已弃用（对齐决策，见 docs/zh-chs/guides/sync-with-java-roadmap.md）：
+// 已弃用（对齐决策，见 docs/zh-Hans/guides/sync-with-java-roadmap.md）：
 // Java 的 route / punctuate / punctuate_audit 三域业务不在本后端实现。
 // pub mod route;
 pub mod score;

@@ -1,5 +1,3 @@
-# Genshin Map Cloud — Rust Backend
-
 [Overview](./README.md)
 
 ---
@@ -20,6 +18,3 @@
 - [Design Index](./designs/README.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
-
----
-

@@ -35,7 +35,7 @@ Rust 後端的目標是與 Java 參考實現 `genshin-map-cloud` 功能對齊。
 - 批次 7：JWK 輪換未實現（密鑰固定，無輪換機制）；HS256 模式下 JWKS 爲空 key set（簽名密鑰不對外公佈）。
 - 數據庫 schema 與真實庫的偏差待數據驗證（`marker_linkage` 空值列、
   `sys_user_archive` 結構綁定等）。
-- 文檔翻譯：`docs/` 僅保留 en / zh-chs / zh-cht 三種語言並同步維護。
+- 文檔翻譯：`docs/` 僅保留 en / zh-Hans / zh-Hant 三種語言並同步維護。
 
 ## 跟進事項
 

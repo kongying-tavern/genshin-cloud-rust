@@ -7,9 +7,6 @@ while improving performance, deployment ergonomics, and type safety. The Rust
 and Java sides share the same PostgreSQL schema (`genshin_map`) during the
 migration, so they can run against the same database.
 
-> **简体中文** · [English](./README.md) — this is the English entry point,
-> linked from the top-level [`README.md`](../../../README.md).
-
 ## Tech stack
 
 | Layer | Technology |
