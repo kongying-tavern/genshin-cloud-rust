@@ -12,7 +12,7 @@
 `utils / database / functions / router` 四个包，逐层从底向上依赖。鉴权由
 `jsonwebtoken` + `bcrypt` 提供，运行时为 `tokio`，日志走 `tracing`。
 
-## 指南 / Guides
+## 指南
 
 | 文档 | 说明 |
 | --- | --- |
@@ -25,7 +25,7 @@
 | [Java 同步路线图](./guides/sync-with-java-roadmap.md) | Java 侧范围与七个移植优先级批次 |
 | [域同步模板](./guides/domain-sync-template.md) | 单域移植的五层落地模式与 area 示例 |
 
-## 设计文档 / Designs
+## 设计文档
 
 - [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md) — 客户端冷启动的全量数据 GZIP 压缩增量同步管线
 - [隐藏标记与特殊标记](./designs/hidden-and-special-flags.md) — `hidden_flag` 数据级防剧透 + `special_flag` 位掩码过滤
@@ -33,13 +33,7 @@
 以下设计文档已编写完成。后续将记录 `rustls+ring` 加密后端选型、`sea-orm` 1.x→2.x
 迁移、`SafeEntityTrait` 宏重写等关键决策。
 
-## 快速入口
-
-- 完整 README（含快速开始与许可证）：[详细说明](./guides/README.md)
-- 目录（mdBook/lagrange 风格）：[SUMMARY](./SUMMARY.md)
-- 顶层项目说明：[仓库根 README](../../README.md)
-
-## 其他语言 / Other Languages
+## 其他语言
 
 本站提供 English / 简体中文 / 繁體中文 三种语言，请使用页面底部的语言
 切换菜单（偏好会保存在浏览器中，链接可通过 `?lang=` 参数分享）。

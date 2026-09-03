@@ -123,7 +123,7 @@ usage.
 
 本后端实现与 Java 侧一致的 API 契约，直接服务空荧酒馆的前端项目（绝大多数
 `/api/*` 路由已逐条对齐；Java 的 `route` / `punctuate` / `punctuate_audit`
-域**有意不提供**——见 `docs/zh-chs/guides/sync-with-java-roadmap.md`）：
+域**有意不提供**——见 `docs/zh-Hans/guides/sync-with-java-roadmap.md`）：
 
 | 前端仓库 | 关系 |
 | --- | --- |
@@ -139,7 +139,7 @@ This backend implements the same API contract as the Java side and serves the
 Kongying Tavern frontend projects directly (the vast majority of `/api/*`
 routes are aligned one by one; the Java `route` / `punctuate` /
 `punctuate_audit` domains are **intentionally not provided** — see
-`docs/zh-chs/guides/sync-with-java-roadmap.md`):
+`docs/zh-Hans/guides/sync-with-java-roadmap.md`):
 
 | Frontend repo | Relationship |
 | --- | --- |
@@ -210,7 +210,7 @@ packages/
 Full architecture, design decisions, and guides live under `docs/`
 (multilingual):
 
-- **[简体中文文档](./docs/zh-chs/README.md)** — 架构、构建、API 参考、Java 同步路线图
+- **[简体中文文档](./docs/zh-Hans/README.md)** — 架构、构建、API 参考、Java 同步路线图
 - **[English docs](./docs/en/README.md)** — architecture, building, API reference, Java-sync roadmap
 
 ## 提交规范 / Commit Convention
@@ -227,7 +227,7 @@ This project follows the celestia-island org
 The [`celestia-devtools`](https://github.com/celestia-island/celestia-devtools)
 commit-msg hook enforces this on every `git commit`.
 
-详见 / See: [提交规范](./docs/zh-chs/guides/commit-message-convention.md) /
+详见 / See: [提交规范](./docs/zh-Hans/guides/commit-message-convention.md) /
 [Commit Convention](./docs/en/guides/commit-message-convention.md)
 
 ## 迭代工作流 / Iteration Workflow

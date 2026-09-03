@@ -66,8 +66,8 @@ current status.
 - Database schema deviations from the real database await data validation
   (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
 - Translation: the docs ship in three maintained languages — English
-  (`docs/en`), Simplified Chinese (`docs/zh-chs`), and Traditional Chinese
-  (`docs/zh-cht`).
+  (`docs/en`), Simplified Chinese (`docs/zh-Hans`), and Traditional Chinese
+  (`docs/zh-Hant`).
 
 ## Rotating the JWT signing key (RS256)
 
