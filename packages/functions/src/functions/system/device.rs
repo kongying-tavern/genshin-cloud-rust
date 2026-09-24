@@ -86,7 +86,7 @@ pub async fn do_list(
 }
 
 /// Update device status (e.g. block/unblock a device).
-pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonResponse<()>> {
+pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonResponse<bool>> {
     let db = &DB_CONN.wait().pg_conn;
 
     let d = device_model::Entity::find_safety_by_id(id)
@@ -114,5 +114,5 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
         let _ = crate::functions::system::user::revoke_user_sessions(uid).await;
     }
 
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }

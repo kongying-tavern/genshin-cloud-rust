@@ -18,8 +18,10 @@
 //! - item.iconStyleType: numeric 0-3 from the frontend.
 //! - sys_user_archive.data: newest-first history array (numeric ms `time`),
 //!   legacy string-time entries and old bare-string writes all parse.
-//! - sys_user.password: `{bcrypt}`-prefixed storage (68 chars).
+//! - sys_user password storage: `{bcrypt}` prefix (68 chars total).
 //! - area add request: the frontend form carries no isFinal (server-computed).
+//! - marker_link get/list & get/graph request: isTraverse / groupIds both
+//!   optional (Java MarkerLinkageSearchVo) — full-sync sends isTraverse only.
 
 use _database::models::common::notice::ChannelWrapper;
 use _utils::bcrypt;
@@ -28,7 +30,9 @@ use _utils::models::{
     history::HistoryItemVO,
     item::ItemRequest,
     marker::{MarkerItemLinkVo, MarkerVO},
-    marker_link::MarkerLinkVO,
+    marker_link::{
+        MarkerLinkGraphRequest, MarkerLinkListRequest, MarkerLinkSearchRequest, MarkerLinkVO,
+    },
     notice::{NoticeAddRequest, NoticeChannel, NoticeVO},
     system::{SysArchiveSlotVo, SysArchiveVo},
 };
@@ -332,7 +336,8 @@ fn marker_linkage_link_action_uppercase() {
 
 #[test]
 fn sys_user_password_prefix() {
-    // Real DB shape (audit): password = `{bcrypt}$2a$...` (68 chars total).
+    // Real DB shape (audit): stored values start with the `{bcrypt}` prefix,
+    // 68 chars total (bcrypt hash body included).
     let stored = bcrypt::generate_storage_password("pw123").expect("generate storage password");
     assert!(
         stored.starts_with("{bcrypt}"),
@@ -726,4 +731,45 @@ fn marker_extra_underground() {
     let no_extra = MarkerVO { extra: None, ..vo };
     let j = serde_json::to_value(&no_extra).expect("serialize MarkerVO without extra");
     assert!(j["extra"].is_null(), "missing extra serializes as null");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. marker_link get/list & get/graph 请求体 — isTraverse 与 groupIds 均可选
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn marker_link_search_request_both_shapes_parse() {
+    // Java `MarkerLinkageSearchVo { Boolean isTraverse; List<String> groupIds; }`
+    // 两字段皆可缺省。前端 register 端「同步全量关联」只传 `{ isTraverse: true }`
+    // —— 回归：groupIds 曾是必填字段，该请求直接 422 "missing field `groupIds`"。
+    let traverse: MarkerLinkSearchRequest = serde_json::from_value(serde_json::json!({
+        "isTraverse": true
+    }))
+    .expect("isTraverse-only body must parse");
+    assert_eq!(traverse.is_traverse, Some(true));
+    assert_eq!(traverse.group_ids, None);
+
+    // 按组刷新只传 groupIds。
+    let grouped: MarkerLinkSearchRequest = serde_json::from_value(serde_json::json!({
+        "groupIds": ["851168d7d77d434e93881e504f2a4df1"]
+    }))
+    .expect("groupIds-only body must parse");
+    assert_eq!(grouped.is_traverse, None);
+    assert_eq!(
+        grouped.group_ids,
+        Some(vec!["851168d7d77d434e93881e504f2a4df1".to_string()])
+    );
+
+    // 空 body（Java 两分支都不命中 → 返回空 map，而非 422）。
+    let empty: MarkerLinkSearchRequest = serde_json::from_str("{}").expect("empty body must parse");
+    assert_eq!(empty.is_traverse, None);
+    assert_eq!(empty.group_ids, None);
+
+    // list / graph 两个端点共用同一请求模型。
+    let list: MarkerLinkListRequest =
+        serde_json::from_str(r#"{"isTraverse":true}"#).expect("list endpoint shape");
+    assert_eq!(list.is_traverse, Some(true));
+    let graph: MarkerLinkGraphRequest =
+        serde_json::from_str(r#"{"isTraverse":true}"#).expect("graph endpoint shape");
+    assert_eq!(graph.is_traverse, Some(true));
 }

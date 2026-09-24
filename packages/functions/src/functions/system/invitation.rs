@@ -18,7 +18,7 @@ use _utils::{
     bcrypt,
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
-    models::{SysUserInvitationVo, wrapper::CommonResponse},
+    models::{SysUserInvitationSmallVo, SysUserInvitationVo, wrapper::CommonResponse},
     types::{AccessPolicyList, InvitationSort, SystemUserRole},
 };
 
@@ -93,7 +93,12 @@ pub async fn do_list(
 }
 
 /// Update or create an invitation by code (upsert semantics).
-/// `code` 为空时生成新邀请码并插入；`code` 有值时按 code 更新，查不到则插入。
+/// 对齐 Java `updateInvitation`：
+/// - username 不能为空；目标用户已存在则不可邀请；
+/// - code+username 精确命中 → 更新该行（保留原 code）；
+/// - 未命中但同名邀请已存在 → 拒绝（请编辑已有邀请）；
+/// - 否则以给定 code 插入，code 缺省时生成新邀请码；
+/// - 返回 `{code, username}`（Java `SysUserInvitationSmallVo`）。
 pub async fn do_update(
     auth: AuthInfo,
     code: Option<String>,
@@ -101,8 +106,22 @@ pub async fn do_update(
     role_id: i64,
     remark: String,
     access_policy: Vec<_utils::types::AccessPolicyItemEnum>,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<SysUserInvitationSmallVo>> {
     let db = &DB_CONN.wait().pg_conn;
+
+    // Java updateInvitation：用户名不能为空
+    if username.trim().is_empty() {
+        return Err(anyhow!("用户名不能为空"));
+    }
+    // Java updateInvitation：用户已存在则不可再邀请
+    let user_exists = sys_user_model::Entity::find_safety()
+        .filter(sys_user_model::Column::Username.eq(&username))
+        .count(db)
+        .await?
+        > 0;
+    if user_exists {
+        return Err(anyhow!("用户【{username}】已存在，无法邀请"));
+    }
 
     let role = match role_id {
         0 => _utils::types::SystemUserRole::Admin,
@@ -120,47 +139,49 @@ pub async fn do_update(
     }
     let access_policy = serde_json::to_value(AccessPolicyList(access_policy))?;
 
-    if let Some(c) = code {
-        if let Some(inv) = inv_model::Entity::find_safety()
-            .filter(inv_model::Column::Code.eq(&c))
-            .one(db)
-            .await?
-        {
-            let mut am: inv_model::ActiveModel = inv.into();
-            am.username = Set(username);
-            am.role_id = Set(Some(role));
-            am.remark = Set(Some(remark));
-            am.access_policy = Set(Some(access_policy));
-            am.updater_id = Set(Some(auth.info.id));
-            inv_model::Entity::update_safety(am)?.exec(db).await?;
-            return Ok(CommonResponse::new(Ok(())));
-        }
+    // Java getInvitation(code, username)：code+username 精确匹配才视为「编辑」
+    let existing = match &code {
+        Some(c) => {
+            inv_model::Entity::find_safety()
+                .filter(inv_model::Column::Code.eq(c))
+                .filter(inv_model::Column::Username.eq(&username))
+                .one(db)
+                .await?
+        },
+        None => None,
+    };
 
-        let now = Utc::now().naive_utc();
-        let am = inv_model::ActiveModel {
-            version: Set(0),
-            id: NotSet,
-            // 审计字段：新增时 create/update 两组全部设置
-            create_time: Set(now),
-            update_time: Set(Some(now)),
-            creator_id: Set(Some(auth.info.id)),
-            updater_id: Set(Some(auth.info.id)),
-            del_flag: Set(false),
-            code: Set(c),
-            username: Set(username),
-            role_id: Set(Some(role)),
-            remark: Set(Some(remark)),
-            access_policy: Set(Some(access_policy)),
-        };
-        inv_model::Entity::insert(am).exec(db).await?;
-        return Ok(CommonResponse::new(Ok(())));
+    if let Some(inv) = existing {
+        let mut am: inv_model::ActiveModel = inv.into();
+        am.username = Set(username.clone());
+        am.role_id = Set(Some(role));
+        am.remark = Set(Some(remark));
+        am.access_policy = Set(Some(access_policy));
+        am.updater_id = Set(Some(auth.info.id));
+        inv_model::Entity::update_safety(am)?.exec(db).await?;
+        return Ok(CommonResponse::new(Ok(SysUserInvitationSmallVo {
+            code: code.unwrap_or_default(),
+            username,
+        })));
     }
 
-    // 邀请码：uuid 前 12 位 hex（48 bit 熵，显著高于原 8 位，降低撞码/爆破风险）
-    let code = &uuid::Uuid::new_v4().simple().to_string()[..12];
+    // Java：code+username 未命中时，同名（不同 code）邀请已存在 → 拒绝
+    let same_username = inv_model::Entity::find_safety()
+        .filter(inv_model::Column::Username.eq(&username))
+        .one(db)
+        .await?;
+    if same_username.is_some() {
+        return Err(anyhow!(
+            "已存在用户【{username}】的邀请，请编辑已有邀请信息"
+        ));
+    }
+
+    // 邀请码：给定了就用给定的；缺省时 uuid 前 12 位 hex
+    // （48 bit 熵，显著高于原 8 位，降低撞码/爆破风险）
+    let code = code.unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string()[..12].to_string());
     let now = Utc::now().naive_utc();
     let am = inv_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -168,14 +189,17 @@ pub async fn do_update(
         creator_id: Set(Some(auth.info.id)),
         updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
-        code: Set(code.to_string()),
-        username: Set(username),
+        code: Set(code.clone()),
+        username: Set(username.clone()),
         role_id: Set(Some(role)),
         remark: Set(Some(remark)),
         access_policy: Set(Some(access_policy)),
     };
     inv_model::Entity::insert(am).exec(db).await?;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(SysUserInvitationSmallVo {
+        code,
+        username,
+    })))
 }
 
 /// Check invitation info by code.
@@ -271,7 +295,7 @@ pub async fn do_consume(
     }
 
     let user_am = sys_user_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
         // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
@@ -309,7 +333,7 @@ pub async fn do_consume(
 }
 
 /// Delete an invitation by id (soft delete).
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety_by_id(id)
         .one(db)
@@ -320,5 +344,5 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(_auth.info.id));
     inv_model::Entity::delete_safety(am)?.exec(db).await?;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }

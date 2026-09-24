@@ -201,7 +201,7 @@ async fn ensure_admin_account(db: &sea_orm::DatabaseConnection) -> Result<()> {
 
     let now = chrono::Utc::now().naive_utc();
     sys_user_entity::Entity::insert(sys_user_entity::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: sea_orm::ActiveValue::NotSet,
         // 审计字段：新增时 create/update 两组全部设置（系统引导，操作者记 0）
         create_time: Set(now),

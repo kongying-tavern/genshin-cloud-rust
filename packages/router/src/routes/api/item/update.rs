@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractManager;
-use _utils::models::{common::EmptyResponse, item::ItemUpdateData, wrapper::CommonResponse};
+use _utils::models::item::ItemUpdateData;
 
 /// 修改物品
 /// 提供修改同名物品功能，默认关闭
@@ -18,7 +18,7 @@ pub async fn update(
     Json(payload): Json<Vec<ItemUpdateData>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item::do_update(auth, edit_same != 0, payload).await {
-        Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
+        Ok(resp) => Ok(Json(resp).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

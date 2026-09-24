@@ -1,5 +1,4 @@
 pub mod area;
-pub mod common;
 pub mod history;
 pub mod icon;
 pub mod icon_type;

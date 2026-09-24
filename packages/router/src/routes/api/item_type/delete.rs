@@ -3,7 +3,6 @@ use anyhow::Result;
 use axum::{extract::Json, extract::Path, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
-use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除物品类型
 /// 批量递归删除物品类型，需在前端做二次确认
@@ -14,7 +13,7 @@ pub async fn delete(
     Path(item_type_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::item_type::do_delete(auth, item_type_id).await {
-        Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
+        Ok(resp) => Ok(Json(resp).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

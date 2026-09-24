@@ -7,6 +7,7 @@ Runs `pnpm install` if node_modules is missing.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -56,10 +57,15 @@ def ensure_deps() -> bool:
             return True
 
     info(TARGET, "Running pnpm install...")
+    # Resolve pnpm to an absolute path (pnpm.cmd on Windows) so the child runs
+    # as a plain argv list without going through the shell.
+    pnpm = shutil.which("pnpm")
+    if not pnpm:
+        error(TARGET, "pnpm not found on PATH — cannot install frontend deps")
+        return False
     result = subprocess.run(
-        ["pnpm", "install"],
+        [pnpm, "install"],
         cwd=str(VUE_FRONTEND),
-        shell=True,
         capture_output=True,
         text=True,
         timeout=300,

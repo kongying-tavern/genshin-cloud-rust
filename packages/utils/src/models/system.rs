@@ -186,3 +186,14 @@ pub struct SysUserInvitationVo {
     /// 权限策略
     pub access_policy: Option<serde_json::Value>,
 }
+
+/// 用户邀请精简 VO（对齐 Java `SysUserInvitationSmallVo`，
+/// `updateInvitation` 的返回体：把最终邀请码回给管理端展示/复制）
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SysUserInvitationSmallVo {
+    /// 邀请码
+    pub code: String,
+    /// 用户名
+    pub username: String,
+}

@@ -135,7 +135,7 @@ async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result
 
     // 首次登记：status 初始化为 0（正常）。
     let am = models::system::sys_user_device::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -509,7 +509,7 @@ async fn record_login_log(
     is_error: bool,
 ) -> Result<()> {
     models::system::sys_action_log::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置；操作者即登录主体
         //（未知用户名的失败登录记 0）

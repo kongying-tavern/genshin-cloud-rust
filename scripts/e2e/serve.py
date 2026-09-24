@@ -24,12 +24,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (  # noqa: E402
     PID_FILE,
     REPO_ROOT,
+    RUST_LOG_NAME,
     RUST_PORT,
     RUST_URL,
-    STATE_DIR,
     VUE_FRONTEND,
+    VUE_LOG_NAME,
     VUE_PORT,
     VUE_URL,
+    guarded_url,
+    local_fetch,
+    open_state_log,
 )
 from log import info, warn, error  # noqa: E402
 
@@ -52,14 +56,16 @@ def _load_env() -> dict[str, str]:
     return env
 
 
-def _wait_for_http(url: str, timeout: float = 60) -> bool:
+def _wait_for_http(base: str, path: str = "/", timeout: float = 60) -> bool:
     import urllib.error
-    import urllib.request
 
+    # Pin the probe to the configured local service; any other origin is a
+    # configuration bug and fails fast via guarded_url.
+    url = guarded_url(base, path)
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            urllib.request.urlopen(url, timeout=3)
+            local_fetch(url, timeout=3)
             return True
         except urllib.error.HTTPError:
             return True
@@ -136,11 +142,11 @@ def start_rust() -> dict | None:
         cmd,
         cwd=str(REPO_ROOT),
         env=env,
-        stdout=open(STATE_DIR / "rust.log", "w", encoding="utf-8"),
+        stdout=open_state_log(RUST_LOG_NAME),
         stderr=subprocess.STDOUT,
     )
 
-    if _wait_for_http(f"{RUST_URL}/", timeout=120):
+    if _wait_for_http(RUST_URL, timeout=120):
         info(TARGET, f"Rust backend ready at {RUST_URL}")
         return {"pid": proc.pid, "url": RUST_URL, "name": "rust"}
     else:
@@ -151,11 +157,16 @@ def start_rust() -> dict | None:
 
 def start_vue() -> dict | None:
     info(TARGET, f"Starting Vue dev server on port {VUE_PORT}...")
+    # Resolve pnpm to an absolute path (pnpm.cmd on Windows) so the child can
+    # be spawned as a plain argv list without going through the shell.
+    pnpm = shutil.which("pnpm")
+    if not pnpm:
+        error(TARGET, "pnpm not found on PATH — cannot start Vue dev server")
+        return None
     proc = subprocess.Popen(
-        ["pnpm", "dev"],
+        [pnpm, "dev"],
         cwd=str(VUE_FRONTEND),
-        shell=True,
-        stdout=open(STATE_DIR / "vue.log", "w", encoding="utf-8"),
+        stdout=open_state_log(VUE_LOG_NAME),
         stderr=subprocess.STDOUT,
     )
 

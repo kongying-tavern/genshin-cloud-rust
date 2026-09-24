@@ -15,7 +15,6 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse,
         tag::{
             TagAddRequest, TagAddResponse, TagListRequest, TagListResponse, TagUpdateRequest,
             TagUpdateTypeRequest, TagVO,
@@ -38,7 +37,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
     let now = Utc::now().naive_utc();
 
     let am = tag_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -65,10 +64,7 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
 }
 
 /// 更新标签
-pub async fn do_update(
-    auth: AuthInfo,
-    payload: TagUpdateRequest,
-) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
@@ -104,7 +100,7 @@ pub async fn do_update(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 标签列表（分页 + 模糊搜索）
@@ -168,7 +164,7 @@ pub async fn do_list(
 }
 
 /// 软删除标签
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
@@ -185,7 +181,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 修改标签的分类信息（Java `updateTypeInTag`，仅供后台使用）：
@@ -238,7 +234,7 @@ pub async fn do_update_type(
     // 重建关联
     for type_id in payload.type_id_list {
         ttl_model::Entity::insert(ttl_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -278,7 +274,7 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
 
     let now = Utc::now().naive_utc();
     tag_model::Entity::insert(tag_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),

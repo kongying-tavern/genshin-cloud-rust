@@ -59,7 +59,7 @@ fn parse_valid_time(
 pub async fn do_update_notice(
     auth: AuthInfo,
     payload: NoticeUpdateRequest,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
@@ -91,7 +91,7 @@ pub async fn do_update_notice(
 
     notice_model::Entity::update_safety(am)?.exec(db).await?;
     super::super::ws::ws_broadcast("NoticeUpdated", serde_json::json!(payload.id));
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_get_notice_list(
@@ -195,7 +195,7 @@ pub async fn do_get_notice_list(
     Ok(CommonResponse::new(Ok(payload)).with_users(users))
 }
 
-pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<()>> {
+pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let n = notice_model::Entity::find_safety_by_id(id).one(db).await?;
@@ -204,7 +204,7 @@ pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<
     am.del_flag = Set(true);
     notice_model::Entity::delete_safety(am)?.exec(db).await?;
     super::super::ws::ws_broadcast("NoticeDeleted", serde_json::json!(id));
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_add_notice(
@@ -214,7 +214,7 @@ pub async fn do_add_notice(
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
     let active = notice_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),

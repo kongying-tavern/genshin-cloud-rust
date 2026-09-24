@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -58,6 +59,13 @@ def main() -> int:
     conn.autocommit = True
     cur = conn.cursor()
 
+    # SQL identifiers can't be bound as query parameters, so validate them
+    # against a strict allow-list before interpolation.
+    ident_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    if not ident_re.fullmatch(schema):
+        print(f"Refusing invalid DB_SCHEMA identifier: {schema!r}", file=sys.stderr)
+        return 1
+
     # ── Wipe the demo-scoped business tables (not sys_user etc.) ────────────
     for table in (
         "marker_punctuate",
@@ -75,6 +83,8 @@ def main() -> int:
         "icon",
         "area",
     ):
+        if not ident_re.fullmatch(table):
+            raise ValueError(f"refusing invalid table identifier: {table!r}")
         cur.execute(f'DELETE FROM "{schema}"."{table}"')
 
     now = "(now() AT TIME ZONE 'UTC')"

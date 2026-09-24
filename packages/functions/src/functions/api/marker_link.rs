@@ -111,6 +111,18 @@ pub(super) fn patch_path_coords(vos: &mut [MarkerLinkVO], coords: &HashMap<i64, 
     }
 }
 
+/// 载入关联并完成 Java 读侧两步变换（reverse + 坐标回填）。
+async fn finish_vos(
+    db: &sea_orm::DatabaseConnection,
+    mut vos: Vec<MarkerLinkVO>,
+) -> Result<Vec<MarkerLinkVO>> {
+    reverse_linkage_vos(&mut vos);
+    let path_ids = path_marker_ids(&vos);
+    let coords = path_marker_coords(db, &path_ids).await?;
+    patch_path_coords(&mut vos, &coords);
+    Ok(vos)
+}
+
 /// 载入分组关联并完成 Java 读侧两步变换（reverse + 坐标回填）。
 async fn load_group_vos(
     db: &sea_orm::DatabaseConnection,
@@ -126,11 +138,34 @@ async fn load_group_vos(
             vos.push(model_to_vo(it));
         }
     }
-    reverse_linkage_vos(&mut vos);
-    let path_ids = path_marker_ids(&vos);
-    let coords = path_marker_coords(db, &path_ids).await?;
-    patch_path_coords(&mut vos, &coords);
-    Ok(vos)
+    finish_vos(db, vos).await
+}
+
+/// 载入全部关联（Java `getLinkageList(isTraverse=true)` 的全表分支）。
+async fn load_all_vos(db: &sea_orm::DatabaseConnection) -> Result<Vec<MarkerLinkVO>> {
+    let vos: Vec<MarkerLinkVO> = linkage_model::Entity::find_safety()
+        .all(db)
+        .await?
+        .into_iter()
+        .map(model_to_vo)
+        .collect();
+    finish_vos(db, vos).await
+}
+
+/// Java `MarkerLinkageHelperService.getLinkageList` 的取数分支：
+/// `isTraverse` 优先（全量），否则按组查询，两者皆无 → 空。
+async fn load_vos(
+    db: &sea_orm::DatabaseConnection,
+    is_traverse: bool,
+    group_ids: &[String],
+) -> Result<Option<Vec<MarkerLinkVO>>> {
+    if is_traverse {
+        Ok(Some(load_all_vos(db).await?))
+    } else if !group_ids.is_empty() {
+        Ok(Some(load_group_vos(db, group_ids).await?))
+    } else {
+        Ok(None)
+    }
 }
 
 /// 将数据库模型转换为前端 VO（字段与前端 `MarkerLinkageVo` 对齐）
@@ -310,7 +345,7 @@ pub async fn do_link(
         } else {
             let now = chrono::Utc::now().naive_utc();
             let active = linkage_model::ActiveModel {
-                version: Set(0),
+                version: Set(1),
                 id: NotSet,
                 // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),
@@ -361,12 +396,17 @@ pub async fn do_get_list(
     _auth: AuthInfo,
     payload: MarkerLinkListRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    // 与 Java 实现一致：未指定组 ID 时返回空 map
-    if payload.group_ids.is_empty() {
-        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
-    }
     let db = &DB_CONN.wait().pg_conn;
-    let vos = load_group_vos(db, &payload.group_ids).await?;
+    // 与 Java 实现一致：isTraverse 全量优先，否则按组，皆未指定时返回空 map
+    let Some(vos) = load_vos(
+        db,
+        payload.is_traverse.unwrap_or(false),
+        &payload.group_ids.unwrap_or_default(),
+    )
+    .await?
+    else {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
     // 按组返回，前端期望 `Record<string, MarkerLinkageVo[]>`
     let mut map: HashMap<String, Vec<MarkerLinkVO>> = HashMap::new();
     for vo in vos {
@@ -682,12 +722,17 @@ pub async fn do_get_graph(
     _auth: AuthInfo,
     payload: MarkerLinkGraphRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    // 与 Java 实现一致：未指定组 ID 时返回空 map
-    if payload.group_ids.is_empty() {
-        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
-    }
     let db = &DB_CONN.wait().pg_conn;
-    let vos = load_group_vos(db, &payload.group_ids).await?;
+    // 与 Java 实现一致：isTraverse 全量优先，否则按组，皆未指定时返回空 map
+    let Some(vos) = load_vos(
+        db,
+        payload.is_traverse.unwrap_or(false),
+        &payload.group_ids.unwrap_or_default(),
+    )
+    .await?
+    else {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
     let mut graphs = build_linkage_graph(&vos);
     // 坐标回填（Java graphMarkerLinkage 末段）
     let mut path_ids: Vec<i64> = Vec::new();

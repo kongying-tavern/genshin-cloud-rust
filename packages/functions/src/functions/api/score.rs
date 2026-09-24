@@ -90,7 +90,7 @@ pub async fn do_generate_score(
         let score = field_weight;
 
         let am = score_stat_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: sea_orm::ActiveValue::NotSet,
             // 审计字段：新增时 create/update 两组全部设置（行主即贡献者）
             create_time: Set(now),

@@ -34,7 +34,7 @@ pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonRes
     let now = Utc::now().naive_utc();
 
     let active = icon_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -82,7 +82,7 @@ async fn write_icon_type_links(operator_id: i64, icon_id: i64, type_ids: &[i64])
     let now = chrono::Utc::now().naive_utc();
     for tid in type_ids {
         icon_type_link_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -204,7 +204,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 }
 
 // 更新图标
-pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<CommonResponse<()>> {
+pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let item = icon_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
@@ -224,7 +224,7 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
         write_icon_type_links(auth.info.id, payload.id, &type_ids).await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// icon_id -> tag.tag 映射（前端 sprite 的 tagCoordMap key 是 tag 表的

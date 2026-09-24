@@ -228,7 +228,7 @@ pub async fn do_add(auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64> 
     let now = chrono::Utc::now().naive_utc();
 
     let active = icon_type_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),

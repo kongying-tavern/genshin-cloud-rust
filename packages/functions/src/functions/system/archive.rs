@@ -256,7 +256,7 @@ pub async fn do_save(
         },
         None => {
             let am = archive_model::ActiveModel {
-                version: Set(0),
+                version: Set(1),
                 id: NotSet,
                 // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),
