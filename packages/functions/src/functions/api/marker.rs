@@ -592,7 +592,7 @@ async fn insert_item_link<C: sea_orm::ConnectionTrait>(
 ) -> Result<()> {
     let now = Utc::now().naive_utc();
     let am = mil_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         // id 为 IDENTITY 列：NotSet 走自增，避免多条插入共用 id=0 撞主键
         id: sea_orm::ActiveValue::NotSet,
         // 审计字段：新增时 create/update 两组全部设置
@@ -652,7 +652,7 @@ pub async fn do_add_single(
     let db = &DB_CONN.wait().pg_conn;
 
     let active = marker_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),

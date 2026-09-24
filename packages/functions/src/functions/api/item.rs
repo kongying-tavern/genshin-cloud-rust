@@ -191,7 +191,7 @@ async fn update_one(
     for t in &p.type_id_list {
         let now = chrono::Utc::now().naive_utc();
         let active = link_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -291,7 +291,7 @@ pub async fn do_join_type(
     auth: AuthInfo,
     type_id: i64,
     payload: Vec<i64>,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<bool>> {
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
@@ -338,7 +338,7 @@ pub async fn do_join_type(
         }
         let now = chrono::Utc::now().naive_utc();
         let active = link_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -358,7 +358,7 @@ pub async fn do_join_type(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_get_list_by_id(
@@ -498,7 +498,7 @@ pub async fn do_copy_to_area(
                 .await?;
             for l in links {
                 let active = link_model::ActiveModel {
-                    version: Set(0),
+                    version: Set(1),
                     id: NotSet,
                     // 审计字段：新增时 create/update 两组全部设置
                     create_time: Set(chrono::Utc::now().naive_utc()),
@@ -531,7 +531,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = item_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -578,7 +578,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
         for t in &payload.type_id_list {
             let now = chrono::Utc::now().naive_utc();
             let active = link_model::ActiveModel {
-                version: Set(0),
+                version: Set(1),
                 id: NotSet,
                 // 审计字段：新增时 create/update 两组全部设置
                 create_time: Set(now),

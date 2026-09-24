@@ -43,7 +43,7 @@ across replicas.
 | --- | --- | --- |
 | Icon doc | `/api/icon_doc` | Single-blob GZIP-compressed icon-archive download (`all_bin`). |
 | Item doc | `/api/item_doc` | Paginated GZIP-compressed item-archive download (`list_page_bin`). |
-| Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download. |
+| Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download plus the protobuf diff snapshot. |
 | Marker link doc | `/api/marker_link_doc` | Single-blob marker-link archives: flat list and adjacency graph (`all_list_bin` / `all_graph_bin`). |
 | Tag doc | `/api/tag_doc` | Single-blob GZIP-compressed tag-archive download (`all_bin`). |
 

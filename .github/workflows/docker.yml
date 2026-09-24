@@ -19,6 +19,13 @@ permissions:
 jobs:
   build:
     name: Build image
+    # 镜像构建与发布严格只属于官方仓库（kongying-tavern）：fork 上的
+    # GITHUB_TOKEN 没有官方组织包的写权限，push 只会白跑并失败。因此
+    # fork 上仅保留 PR 构建校验（分支保护的必需检查），master/tag push
+    # 与手动触发一律跳过；镜像只从官方仓库发布。
+    if: >-
+      github.event_name == 'pull_request'
+      || github.repository == 'kongying-tavern/genshin-cloud-rust'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -32,17 +39,16 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
-          # 发布目标为官方组织命名空间（kongying-tavern）：
-          # - 官方仓库运行时，GITHUB_TOKEN 即可推送该命名空间；
-          # - fork 上运行时，需配置 GHCR_USER/GHCR_PAT（write:packages）。
-          username: ${{ secrets.GHCR_USER || github.actor }}
-          password: ${{ secrets.GHCR_PAT || github.token }}
+          # 能走到这里的 push 只可能来自官方仓库，GITHUB_TOKEN 即可推送
+          # 自己的组织命名空间，无需额外 PAT。
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # 官方组织命名空间（无论 workflow 在 fork 还是官方仓库触发）
+          # 官方组织命名空间（发布只发生在官方仓库，见 job 级 if）
           images: ghcr.io/kongying-tavern/genshin-cloud-rust
           tags: |
             # 语义化版本 tag（v1.2.3 → 1.2.3 / 1.2 / 1）

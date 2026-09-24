@@ -13,7 +13,6 @@ use _database::{
         marker::marker_item_link as mil_model,
     },
 };
-use _utils::models::common::EmptyResponse;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -48,7 +47,7 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
     let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = area_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),
@@ -76,10 +75,7 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
 }
 
 // 更新地区
-pub async fn do_update(
-    auth: AuthInfo,
-    payload: AreaUpdateRequest,
-) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_update(auth: AuthInfo, payload: AreaUpdateRequest) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     // Java updateArea：指定的父节点无效（自己挂到自己下面）。
     if payload.area.parent_id == payload.id {
@@ -116,7 +112,7 @@ pub async fn do_update(
     am.special_flag = Set(payload.area.special_flag);
 
     area_model::Entity::update_safety(am)?.exec(db).await?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 该地区是否为末端（无非删除子级）。Java updateAreaIsFinal(area) 的判定。
@@ -236,7 +232,7 @@ pub async fn do_get(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaV
 }
 
 // 删除（软删除，递归子树并级联物品/点位，Java deleteArea 同语义）
-pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let item = area_model::Entity::find_safety_by_id(area_id)
@@ -268,7 +264,7 @@ pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<Em
 
     // Java deleteArea 收尾：重算父级 isFinal（无剩余子级 → 叶子）
     recalc_is_final(db, parent_area_id).await?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// Java deleteMarkerAndItemInArea 同语义：删除地区内的物品，以及只关联到

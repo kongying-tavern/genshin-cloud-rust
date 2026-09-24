@@ -11,7 +11,6 @@ use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QueryOrder, QuerySelec
 use _utils::{
     jwt::AuthInfo,
     models::{
-        common::EmptyResponse,
         item::{ItemAreaPublicListResponse, ItemAreaPublicVo},
         wrapper::CommonResponse,
         wrapper::Pagination,
@@ -136,7 +135,7 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
     let mut models = Vec::with_capacity(first_by_name.len());
     for item_id in first_by_name.into_values() {
         models.push(iap_model::ActiveModel {
-            version: Set(0),
+            version: Set(1),
             id: sea_orm::ActiveValue::NotSet,
             // 审计字段：新增时 create/update 两组全部设置
             create_time: Set(now),
@@ -155,7 +154,7 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
 /// `DELETE /item_common/delete/{itemId}`
 ///
 /// 对齐 Java：按 item_id 软删 `item_area_public` 关联行（不动 item 表）。
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     iap_model::Entity::update_many()
@@ -167,5 +166,5 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         .exec(db)
         .await?;
     super::binary_doc::invalidate_item_doc_cache().await;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }

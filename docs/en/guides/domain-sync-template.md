@@ -82,7 +82,8 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest)
     -> Result<CommonResponse<AreaAddResponse>>
 {
     let active = area_model::ActiveModel {
-        version: Set(0),
+        // Optimistic lock starts at 1 on insert (Java insertFill sets version = 1L).
+        version: Set(1),
         creator_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
         // ... map payload fields ...
@@ -93,7 +94,7 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest)
 }
 
 pub async fn do_delete(_auth: AuthInfo, area_id: i64)
-    -> Result<CommonResponse<EmptyResponse>>
+    -> Result<CommonResponse<bool>>
 {
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(&DB_CONN.wait().pg_conn).await?
@@ -102,7 +103,8 @@ pub async fn do_delete(_auth: AuthInfo, area_id: i64)
     am.del_flag = Set(true);
     area_model::Entity::delete_safety(am)
         .exec(&DB_CONN.wait().pg_conn).await?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    // No-content write operations return `data: true` (Java `R<Boolean>` contract).
+    Ok(CommonResponse::new(Ok(true)))
 }
 ```
 

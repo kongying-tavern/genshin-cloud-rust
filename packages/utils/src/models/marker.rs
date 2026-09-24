@@ -50,11 +50,6 @@ pub struct MarkerVO {
     pub linkage_id: Option<String>,
 }
 
-/// 空响应（会序列化为 {}）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MarkerEmptyResponse {}
-
 /// 添加返回 ID
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -4,7 +4,6 @@ use axum::extract::Json;
 use axum::{extract::Path, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
-use _utils::models::{common::EmptyResponse, wrapper::CommonResponse};
 
 /// 删除地区
 /// DELETE /area/{areaId}
@@ -17,7 +16,7 @@ pub async fn delete(
     Path(area_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::area::do_delete(auth, area_id).await {
-        Ok(_) => Ok(Json(CommonResponse::new(Ok(EmptyResponse {}))).into_response()),
+        Ok(resp) => Ok(Json(resp).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
 }

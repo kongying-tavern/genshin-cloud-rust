@@ -31,7 +31,7 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | 域 | 路径前缀 | 说明 |
 | --- | --- | --- |
 | item_doc | `/item_doc` | 条目分页导出（bin 二进制 / md5 校验） |
-| marker_doc | `/marker_doc` | 打点分页导出（bin / md5） |
+| marker_doc | `/marker_doc` | 打点分页导出（bin / md5）与差异比对快照（protobuf） |
 | marker_link_doc | `/marker_link_doc` | 打点关联导出 |
 | icon_doc | `/icon_doc` | 图标归档导出（单 blob） |
 | tag_doc | `/tag_doc` | 图标标签归档导出（单 blob） |

@@ -124,7 +124,7 @@ async fn seed_common_item(
     name: &str,
 ) -> anyhow::Result<i64> {
     let am = item_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
@@ -155,7 +155,7 @@ async fn seed_icon(
     name: &str,
 ) -> anyhow::Result<i64> {
     let am = icon_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
@@ -182,7 +182,7 @@ async fn seed_user(
 ) -> anyhow::Result<i64> {
     let am = sys_user_model::ActiveModel {
         id: NotSet,
-        version: Set(0),
+        version: Set(1),
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -333,7 +333,7 @@ async fn area_and_item_doc_business_assertions() {
 
     let area_am = area_model::ActiveModel {
         id: NotSet,
-        version: Set(0),
+        version: Set(1),
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -358,7 +358,7 @@ async fn area_and_item_doc_business_assertions() {
     for hidden in [HiddenFlag::Visible, HiddenFlag::Hidden] {
         let item_am = item_model::ActiveModel {
             id: NotSet,
-            version: Set(0),
+            version: Set(1),
             create_time: Set(now),
             update_time: Set(None),
             creator_id: Set(None),
@@ -594,7 +594,7 @@ async fn area_and_item_doc_business_assertions() {
     // RemoveLeft against its item links.
     let marker_am = marker_model::ActiveModel {
         id: NotSet,
-        version: Set(0),
+        version: Set(1),
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -780,7 +780,7 @@ async fn area_and_item_doc_business_assertions() {
     .expect("seed blocked-device user");
     let blocked_am = device_model::ActiveModel {
         id: NotSet,
-        version: Set(0),
+        version: Set(1),
         create_time: Set(now),
         update_time: Set(None),
         creator_id: Set(None),
@@ -904,7 +904,7 @@ async fn area_and_item_doc_business_assertions() {
     {
         let am = history_model::ActiveModel {
             id: NotSet,
-            version: Set(0),
+            version: Set(1),
             create_time: Set(now_naive + chrono::Duration::seconds(i as i64)),
             update_time: Set(None),
             creator_id: Set(Some(77)),
@@ -990,7 +990,7 @@ async fn area_and_item_doc_business_assertions() {
     // "fields":{"updaterId":1,"updateTime":1,"content":1}}` (Java-written row).
     let java_user: i64 = 78;
     score_stat_model::Entity::insert(score_stat_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
@@ -1147,7 +1147,7 @@ async fn area_and_item_doc_business_assertions() {
     let icon_1 = seed_icon(db, now, "icon-a").await.expect("seed icon a");
     let icon_2 = seed_icon(db, now, "icon-b").await.expect("seed icon b");
     itl_model::Entity::insert(itl_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),
@@ -1196,7 +1196,7 @@ async fn area_and_item_doc_business_assertions() {
     //    type ids, and the item_doc blob includes them (the frontend filters
     //    the item panel by typeIdList). ────────────────────────────────────
     let itl = item_type_link_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         create_time: Set(now),
         update_time: Set(None),

@@ -9,3 +9,4 @@
 .zcode/
 *.pyc
 __pycache__/
+.mimosa/

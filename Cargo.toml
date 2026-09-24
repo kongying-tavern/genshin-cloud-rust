@@ -14,7 +14,7 @@ panic = "abort"
 authors = ["langyo <langyo.china@gmail.com>"]
 publish = false
 
-version = "0.2.0"
+version = "0.2.2"
 edition = "2024"
 # Declared MSRV — verified by the "MSRV check" job in rust.yml. Bump only
 # with an explicit reason (dependency floor raised), never opportunistically.

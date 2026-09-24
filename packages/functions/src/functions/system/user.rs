@@ -47,7 +47,7 @@ pub async fn do_register(
 
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
         // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
@@ -109,7 +109,7 @@ pub async fn do_register_qq(
 
     let now = Utc::now().naive_utc();
     let am = sys_user_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
         // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
@@ -178,7 +178,7 @@ pub async fn do_update(
     qq: Option<String>,
     remark: Option<String>,
     role_id: Option<SystemUserRole>,
-) -> Result<CommonResponse<()>, (u16, String)> {
+) -> Result<CommonResponse<bool>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
@@ -252,7 +252,7 @@ pub async fn do_update(
     {
         let _ = revoke_user_sessions(id).await;
     }
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_update_password(
@@ -260,7 +260,7 @@ pub async fn do_update_password(
     user_id: i64,
     old_password: String,
     new_password: String,
-) -> Result<CommonResponse<()>, (u16, String)> {
+) -> Result<CommonResponse<bool>, (u16, String)> {
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
@@ -296,14 +296,14 @@ pub async fn do_update_password(
     // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
     // Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(user_id).await;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_update_password_by_admin(
     _auth: AuthInfo,
     password: String,
     user_id: i64,
-) -> Result<CommonResponse<()>> {
+) -> Result<CommonResponse<bool>> {
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
@@ -317,7 +317,7 @@ pub async fn do_update_password_by_admin(
     // 管理员重置密码后吊销该用户全部会话，旧 token 一律失效（无旧密码
     // 校验的管理员通道同样生效）。Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(user_id).await;
-    Ok(CommonResponse::new(Ok(())))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {

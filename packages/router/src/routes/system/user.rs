@@ -250,7 +250,7 @@ pub async fn delete(
     do_delete(auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
-    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())
 }
 
 /// 用户信息(批量查询)
@@ -286,5 +286,5 @@ pub async fn kick_out(
     do_kick_out(auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
-    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(()))).into_response())
+    Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())
 }

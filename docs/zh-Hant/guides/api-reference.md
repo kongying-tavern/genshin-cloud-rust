@@ -31,7 +31,7 @@ Java 側控制器的 Rust 移植：路徑、請求/響應結構與 Java 參考�
 | 域 | 路徑前綴 | 說明 |
 | --- | --- | --- |
 | item_doc | `/item_doc` | 條目分頁導出（bin 二進制 / md5 校驗） |
-| marker_doc | `/marker_doc` | 打點分頁導出（bin / md5） |
+| marker_doc | `/marker_doc` | 打點分頁導出（bin / md5）與差異比對快照（protobuf） |
 | marker_link_doc | `/marker_link_doc` | 打點關聯導出 |
 | icon_doc | `/icon_doc` | 圖標歸檔導出（單 blob） |
 | tag_doc | `/tag_doc` | 圖標標籤歸檔導出（單 blob） |

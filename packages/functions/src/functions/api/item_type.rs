@@ -9,7 +9,6 @@ use sea_orm::{
 use _database::{
     DB_CONN, models::item::item_type as item_type_model, models::item::item_type_link as link_model,
 };
-use _utils::models::common::EmptyResponse;
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -330,7 +329,7 @@ pub async fn do_get_list_all(auth: AuthInfo) -> Result<CommonResponse<ItemTypeAl
 }
 
 // 逻辑删除类型
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
 
@@ -391,7 +390,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<EmptyRe
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 // 新增类型
@@ -413,7 +412,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     let is_final = payload.is_final || payload.parent_id > 0;
 
     let active = item_type_model::ActiveModel {
-        version: Set(0),
+        version: Set(1),
         id: NotSet,
         // 审计字段：新增时 create/update 两组全部设置
         create_time: Set(now),

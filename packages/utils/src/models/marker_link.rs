@@ -2,13 +2,20 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::MarkerLinkageLinkAction;
 
-/// 通用的组 ID 查询请求模型
-/// 用于需要通过组 ID 列表进行查询的场景
+/// 点位关联查询请求（Java `MarkerLinkageSearchVo`）
+///
+/// `isTraverse` 与 `groupIds` 均可缺省：前端「同步全量关联」只传
+/// `{ "isTraverse": true }`，按组刷新只传 `{ "groupIds": [...] }` ——
+/// 任何一字段必填都会让另一类调用直接 422。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GroupIdsRequest {
+pub struct MarkerLinkSearchRequest {
+    /// 是否遍历全部关联（true 时忽略 groupIds，返回全量）
+    #[serde(default)]
+    pub is_traverse: Option<bool>,
     /// 关联组 ID 列表
-    pub group_ids: Vec<String>,
+    #[serde(default)]
+    pub group_ids: Option<Vec<String>>,
 }
 
 /// 箭头类型枚举
@@ -88,10 +95,10 @@ pub struct MarkerLinkage {
 }
 
 /// 点位关联列表查询请求
-pub type MarkerLinkListRequest = GroupIdsRequest;
+pub type MarkerLinkListRequest = MarkerLinkSearchRequest;
 
 /// 点位关联图数据查询请求
-pub type MarkerLinkGraphRequest = GroupIdsRequest;
+pub type MarkerLinkGraphRequest = MarkerLinkSearchRequest;
 
 /// 删除点位关联请求
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

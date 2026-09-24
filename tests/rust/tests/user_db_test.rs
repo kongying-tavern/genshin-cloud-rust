@@ -73,7 +73,7 @@ async fn seed_user(db: &sea_orm::DatabaseConnection) -> anyhow::Result<i64> {
 
     let am = sys_user::ActiveModel {
         id: NotSet,
-        version: Set(0),
+        version: Set(1),
         create_time: Set(Utc::now().naive_utc()),
         update_time: Set(None),
         creator_id: Set(None),

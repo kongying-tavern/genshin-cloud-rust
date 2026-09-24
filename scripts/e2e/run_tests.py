@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -26,7 +27,17 @@ if hasattr(sys.stdout, "reconfigure"):
 import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import RUST_URL, SHIRABE_PORT, SHIRABE_URL, STATE_DIR, VUE_URL  # noqa: E402
+from config import (  # noqa: E402
+    RUST_URL,
+    SHIRABE_LOG_NAME,
+    SHIRABE_PORT,
+    SHIRABE_URL,
+    STATE_DIR,
+    VUE_URL,
+    guarded_url,
+    local_fetch,
+    open_state_log,
+)
 
 SCREENSHOTS_DIR = STATE_DIR / "screenshots"
 SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,19 +48,19 @@ SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def _shirabe_post(path: str, data: dict, timeout: float = 30) -> dict:
     """POST to the Shirabe debug API."""
-    url = f"{SHIRABE_URL}{path}"
+    url = guarded_url(SHIRABE_URL, path)
     body = json.dumps(data).encode("utf-8")
     req = urllib.request.Request(
         url, data=body, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with local_fetch(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
 def _shirabe_get(path: str, timeout: float = 30) -> dict:
     """GET from the Shirabe debug API."""
-    url = f"{SHIRABE_URL}{path}"
-    with urllib.request.urlopen(url, timeout=timeout) as resp:
+    url = guarded_url(SHIRABE_URL, path)
+    with local_fetch(url, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -117,11 +128,11 @@ def _api_headers() -> dict:
         "password": password,
     })
     req = urllib.request.Request(
-        f"{RUST_URL}/oauth/token",
+        guarded_url(RUST_URL, "/oauth/token"),
         data=body,
         headers={"Content-Type": content_type},
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with local_fetch(req, timeout=15) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     token = data.get("access_token")
     if not token:
@@ -198,14 +209,15 @@ def test_api_area_list():
     them the test SKIPs — a 401/403 is no longer treated as a pass.
     """
     import urllib.error
+
     import urllib.request as ur
 
     headers = _api_headers()
     headers["Content-Type"] = "application/json"
-    url = f"{VUE_URL}/api/area/get/list"
+    url = guarded_url(VUE_URL, "/api/area/get/list")
     req = ur.Request(url, method="POST", data=b"{}", headers=headers)
     try:
-        with ur.urlopen(req, timeout=10) as resp:
+        with local_fetch(req, timeout=10) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
             payload = json.loads(body)
@@ -216,19 +228,23 @@ def test_api_area_list():
             raise SkipTest(f"endpoint requires auth (HTTP {e.code}) — "
                            "check E2E_USERNAME / E2E_PASSWORD")
         raise Exception(f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}")
+    except SkipTest:
+        raise
     except Exception as e:
         raise Exception(f"API call failed: {e}")
 
 
 def test_api_marker_doc_md5():
     """Verify the BinaryMD5 marker doc endpoint returns the MD5 list."""
+    import urllib.error
+
     import urllib.request as ur
 
     headers = _api_headers()
-    url = f"{VUE_URL}/api/marker_doc/list_page_bin_md5"
+    url = guarded_url(VUE_URL, "/api/marker_doc/list_page_bin_md5")
     req = ur.Request(url, method="GET", headers=headers)
     try:
-        with ur.urlopen(req, timeout=15) as resp:
+        with local_fetch(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
             payload = json.loads(body)
@@ -244,13 +260,15 @@ def test_api_marker_doc_md5():
 
 def test_api_item_doc_md5():
     """Verify the BinaryMD5 item doc endpoint returns the MD5 list."""
+    import urllib.error
+
     import urllib.request as ur
 
     headers = _api_headers()
-    url = f"{VUE_URL}/api/item_doc/list_page_bin_md5"
+    url = guarded_url(VUE_URL, "/api/item_doc/list_page_bin_md5")
     req = ur.Request(url, method="GET", headers=headers)
     try:
-        with ur.urlopen(req, timeout=15) as resp:
+        with local_fetch(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
             print(f"  Response: {body[:200]}...")
             payload = json.loads(body)
@@ -267,10 +285,10 @@ def test_api_item_doc_md5():
 def test_rust_health():
     """Verify the Rust backend is responding directly."""
     import urllib.error
-    import urllib.request as ur
 
+    url = guarded_url(RUST_URL, "/")
     try:
-        with ur.urlopen(f"{RUST_URL}/", timeout=5) as resp:
+        with local_fetch(url, timeout=5) as resp:
             print(f"  Rust backend HTTP {resp.status}")
     except urllib.error.HTTPError as e:
         # 404, 401, 501 etc. — server IS responding
@@ -289,12 +307,17 @@ def start_shirabe() -> subprocess.Popen | None:
     """Start the Shirabe debug server."""
     print(f"🌐 Starting Shirabe debug server on port {SHIRABE_PORT}...")
     env = {**os.environ, "SHIRABE_PORT": str(SHIRABE_PORT)}
+    # Resolve npx to an absolute path (npx.cmd on Windows) so the child can be
+    # spawned as a plain argv list without going through the shell.
+    npx = shutil.which("npx")
+    if not npx:
+        print("❌ npx not found on PATH — cannot start Shirabe", file=sys.stderr)
+        return None
     proc = subprocess.Popen(
-        ["npx", "@celestia-island/shirabe", "debug", "--port", str(SHIRABE_PORT)],
+        [npx, "@celestia-island/shirabe", "debug", "--port", str(SHIRABE_PORT)],
         env=env,
-        stdout=open(STATE_DIR / "shirabe.log", "w", encoding="utf-8"),
+        stdout=open_state_log(SHIRABE_LOG_NAME),
         stderr=subprocess.STDOUT,
-        shell=True,
     )
 
     if _wait_for_shirabe(timeout=30):

@@ -9,31 +9,28 @@
 
 use anyhow::Result;
 
-use _utils::{
-    jwt::AuthInfo,
-    models::{common::EmptyResponse, wrapper::CommonResponse},
-};
+use _utils::{jwt::AuthInfo, models::wrapper::CommonResponse};
 
 use super::binary_doc;
 
 /// 清除地区缓存。当前无对应缓存层，为 no-op。
-pub async fn do_delete_area_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_area_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除物品缓存（BinaryMD5 item 页）。
-pub async fn do_delete_item_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_item_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
     super::super::ws::ws_broadcast("ItemBinaryPurged", serde_json::Value::Null);
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除公共物品缓存。当前无对应缓存层，为 no-op。
-pub async fn do_delete_common_item_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_common_item_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除图标标签缓存。当前无对应缓存层，为 no-op。
@@ -41,30 +38,30 @@ pub async fn do_delete_common_item_cache(auth: AuthInfo) -> Result<CommonRespons
 pub async fn do_delete_icon_tag_cache(
     auth: AuthInfo,
     _tags: Vec<String>,
-) -> Result<CommonResponse<EmptyResponse>> {
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     super::super::ws::ws_broadcast("IconTagBinaryPurged", serde_json::Value::Null);
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除点位缓存（BinaryMD5 marker 页）。
-pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
     super::super::ws::ws_broadcast("MarkerBinaryPurged", serde_json::Value::Null);
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除点位连线缓存（BinaryMD5 link list/graph 页）。
-pub async fn do_delete_marker_link_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_marker_link_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     binary_doc::invalidate_all().await;
     super::super::ws::ws_broadcast("MarkerLinkageBinaryPurged", serde_json::Value::Null);
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除公告缓存。当前无对应缓存层，为 no-op。
-pub async fn do_delete_notice_cache(auth: AuthInfo) -> Result<CommonResponse<EmptyResponse>> {
+pub async fn do_delete_notice_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    Ok(CommonResponse::new(Ok(EmptyResponse {})))
+    Ok(CommonResponse::new(Ok(true)))
 }
