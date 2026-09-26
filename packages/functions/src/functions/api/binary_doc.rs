@@ -52,13 +52,17 @@ pub fn serialize_compress_md5<T: Serialize>(data: &T) -> anyhow::Result<(Vec<u8>
 
 /// A cached BinaryMD5 page: the compressed bytes plus the metadata needed by
 /// both the md5 list and the bin fetch endpoints.
+///
+/// `bytes` is a cheap-clone [`bytes::Bytes`]: pages are served at high
+/// frequency (the diff snapshot especially), and every cache hit must be a
+/// refcount bump rather than a full-payload memcpy.
 #[derive(Debug, Clone)]
 pub struct CachedPage {
     pub md5: String,
     /// Generation timestamp (stable while the cache entry is alive — the md5
     /// list `time` field must not change on every request).
     pub time: i64,
-    pub bytes: Vec<u8>,
+    pub bytes: bytes::Bytes,
 }
 
 /// In-process page cache. Java uses Caffeine with a similar TTL; moka is the
@@ -117,7 +121,7 @@ impl From<&ResultEntry> for RedisResultEntry {
         RedisResultEntry {
             key: e.key.clone(),
             vo: e.vo.clone(),
-            bytes_b64: base64::engine::general_purpose::STANDARD.encode(&e.bytes),
+            bytes_b64: base64::engine::general_purpose::STANDARD.encode(&e.bytes[..]),
         }
     }
 }
@@ -130,7 +134,8 @@ impl From<RedisResultEntry> for ResultEntry {
             vo: e.vo,
             bytes: base64::engine::general_purpose::STANDARD
                 .decode(&e.bytes_b64)
-                .unwrap_or_default(),
+                .unwrap_or_default()
+                .into(),
         }
     }
 }
@@ -243,7 +248,7 @@ pub struct ResultEntry {
     /// Domain page key (e.g. `item:0`, `marker:0:123`, `link:list`).
     pub key: String,
     pub vo: BinaryMd5Vo,
-    pub bytes: Vec<u8>,
+    pub bytes: bytes::Bytes,
 }
 
 /// Result-level cache: the fully computed page set for a domain (e.g.
@@ -300,7 +305,7 @@ mod tests {
                 md5: "abc123".into(),
                 time: 42,
             },
-            bytes: vec![0xde, 0xad, 0xbe, 0xef],
+            bytes: vec![0xde, 0xad, 0xbe, 0xef].into(),
         }
     }
 

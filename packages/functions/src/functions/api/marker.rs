@@ -285,6 +285,9 @@ pub async fn do_tweak(
     payloads: Vec<MarkerTweakRequest>,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
     auth.require_non_anonymous()?;
+    // 写路径与读路径的 hidden_flag 可见性对称：可见集合之外的点位不可
+    // 改写/删除/创建（如 MapPunctate 可见 0/1/3，不得改写 flag=2 的 Beta 点位）
+    let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let db = &DB_CONN.wait().pg_conn;
 
     let mut touched_ids: Vec<i64> = Vec::new();
@@ -298,6 +301,10 @@ pub async fn do_tweak(
                 continue;
             }
             let m = m.unwrap();
+            // 写路径可见性对称：不可见点位对调用者如同不存在
+            if !allowed_flags.contains(&(m.hidden_flag as i32)) {
+                return Err(anyhow!("无权操作该点位"));
+            }
             let content = m.content.clone();
             let marker_title = m.marker_title.clone();
             let mut am: marker_model::ActiveModel = m.into();
@@ -389,6 +396,11 @@ pub async fn do_tweak(
                                     3 => _utils::types::HiddenFlag::Suprise,
                                     _ => _utils::types::HiddenFlag::Visible,
                                 };
+                                // 写路径可见性对称：不可借 tweak 把点位改成可见
+                                // 集合之外的等级（如 MapPunctate 不可自造 Beta 点位）
+                                if !allowed_flags.contains(&(hf as i32)) {
+                                    return Err(anyhow!("无权设置该内容等级"));
+                                }
                                 am.hidden_flag = Set(hf);
                             }
                         }
@@ -648,6 +660,12 @@ pub async fn do_add_single(
     payload: MarkerAddRequest,
 ) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
+    // 写路径可见性对称：不可自造可见集合之外的点位（如 MapPunctate 不可
+    // 创建 flag=2 的 Beta 点位）。hidden_flag 为必填 HiddenFlag（无 serde 默认）
+    let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
+    if !allowed_flags.contains(&(payload.hidden_flag as i32)) {
+        return Err(anyhow!("无权创建该内容等级的点位"));
+    }
     let now = Utc::now().naive_utc();
     let db = &DB_CONN.wait().pg_conn;
 
@@ -719,6 +737,14 @@ pub async fn do_update_single(
         // Java：实体不存在时 updateById 影响行数为 0，经乐观锁分支同文案报错
         return Err(anyhow!("该点位已更新，请重新提交"));
     };
+    // 写路径可见性对称：不可见点位不可改写，也不可借更新把点位改成可见
+    // 集合之外的等级（改写与新建同一套 hidden_flag 门槛）
+    let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
+    if !allowed_flags.contains(&(m.hidden_flag as i32))
+        || !allowed_flags.contains(&(payload.hidden_flag as i32))
+    {
+        return Err(anyhow!("无权操作该点位"));
+    }
     let old_extra = m.extra.clone();
     let old_version = m.version;
     let mut am: marker_model::ActiveModel = m.into();
@@ -1022,8 +1048,13 @@ pub async fn do_get_page(
 pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
+    // 写路径可见性对称：可见集合之外的点位不可删除（整个操作失败，不静默跳过）
+    let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
     // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）
     if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
+        if !allowed_flags.contains(&(m.hidden_flag as i32)) {
+            return Err(anyhow!("无权操作该点位"));
+        }
         let mut am: marker_model::ActiveModel = m.into();
         am.del_flag = Set(true);
         // 审计字段：软删也是修改，设置 update 组

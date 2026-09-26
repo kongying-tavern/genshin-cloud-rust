@@ -53,10 +53,11 @@ jobs:
       - name: Run integration tests
         run: cargo test --workspace --tests --no-fail-fast
 
-  # DB-backed integration tests. Provisions a Postgres service and runs the
-  # `user_db` test binary (and any future `*_db` binaries). Tests self-skip when
-  # GCS_TEST_DB is unset, so this job is the only place that actually exercises
-  # them. Mirrors tests/docker/docker-compose.e2e.yml credentials.
+  # DB-backed integration tests. Provisions Postgres + Redis services and
+  # runs the `*_db` test binaries: user_db / api_db / res_db / redis_cache_db
+  # (the last needs the Redis service below). Tests self-skip when GCS_TEST_DB
+  # is unset, so this job is the only place that actually exercises them.
+  # Mirrors tests/docker/docker-compose.e2e.yml credentials.
   integration:
     name: DB integration
     runs-on: ubuntu-latest
@@ -76,11 +77,31 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      # redis_cache_db needs a reachable Redis: the backend only wires its
+      # redis_conn when REDIS_HOST/REDIS_PORT resolve (see
+      # tests/rust/tests/redis_cache_db_test.rs and REDIS_HOST/REDIS_PORT in
+      # the job env below). Healthcheck mirrors the redis service in
+      # tests/docker/docker-compose.e2e.yml.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     env:
       GCS_TEST_DB: "1"
       DB_USERNAME: genshin_map
       DB_PASSWORD: genshin_map
       DB_DATABASE: genshin_map
+      # Loopback-reachable via the service port mappings above; same values
+      # as docker-compose.e2e.yml (also the backend's defaults, spelled out
+      # here so the redis wiring is visible).
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
 
     steps:
       - name: Checkout code
@@ -101,7 +122,7 @@ jobs:
           key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Run DB-backed tests
-        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --no-fail-fast
+        run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --test redis_cache_db --no-fail-fast
 
   # Commit-message linting lives in commit-msg.yml (standalone workflow).
   # It used to be inlined here as a job with the required-check context name

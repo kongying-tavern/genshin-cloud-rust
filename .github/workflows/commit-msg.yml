@@ -77,8 +77,18 @@ jobs:
           set -o pipefail
           if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
             RANGE="$AFTER_SHA"
-          else
+          elif git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
             RANGE="${BEFORE_SHA}..${AFTER_SHA}"
+          else
+            # Force-with-lease push after rebase/amend — the repo-sanctioned
+            # recovery flow (AGENTS.md §5) — leaves `before` unreachable, so
+            # `git log before..after` fatals (exit 128) and turns this
+            # required check red through no fault of the commit messages.
+            # Degrade to linting just the pushed tip: the only commit we can
+            # positively identify as new without the old range (PR-side and
+            # merge-group steps still lint every commit in scope).
+            echo "before ${BEFORE_SHA} not resolvable (force push?) - linting the pushed tip only"
+            RANGE="$AFTER_SHA"
           fi
           echo "Linting commits in range: $RANGE"
           git log --format='%s' "$RANGE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects

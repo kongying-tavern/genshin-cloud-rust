@@ -5,6 +5,24 @@ name = "_router"
 publish = false
 version.workspace = true
 
+# Keep `cargo bench --workspace` on the real [[bench]] targets: bin targets
+# default to bench = true and would run the server / init binaries under
+# cargo bench (rejecting criterion CLI flags).
+[[bin]]
+name = "_router"
+bench = false
+
+[[bin]]
+name = "init_db"
+path = "src/bin/init_db.rs"
+bench = false
+
+# The lib target exists so the integration tests (`tests/rust`) can drive the
+# assembled Router directly; keep it out of `cargo bench` targets like the
+# bins above.
+[lib]
+bench = false
+
 [dependencies]
 _database = { path = "../database", version = "*" }
 _functions = { path = "../functions", version = "*" }

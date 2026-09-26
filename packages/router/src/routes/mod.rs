@@ -1,6 +1,9 @@
 mod api;
+mod cdn;
 mod system;
-mod ws;
+// `ws` 公开给 HTTP 层测试：oneshot 无法走真实 WS 升级，握手鉴权契约
+// （`ws_handshake_key`）只能在函数层直测。
+pub mod ws;
 
 use anyhow::Result;
 
@@ -8,10 +11,14 @@ use axum::{
     Json, Router,
     extract::DefaultBodyLimit,
     http::StatusCode,
+    http::header::{HeaderValue, REFERRER_POLICY, X_CONTENT_TYPE_OPTIONS},
     middleware::from_extractor,
     response::IntoResponse,
     routing::{get, post},
 };
+
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::timeout::TimeoutLayer;
 
 use _utils::models::CommonResponse;
 
@@ -80,6 +87,12 @@ pub fn internal_error<E: Into<anyhow::Error>>(e: E) -> RouteError {
     route_error(detail)
 }
 
+/// 请求级超时上限。60s：挡住慢请求长期占用 handler 的面（慢 SQL、挂起
+/// 的上游调用），同时给 `POST /api/score/data`（`ExtractAdmin` 鉴权、
+/// limit 上限 100_000 的重查询）留足余量；CDN 代理内部另有更短的 15s
+/// 上游超时，不会先撞到这里。
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 pub async fn router() -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
@@ -93,12 +106,36 @@ pub async fn router() -> Result<Router> {
         // dev-mode frontend hits the unprefixed paths. Both must work.
         .merge(api::router().await?)
         .nest("/api", api::router().await?)
-        .nest_service("/cdn", cdn_proxy())
+        .nest_service("/cdn", cdn::cdn_proxy())
         .fallback(|| async { (StatusCode::NOT_IMPLEMENTED, "Not Implemented").into_response() })
         .layer(cors_layer())
         .layer(from_extractor::<crate::middlewares::ExtractUserAgent>())
         .layer(from_extractor::<crate::middlewares::ExtractIP>())
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 16)); // 16 MiB
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 16)) // 16 MiB
+        // 请求级 60s 超时（理由见 REQUEST_TIMEOUT），超时以 408 拒绝
+        // （tower-http 0.7 已弃用默认状态码的 `TimeoutLayer::new`）。
+        // 注意 tower-http 的 Timeout 只约束「响应 future」（收到请求 →
+        // 响应头就绪）：WebSocket 的 101 握手响应立即返回，升级完成后的
+        // 长连 socket 不在覆盖范围，不会被 60s 掐断——勿因「WS 看似不受
+        // 限」而误删本层。
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            REQUEST_TIMEOUT,
+        ))
+        // 安全响应头（overriding 保证逐响应存在）：
+        // - nosniff：禁止浏览器对响应体做 MIME 嗅探——/cdn 图片代理硬编码
+        //   `Content-Type: image/png`（不随真实文件类型变化），该路径尤其
+        //   需要这层兜底；
+        // - Referrer-Policy: no-referrer：不向第三方泄漏站内 URL。
+        // HSTS 留给 TLS 终结层（本服务纯 HTTP，在此声明反而误导）。
+        .layer(SetResponseHeaderLayer::overriding(
+            X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ));
 
     Ok(ret)
 }
@@ -154,240 +191,4 @@ async fn jwks() -> axum::response::Response {
         )
             .into_response(),
     }
-}
-
-/// CDN 上游地址：默认 `v3.yuanshen.site`，可用 `CDN_UPSTREAM` 环境变量覆盖
-/// （例如自建 CDN 或内网镜像）。URL 不带尾斜杠。
-fn cdn_upstream() -> String {
-    std::env::var("CDN_UPSTREAM")
-        .unwrap_or_else(|_| "https://v3.yuanshen.site".into())
-        .trim_end_matches('/')
-        .to_string()
-}
-
-/// 从 URL 字符串中提取 host（小写、去 userinfo、去端口）；解析失败返回 None。
-/// 简单字符串解析即可满足白名单精确匹配，无需引入 url crate。
-fn url_host(url: &str) -> Option<String> {
-    let rest = url.split_once("://")?.1;
-    let host = rest.split(['/', '?', '#']).next().unwrap_or(rest);
-    let host = host.rsplit('@').next().unwrap_or(host);
-    let host = host.split(':').next().unwrap_or(host);
-    if host.is_empty() {
-        return None;
-    }
-    Some(host.to_ascii_lowercase())
-}
-
-/// 本地 dadian 配置文件路径（`CDN_DADIAN_CONFIG`，可选）。
-/// 指向一个预生成的 bz2 压缩配置；未设置时 `/cdn/dadian-preview.json.bz2`
-/// 降级为内置的空配置（开发期行为）。
-fn dadian_config_file() -> Option<Vec<u8>> {
-    let path = std::env::var("CDN_DADIAN_CONFIG").ok()?;
-    std::fs::read(path).ok()
-}
-
-/// CDN proxy with fallback. Tries remote CDN first, falls back to a locally
-/// generated minimal dadian config if the remote file is unavailable.
-fn cdn_proxy() -> axum::Router {
-    use axum::extract::State;
-    use axum::http::Request;
-    use axum::response::{IntoResponse, Response};
-    use std::time::Duration;
-
-    // Whitelist for the `u=` image proxy. The initial URL AND every redirect
-    // hop must stay on this list (or the configured CDN upstream host) —
-    // otherwise a 30x from a whitelisted host could drag the proxy into
-    // internal addresses (redirect-based SSRF).
-    const IMG_PROXY_ALLOWED_HOSTS: [&str; 4] = [
-        "ddns.minemc.top",
-        "assets.yuanshen.site",
-        "tiles.yuanshen.site",
-        "v3.yuanshen.site",
-    ];
-
-    // 上游挂起时不能无限等待：连接 5s、整体 15s 超时。
-    let client = std::sync::Arc::new(
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(15))
-            .build()
-            .expect("build cdn client"),
-    );
-    // Strict client for the user-influenced img-proxy only: every redirect
-    // hop is re-validated against the whitelist. The generic CDN client above
-    // keeps default redirect handling for its operator-configured upstream,
-    // which may legitimately bounce across domains.
-    let img_client = {
-        let allowed: std::sync::Arc<[String]> =
-            std::sync::Arc::new(IMG_PROXY_ALLOWED_HOSTS.map(String::from));
-        let upstream = cdn_upstream();
-        let upstream_host = url_host(&upstream);
-        reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(Duration::from_secs(15))
-            .redirect(reqwest::redirect::Policy::custom(move |attempt| {
-                // Custom policies get no automatic loop cap — enforce one.
-                if attempt.previous().len() >= 10 {
-                    return attempt.error("too many redirects");
-                }
-                let host = attempt.url().host_str().unwrap_or_default();
-                if allowed.iter().any(|a| a == host) || upstream_host.as_deref() == Some(host) {
-                    attempt.follow()
-                } else {
-                    attempt.stop()
-                }
-            }))
-            .build()
-            .expect("build img proxy client")
-    };
-    let upstream = cdn_upstream();
-    let dadian_override = dadian_config_file();
-
-    Router::new()
-        .fallback(
-            move |State(client): State<std::sync::Arc<reqwest::Client>>,
-                  req: Request<axum::body::Body>| {
-                let client = client.clone();
-                let img_client = img_client.clone();
-                let upstream = upstream.clone();
-                let dadian_override = dadian_override.clone();
-                async move {
-                    let path = req.uri().path().trim_start_matches("/cdn");
-
-                    // Special case: serve locally generated dadian config
-                    if path == "/dadian-preview.json.bz2" {
-                        let bz2_bytes = match dadian_override {
-                            Some(bytes) => bytes,
-                            None => {
-                                let config = serde_json::json!({
-                                    "tiles": {},
-                                    "application": {"avatar": [], "nameCard": []},
-                                    "editor": {},
-                                    "plugins": {}
-                                });
-                                let json_bytes = serde_json::to_vec(&config).unwrap_or_default();
-                                bz2_bump(&json_bytes)
-                            },
-                        };
-                        return Response::builder()
-                            .status(200)
-                            .header("Content-Type", "application/octet-stream")
-                            .header("Access-Control-Allow-Origin", "*")
-                            .body(axum::body::Body::from(bz2_bytes))
-                            .unwrap_or_else(|_| {
-                                Response::builder()
-                                    .status(500)
-                                    .body(axum::body::Body::from("compress error"))
-                                    .unwrap()
-                            })
-                            .into_response();
-                    }
-
-                    // Image proxy: forward to the icon host with wildcard CORS
-                    // (the dev MinIO on ddns.minemc.top sends no CORS headers,
-                    // which breaks the frontend sprite renderer).
-                    // SSRF 防护：`u` 只能是白名单内的上游 host（图标/资源站 +
-                    // CDN_UPSTREAM 配置的 host），其余一律 403，防止抓取内网
-                    // 地址（169.254.169.254 等）或任意外部站点。
-                    if let Some(query) = req.uri().query()
-                        && let Some(u) = query.split('&').find_map(|kv| kv.strip_prefix("u="))
-                    {
-                        let decoded = urlencoding::decode(u).unwrap_or_default().into_owned();
-                        let host = url_host(&decoded);
-                        let upstream_host = url_host(&upstream);
-                        let allowed: [&str; 4] = IMG_PROXY_ALLOWED_HOSTS;
-                        let host_allowed = host.as_deref().is_some_and(|h| {
-                            allowed.contains(&h) || upstream_host.as_deref() == Some(h)
-                        });
-                        if !host_allowed {
-                            return Response::builder()
-                                .status(403)
-                                .header("Access-Control-Allow-Origin", "*")
-                                .body(axum::body::Body::from("host not allowed"))
-                                .unwrap()
-                                .into_response();
-                        }
-                        match img_client.get(&decoded).send().await {
-                            Ok(resp) => {
-                                let body = resp.bytes().await.unwrap_or_default();
-                                return Response::builder()
-                                    .status(200)
-                                    .header("Content-Type", "image/png")
-                                    .header("Access-Control-Allow-Origin", "*")
-                                    .header("Cache-Control", "no-store")
-                                    .body(axum::body::Body::from(body))
-                                    .unwrap()
-                                    .into_response();
-                            },
-                            Err(_) => {
-                                return Response::builder()
-                                    .status(502)
-                                    .header("Access-Control-Allow-Origin", "*")
-                                    .body(axum::body::Body::from("img proxy error"))
-                                    .unwrap()
-                                    .into_response();
-                            },
-                        }
-                    }
-                    // All other CDN paths: proxy to the configured upstream
-                    let url = format!("{upstream}{path}");
-
-                    match client.get(&url).send().await {
-                        Ok(resp) => {
-                            let status = resp.status();
-                            let headers = resp.headers().clone();
-                            let body = resp.bytes().await.unwrap_or_default();
-
-                            // Check if CDN returned HTML (SPA fallback) instead of real content
-                            let is_html =
-                                body.starts_with(b"<!DOCTYPE") || body.starts_with(b"<html");
-                            if is_html {
-                                return Response::builder()
-                                    .status(404)
-                                    .header("Access-Control-Allow-Origin", "*")
-                                    .body(axum::body::Body::from("not found"))
-                                    .unwrap()
-                                    .into_response();
-                            }
-
-                            let mut builder = Response::builder().status(status);
-                            for (k, v) in headers.iter() {
-                                if k != "transfer-encoding" && k != "content-length" {
-                                    builder = builder.header(k, v);
-                                }
-                            }
-                            builder = builder.header("Access-Control-Allow-Origin", "*");
-                            // 上游响应无缓存头：浏览器可能启发式缓存到之前
-                            // 网络抖动期的坏响应（502/空 body），禁止缓存。
-                            builder = builder.header("Cache-Control", "no-store");
-                            builder
-                                .body(axum::body::Body::from(body))
-                                .unwrap_or_else(|_| {
-                                    Response::builder()
-                                        .status(500)
-                                        .body(axum::body::Body::from("proxy error"))
-                                        .unwrap()
-                                })
-                                .into_response()
-                        },
-                        Err(e) => Response::builder()
-                            .status(502)
-                            .header("Access-Control-Allow-Origin", "*")
-                            .header("Cache-Control", "no-store")
-                            .body(axum::body::Body::from(format!("CDN proxy error: {e}")))
-                            .unwrap()
-                            .into_response(),
-                    }
-                }
-            },
-        )
-        .with_state(client)
-}
-
-/// Compress data with bz2 (pure Rust, no C dependency).
-fn bz2_bump(data: &[u8]) -> Vec<u8> {
-    use std::io::Write;
-    let mut writer = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::default());
-    writer.write_all(data).ok();
-    writer.finish().unwrap_or_default()
 }

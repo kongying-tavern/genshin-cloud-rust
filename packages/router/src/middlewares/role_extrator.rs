@@ -45,8 +45,13 @@ where
 }
 
 /// Map-manager-and-above extractor (base-data writes: `area` / `icon` /
-/// `icon_type` / `item` / `item_type` / `item_common` / `history` / `tag*`
-/// in the Java matrix).
+/// `icon_type` / `item` / `item_type` / `item_common` / `tag*` in the Java
+/// matrix).
+///
+/// History is **not** in this group: the Java matrix gates
+/// `/api/history/get/**` at MAP_USER level (logged-in users, no anonymous
+/// visitors) — this repo enforces that at the function layer via
+/// `require_non_anonymous`, not with this extractor.
 pub struct ExtractManager(pub AuthInfo);
 
 impl<S> FromRequestParts<S> for ExtractManager

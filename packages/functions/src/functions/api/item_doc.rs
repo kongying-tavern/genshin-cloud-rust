@@ -50,7 +50,7 @@ pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
     entries
         .iter()
         .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
-        .map(|e| e.bytes.clone())
+        .map(|e| e.bytes.to_vec())
         .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
 }
 
@@ -98,7 +98,7 @@ async fn item_result() -> Result<Vec<ResultEntry>> {
                 Ok(CachedPage {
                     md5: md5_hex,
                     time: chrono::Utc::now().timestamp_millis(),
-                    bytes: compressed,
+                    bytes: compressed.into(),
                 })
             })
             .await?;

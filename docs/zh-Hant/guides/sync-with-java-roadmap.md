@@ -16,11 +16,11 @@ Rust 後端的目標是與 Java 參考實現 `genshin-map-cloud` 功能對齊。
 | --- | --- | --- | --- | --- |
 | 1 | **area + marker** | `area`、`marker` 實體；CRUD + 軟刪除 + 樂觀鎖；`SafeEntityTrait` 宏定型 | 中 | **已完成** — 作爲參考樣板 |
 | 2 | **icon / item / tag 系列** | `icon`、`icon_type`、`item`、`item_type`、`item_common`、`tag`、`tag_type`；含 copy/join/move_type、`specialFlag` 過濾 | 中高 — 實體多、關聯複雜 | **已完成**（`item_doc` 等由 api_db 測試覆蓋） |
-| 3 | **notice / route / history** | `notice`、`route`、`history`（公共模型在 `models/common/`）；`RouteVO` 分頁/搜索/批量查詢 | 低中 — 結構相對獨立 | **已完成** |
+| 3 | **notice / history（route 除外）** | `notice`（validity 排序規則）、`history`。Java 的 `route` 域**有意不移植**：`route` 公共模型留在 `models/common/` 以保持 schema 對齊，但 `/api/route` 端點不提供 | 低中 — 結構相對獨立 | **已完成** |
 | 4 | **打點審批流 + 評分** | `punctuate`、`punctuate_audit`（pass/reject/delete，含角色校驗與事務化晉升）、`score`（data/generate，字段級加權） | 高 — 狀態機 + 生成邏輯 | **打點審批流已棄用**（暫存表 `marker_punctuate` 隨 schema 保留）；`score` 已完成 |
 | 5 | **系統域** | `user`、`role`、`device`、`invitation`、`action_log`、`archive`（rename/delete_slot 已補齊） | 中 — 鑑權與權限耦合 | **已完成** — 登錄設備登記 + access_policy 校驗已接線 |
 | 6 | **BinaryMD5 歸檔導出** | `item_doc`、`marker_doc`、`marker_link_doc` 的 bin/md5 端點；GZIP 壓縮 + 雙層緩存（moka 進程內 + Redis 二級，TTL 3600s） | 高 — 二進制協議還原 | **已完成** |
-| 7 | **OAuth2 / JWKS** | `oauth` 路由（password / QQ / client_credentials）、`/.well-known/jwks.json`、access_policy 檢查、scope 映射 | 高 — 安全敏感 | **大部分完成** — RS256 簽名與 RSA JWKS 已實現（`JWT_RSA_PRIVATE_KEY_PEM`）；JWK 輪換仍未實現；HS256 模式下 JWKS 返回空 key set（不泄露 HMAC 密鑰） |
+| 7 | **OAuth2 / JWKS** | `oauth` 路由（password / QQ / client_credentials）、`/.well-known/jwks.json`、access_policy 檢查、scope 映射 | 高 — 安全敏感 | **已完成** — RS256 簽名與 RSA JWKS；**JWK 輪換**經 `JWT_RSA_VERIFY_KEYS` 實現（歷史公鑰保持可驗證並隨 JWKS 發佈；由 `tests/rust/tests/jwks_rotation_test.rs` 覆蓋）；HS256 模式下 JWKS 返回空 key set（不泄露 HMAC 密鑰） |
 
 ## 當前狀態
 
@@ -32,12 +32,12 @@ Rust 後端的目標是與 Java 參考實現 `genshin-map-cloud` 功能對齊。
 
 ## 已知差距（與 Java 的剩餘差異）
 
-- 批次 7：JWK 輪換未實現（密鑰固定，無輪換機制）；HS256 模式下 JWKS 爲空 key set（簽名密鑰不對外公佈）。
+- HS256 模式下 JWKS 爲空 key set（簽名密鑰不對外公佈）；JWK 輪換僅 RS256 模式提供（見批次 7，覆蓋於 `tests/rust/tests/jwks_rotation_test.rs`）。
 - 數據庫 schema 與真實庫的偏差待數據驗證（`marker_linkage` 空值列、
   `sys_user_archive` 結構綁定等）。
 - 文檔翻譯：`docs/` 僅保留 en / zh-Hans / zh-Hant 三種語言並同步維護。
 
 ## 跟進事項
 
-- 批次 4 / 7 的差距項排入迭代 backlog（見根目錄 `PLAN.md`），
+- 上述差距項排入迭代 backlog（見根目錄 `PLAN.md`），
   隨 master-based PR 流程逐項合入。

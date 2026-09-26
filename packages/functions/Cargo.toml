@@ -5,6 +5,11 @@ publish = false
 name = "_functions"
 version.workspace = true
 
+[lib]
+# Keep `cargo bench --workspace` on the real [[bench]] targets: lib targets
+# default to bench = true and their libtest harness rejects criterion flags.
+bench = false
+
 [dependencies]
 _database = { path = "../database", version = "*" }
 _utils = { path = "../utils", version = "*" }
@@ -16,6 +21,7 @@ once_cell = { workspace = true }
 tokio = { workspace = true }
 
 base64 = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true }
 
 
@@ -40,3 +46,18 @@ tracing = { workspace = true }
 sea-orm = { workspace = true }
 redis = { workspace = true }
 minio = { workspace = true }
+
+[dev-dependencies]
+# criterion: benchmark harness for the diff-snapshot pipeline (benches/).
+# default-features off drops rayon + plotters (HTML reports) to keep the
+# dependency tree — and thus cargo-deny / MSRV exposure — small.
+criterion = { version = "^0.8", default-features = false, features = [
+  "cargo_bench_support",
+] }
+# regex-lite: strip FOREIGN KEY constraints from generated DDL in the DB bench
+# seeding (same pattern as the api_db_test helper).
+regex-lite = "^0.1"
+
+[[bench]]
+name = "diff_snapshot"
+harness = false

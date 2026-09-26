@@ -41,7 +41,7 @@ pub async fn do_all_bin_md5(
 /// `GET /icon_doc/all_bin` — the all-icons blob (compressed bytes).
 pub async fn do_all_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
     let entry = icon_result().await?;
-    Ok(entry.bytes)
+    Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) the single icon blob.
@@ -79,7 +79,7 @@ async fn icon_result() -> Result<ResultEntry> {
             Ok(CachedPage {
                 md5: md5_hex,
                 time: chrono::Utc::now().timestamp_millis(),
-                bytes: compressed,
+                bytes: compressed.into(),
             })
         })
         .await?;

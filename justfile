@@ -9,6 +9,7 @@
 #   just dev mock      # start + Shirabe e2e tests + stop
 #   just dev stop      # stop dev stack
 #   just test          # run cargo tests
+#   just bench         # run criterion benchmarks
 #   just ci            # fmt-check + clippy + check + test
 #   just fmt           # format code + docs
 
@@ -87,6 +88,20 @@ clippy:
 # Run the workspace test suite.
 test:
     cargo test --workspace --all-targets --no-fail-fast
+
+# ── bench ────────────────────────────────────────────────────────────────────
+
+# Run criterion benchmarks (currently: marker_doc diff snapshot pipeline).
+#   just bench                                             # full run
+#   just bench diff_snapshot                               # filter by name
+#   just bench -- --sample-size 10 --measurement-time 2    # quick mode
+# Pure CPU benches always run; the DB group self-skips like the *_db tests.
+# To enable it, start the e2e Postgres (tests/docker) and run with
+#   GCS_TEST_DB=1 just bench
+# (Workspace lib targets set `bench = false`, so only real [[bench]] targets
+# run and criterion CLI flags reach the criterion harness.)
+bench *ARGS:
+    cargo bench --workspace {{ARGS}}
 
 # ── ci ───────────────────────────────────────────────────────────────────────
 

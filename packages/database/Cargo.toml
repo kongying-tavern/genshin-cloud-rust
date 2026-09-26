@@ -5,6 +5,11 @@ publish = false
 name = "_database"
 version.workspace = true
 
+[lib]
+# Keep `cargo bench --workspace` on the real [[bench]] targets: lib targets
+# default to bench = true and their libtest harness rejects criterion flags.
+bench = false
+
 [dependencies]
 _utils = { path = "../utils", version = "*" }
 

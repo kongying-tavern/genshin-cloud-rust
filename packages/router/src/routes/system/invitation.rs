@@ -1,12 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
 use axum::{
-    extract::{Json, Path},
+    extract::{ConnectInfo, Json, Path},
     response::IntoResponse,
 };
 
-use crate::middlewares::ExtractAdmin;
+use crate::middlewares::{ExtractAdmin, ExtractIP};
 use _utils::{
     models::wrapper::Pagination,
     types::{AccessPolicyItemEnum, InvitationSort},
@@ -124,9 +125,14 @@ pub async fn update(
 /// POST /invitation/info（公开接口：注册流程未登录调用，对齐 Java pass-filter）
 #[tracing::instrument(skip_all)]
 pub async fn info(
+    ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
+    ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<InvitationInfoRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::system::invitation::do_info_public(payload.code).await {
+    // 代理头可信时优先用代理解析的客户端 IP，否则回退到连接对端地址
+    //（与 oauth handler 一致；供公开端点限流使用）
+    let ip = proxy_ip.unwrap_or(native_ip);
+    match _functions::functions::system::invitation::do_info_public(ip, payload.code).await {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -136,9 +142,15 @@ pub async fn info(
 /// POST /invitation/consume
 #[tracing::instrument(skip(payload))]
 pub async fn consume(
+    ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
+    ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<InvitationConsumeRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
+    // 代理头可信时优先用代理解析的客户端 IP，否则回退到连接对端地址
+    //（与 oauth handler 一致；供公开端点限流使用）
+    let ip = proxy_ip.unwrap_or(native_ip);
     match _functions::functions::system::invitation::do_consume(
+        ip,
         payload.code,
         payload.username,
         payload.password,

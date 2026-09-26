@@ -1,5 +1,6 @@
 use anyhow::{Result, anyhow};
 use chrono::Utc;
+use std::net::SocketAddr;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -13,15 +14,18 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{CommonResponse, Pagination, SysUserVO},
+    text::escape_like,
     types::{AccessPolicyItemEnum, SystemUserRole, UserSort},
 };
 
 // 业务处理函数
-/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
+/// 密码最小强度策略：至少 8 个字符（按字符数计）且非纯空白。注册/改密
+/// 入口共用，防止空/极短密码进入 bcrypt 落库（短密码可被离线秒级爆破）。
+fn ensure_password_policy(password: &str) -> Result<()> {
+    if password.chars().count() < 8 || password.trim().is_empty() {
+        return Err(anyhow!("password must be at least 8 characters"));
+    }
+    Ok(())
 }
 
 pub async fn do_register(
@@ -32,6 +36,8 @@ pub async fn do_register(
     username: String,
     password: String,
 ) -> Result<CommonResponse<i64>> {
+    // 密码最小强度：先于任何查重 / bcrypt 工作拒绝弱密码
+    ensure_password_policy(&password)?;
     let db = &DB_CONN.wait().pg_conn;
 
     // 注册前查重（应用层）：username 已被占用（未软删）则拒绝，防重复用户名
@@ -76,6 +82,7 @@ pub async fn do_register(
 }
 
 pub async fn do_register_qq(
+    ip: SocketAddr,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
     remark: Option<String>,
@@ -85,6 +92,12 @@ pub async fn do_register_qq(
     // 不做腾讯 OAuth openid 语义（openid 需服务端授权码换取，客户端自报不可信）。
     qq: Option<String>,
 ) -> Result<CommonResponse<i64>> {
+    // 公开端点限流：每 IP 每小时最多 10 次注册。注册路径含两次查重 +
+    // bcrypt cost-12（~250ms CPU），无限流时是公开的 CPU 放大面，先于
+    // 任何 DB 工作拒绝滥用。
+    super::rate_limit::enforce_ip_rate_limit("register_qq", ip, 10, 3600).await?;
+    // 密码最小强度：与 do_register 一致
+    ensure_password_policy(&password)?;
     let db = &DB_CONN.wait().pg_conn;
     let qq = qq.unwrap_or_else(|| username.clone());
 
@@ -261,6 +274,8 @@ pub async fn do_update_password(
     old_password: String,
     new_password: String,
 ) -> Result<CommonResponse<bool>, (u16, String)> {
+    // 密码最小强度：400（客户端输入错误，先于权限/旧密码校验拒绝弱密码）
+    ensure_password_policy(&new_password).map_err(|e| (400, e.to_string()))?;
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
@@ -304,6 +319,9 @@ pub async fn do_update_password_by_admin(
     password: String,
     user_id: i64,
 ) -> Result<CommonResponse<bool>> {
+    // 密码最小强度：管理员重置同样不得落库弱密码（该通道无旧密码校验，
+    // 弱密码会直接成为该账号的唯一凭据）
+    ensure_password_policy(&password)?;
     let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)

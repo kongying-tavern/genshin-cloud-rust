@@ -22,14 +22,8 @@ use _utils::{
         },
         wrapper::CommonResponse,
     },
+    text::escape_like,
 };
-
-/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
 
 /// 全部 `item_type_link` 的 item_id → type_id 列表映射。
 /// 前端按 `typeIdList` 过滤/分组物品，`ItemVO` 必须携带该字段。
