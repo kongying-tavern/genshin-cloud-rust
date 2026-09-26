@@ -8,11 +8,14 @@
 //! A result-level cache avoids re-scanning the whole table on every request:
 //! a warm `get_result_cached("item:result", ...)` performs zero DB queries.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use std::collections::BTreeMap;
 
 use _database::{DB_CONN, models::item::item as item_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
+    models::wrapper::CommonResponse,
+};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -51,7 +54,7 @@ pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
         .iter()
         .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
         .map(|e| e.bytes.to_vec())
-        .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
+        .ok_or_else(|| DomainError::Business("分页数据未生成或超出获取范围".into()).into())
 }
 
 /// Cache key 形如 `item:{flag}` —— 解析其中的 flag。

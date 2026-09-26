@@ -5,7 +5,7 @@
 //! `tag_type_link` and the icon `url`), keyed by the MD5 of the compressed
 //! bytes. Cached at the result level — warm requests do no DB scan.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use sea_orm::{ColumnTrait, QueryFilter};
 use serde::Serialize;
 
@@ -13,7 +13,10 @@ use _database::{
     DB_CONN,
     models::{icon::icon as icon_model, tag::tag as tag_model, tag::tag_type_link as ttl_model},
 };
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
+    models::wrapper::CommonResponse,
+};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -126,5 +129,5 @@ async fn tag_result() -> Result<ResultEntry> {
     entries
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow!("empty tag result"))
+        .ok_or_else(|| DomainError::Business("empty tag result".into()).into())
 }

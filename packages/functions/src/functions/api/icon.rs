@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use chrono::Utc;
 
@@ -13,6 +13,7 @@ use _database::models::icon::icon as icon_model;
 use _database::models::icon::icon_type_link as icon_type_link_model;
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         IconAddRequest, IconListRequest, IconUpdateRequest,
@@ -66,7 +67,7 @@ async fn write_icon_type_links(operator_id: i64, icon_id: i64, type_ids: &[i64])
         .all(db)
         .await?;
     if existing.len() != type_ids.len() {
-        return Err(anyhow!("类型ID错误"));
+        return Err(DomainError::Business("类型ID错误".into()).into());
     }
     // replace semantics: clear then insert
     icon_type_link_model::Entity::delete_many()
@@ -159,7 +160,7 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
     let item = icon_model::Entity::find_safety_by_id(id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
-    let item = item.ok_or(anyhow!("Icon not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
     Ok(CommonResponse::new(Ok(IconVO {
         id: item.id,
         version: item.version,
@@ -203,7 +204,7 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
     let item = icon_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
-    let item = item.ok_or(anyhow!("Icon not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
     let mut am: icon_model::ActiveModel = item.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));

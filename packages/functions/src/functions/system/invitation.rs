@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -18,6 +18,7 @@ use _database::{
 use _utils::{
     bcrypt,
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{SysUserInvitationSmallVo, SysUserInvitationVo, wrapper::CommonResponse},
     types::{AccessPolicyList, InvitationSort, SystemUserRole},
@@ -112,7 +113,7 @@ pub async fn do_update(
 
     // Java updateInvitation：用户名不能为空
     if username.trim().is_empty() {
-        return Err(anyhow!("用户名不能为空"));
+        return Err(DomainError::Business("用户名不能为空".into()).into());
     }
     // Java updateInvitation：用户已存在则不可再邀请
     let user_exists = sys_user_model::Entity::find_safety()
@@ -121,7 +122,7 @@ pub async fn do_update(
         .await?
         > 0;
     if user_exists {
-        return Err(anyhow!("用户【{username}】已存在，无法邀请"));
+        return Err(DomainError::Business(format!("用户【{username}】已存在，无法邀请")).into());
     }
 
     let role = match role_id {
@@ -131,12 +132,15 @@ pub async fn do_update(
         3 => _utils::types::SystemUserRole::MapPunctuate,
         4 => _utils::types::SystemUserRole::MapUser,
         5 => _utils::types::SystemUserRole::Visitor,
-        _ => return Err(anyhow!("Invalid role id")),
+        _ => return Err(DomainError::Business("Invalid role id".into()).into()),
     };
     // 安全边界：邀请码不可授予 Admin（管理员仅能由 Admin 直接注册/提拔）。
     // 显式拒绝而非静默降级，防止低权限操作者通过邀请码扩散管理员权限。
     if role == SystemUserRole::Admin {
-        return Err(anyhow!("Admin role cannot be granted via invitation code"));
+        return Err(DomainError::Business(
+            "Admin role cannot be granted via invitation code".into(),
+        )
+        .into());
     }
     let access_policy = serde_json::to_value(AccessPolicyList(access_policy))?;
 
@@ -172,9 +176,10 @@ pub async fn do_update(
         .one(db)
         .await?;
     if same_username.is_some() {
-        return Err(anyhow!(
+        return Err(DomainError::Business(format!(
             "已存在用户【{username}】的邀请，请编辑已有邀请信息"
-        ));
+        ))
+        .into());
     }
 
     // 邀请码：给定了就用给定的；缺省时 uuid 前 12 位 hex
@@ -218,7 +223,7 @@ pub async fn do_info_public(
         .filter(inv_model::Column::Code.eq(code))
         .one(db)
         .await?
-        .ok_or_else(|| anyhow!("Invitation code not found"))?;
+        .ok_or_else(|| DomainError::Business("Invitation code not found".into()))?;
     Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
 }
 
@@ -229,7 +234,7 @@ pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serd
         .filter(inv_model::Column::Code.eq(code))
         .one(db)
         .await?
-        .ok_or_else(|| anyhow!("Invitation code not found"))?;
+        .ok_or_else(|| DomainError::Business("Invitation code not found".into()))?;
     Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
 }
 
@@ -267,7 +272,7 @@ pub async fn do_consume(
         .filter(inv_model::Column::Code.eq(&code))
         .one(&txn)
         .await?
-        .ok_or_else(|| anyhow!("Invitation code not found"))?;
+        .ok_or_else(|| DomainError::Business("Invitation code not found".into()))?;
 
     // 条件软删抢占邀请码：并发消费时，后到的事务会等锁并在拿到行锁后重新
     // 评估 WHERE（del_flag=false 已不再满足）→ 影响行数为 0，说明已被消费，
@@ -288,7 +293,7 @@ pub async fn do_consume(
         .rows_affected;
     if claimed == 0 {
         txn.rollback().await?;
-        return Err(anyhow!("Invitation code already consumed"));
+        return Err(DomainError::Business("Invitation code already consumed".into()).into());
     }
 
     // 用户已存在：不重复创建，返回 EXISTING 供前端直接走登录（回滚抢占，
@@ -349,7 +354,7 @@ pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>>
     let inv = inv_model::Entity::find_safety_by_id(id)
         .one(db)
         .await?
-        .ok_or_else(|| anyhow!("Invitation not found"))?;
+        .ok_or_else(|| DomainError::Business("Invitation not found".into()))?;
     let mut am: inv_model::ActiveModel = inv.into();
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组

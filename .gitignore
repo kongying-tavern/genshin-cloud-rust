@@ -5,6 +5,9 @@
 
 .env
 
+# 历史回归会话工件；套件本体已在 tests/python/
+/.regression/
+
 # ZCode agent local files
 .zcode/
 *.pyc

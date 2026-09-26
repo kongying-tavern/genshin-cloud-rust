@@ -208,7 +208,7 @@ pub async fn update(
             payload.role_id,
         )
         .await
-        .map_err(|(code, msg)| crate::routes::status_error(code, msg))?,
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -227,7 +227,7 @@ pub async fn update_password(
     Ok(Json(
         do_update_password(auth, payload.user_id, payload.old_password, new_pw)
             .await
-            .map_err(|(code, msg)| crate::routes::status_error(code, msg))?,
+            .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }

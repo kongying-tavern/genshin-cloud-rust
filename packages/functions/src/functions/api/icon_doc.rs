@@ -6,14 +6,17 @@
 //!
 //! Cached at the result level, so warm requests perform no database scan.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use sea_orm::{ColumnTrait, QueryFilter};
 use serde::Serialize;
 
 use _database::{
     DB_CONN, models::icon::icon as icon_model, models::icon::icon_type_link as itl_model,
 };
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
+    models::wrapper::CommonResponse,
+};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -97,5 +100,5 @@ async fn icon_result() -> Result<ResultEntry> {
     entries
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow!("empty icon result"))
+        .ok_or_else(|| DomainError::Business("empty icon result".into()).into())
 }

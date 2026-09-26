@@ -50,6 +50,12 @@ jobs:
       - name: Run unit tests
         run: cargo test --workspace --lib --no-fail-fast
 
+      # Bin-target unit tests (e.g. the init_db column-mapping tests) are not
+      # covered by --lib/--tests; --bins runs them without the bench/doc
+      # overhead of a bare `cargo test --workspace`.
+      - name: Run bin unit tests
+        run: cargo test --workspace --bins --no-fail-fast
+
       - name: Run integration tests
         run: cargo test --workspace --tests --no-fail-fast
 

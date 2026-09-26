@@ -19,6 +19,7 @@ use sea_orm::{
 use _database::{DB_CONN, models::system::sys_user_archive as archive_model};
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{SysArchiveSlotVo, SysArchiveVo, wrapper::CommonResponse},
 };
@@ -162,7 +163,7 @@ pub async fn do_get_history(
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
-        .ok_or_else(|| anyhow!("槽位不存在"))?;
+        .ok_or_else(|| DomainError::Business("槽位不存在".into()))?;
     Ok(CommonResponse::new(Ok(row_to_slot_vo(row))))
 }
 
@@ -288,7 +289,7 @@ pub async fn do_rename_by_slot(
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
-        .ok_or_else(|| anyhow!("槽位不存在"))?;
+        .ok_or_else(|| DomainError::Business("槽位不存在".into()))?;
     let mut am: archive_model::ActiveModel = row.into();
     am.name = Set(Some(new_name));
     // 审计字段：修改时设置 update 组
@@ -311,10 +312,10 @@ pub async fn do_restore_slot(
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
-        .ok_or_else(|| anyhow!("存档为空，无历史存档"))?;
+        .ok_or_else(|| DomainError::Business("存档为空，无历史存档".into()))?;
     let mut entries = parse_entries(&row.data);
     if entries.is_empty() {
-        return Err(anyhow!("存档为空，无历史存档"));
+        return Err(DomainError::Business("存档为空，无历史存档".into()).into());
     }
     let removed = entries.remove(0);
 
@@ -339,7 +340,7 @@ pub async fn do_delete_slot(
     let db = &DB_CONN.wait().pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     if find_slot_row(db, user_id, slot_index).await?.is_none() {
-        return Err(anyhow!("槽位不存在"));
+        return Err(DomainError::Business("槽位不存在".into()).into());
     }
     // 批量软删（含脏数据多行；update_many 不走实体钩子，手动补 update 组）
     let now = Utc::now().naive_utc();

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{
@@ -13,6 +13,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         tag::{
@@ -65,7 +66,7 @@ pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<Comm
     let t = tag_model::Entity::find_safety_by_id(payload.id)
         .one(db)
         .await?;
-    let t = t.ok_or(anyhow!("Tag not found"))?;
+    let t = t.ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let old_tag = t.tag.clone();
     let new_tag = payload.base.tag;
     let mut am: tag_model::ActiveModel = t.into();
@@ -163,7 +164,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     let db = &DB_CONN.wait().pg_conn;
 
     let t = tag_model::Entity::find_safety_by_id(id).one(db).await?;
-    let t = t.ok_or(anyhow!("Tag not found"))?;
+    let t = t.ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组
@@ -192,7 +193,7 @@ pub async fn do_update_type(
         .filter(tag_model::Column::Tag.eq(&payload.tag))
         .one(db)
         .await?
-        .ok_or_else(|| anyhow!("Tag not found"))?;
+        .ok_or_else(|| DomainError::Business("Tag not found".into()))?;
 
     // Java TagService.updateTypeInTag：typeIdList 中存在未创建的类型即报错
     if !payload.type_id_list.is_empty() {
@@ -208,7 +209,7 @@ pub async fn do_update_type(
                 .map(|t| t.id)
                 .collect();
         if payload.type_id_list.iter().any(|t| !existing.contains(t)) {
-            return Err(anyhow!("类型ID错误"));
+            return Err(DomainError::Business("类型ID错误".into()).into());
         }
     }
 
@@ -301,7 +302,7 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
         .filter(tag_model::Column::Tag.eq(&tag_name))
         .one(db)
         .await?
-        .ok_or(anyhow!("无删除的标签"))?;
+        .ok_or_else(|| DomainError::Business("无删除的标签".into()))?;
     // Java deleteTag：先删 tag_type_link 再删 tag，避免悬空关联
     ttl_model::Entity::update_many()
         .col_expr(
@@ -338,7 +339,7 @@ pub async fn do_update_by_name(
         .filter(tag_model::Column::Tag.eq(&tag_name))
         .one(db)
         .await?
-        .ok_or(anyhow!("Tag not found"))?;
+        .ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let mut am: tag_model::ActiveModel = t.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
@@ -362,7 +363,7 @@ pub async fn do_get_single(auth: AuthInfo, tag_name: String) -> Result<CommonRes
         .filter(tag_model::Column::Tag.eq(&tag_name))
         .one(db)
         .await?
-        .ok_or(anyhow!("Tag not found"))?;
+        .ok_or_else(|| DomainError::Business("Tag not found".into()))?;
 
     let type_id_list: Vec<i64> = ttl_model::Entity::find_safety()
         .filter(ttl_model::Column::TagName.eq(&tag_name))

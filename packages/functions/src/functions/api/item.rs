@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 // serde_json not needed after concrete response conversion
 
@@ -15,6 +15,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         item::{
@@ -91,11 +92,12 @@ pub async fn do_update(
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
-            return Err(anyhow!(
+            return Err(DomainError::Business(format!(
                 "batch too large: {} > {}",
                 payload.len(),
                 MAX_BATCH
-            ));
+            ))
+            .into());
         }
     }
     auth.require_non_anonymous()?;
@@ -118,7 +120,7 @@ pub async fn do_update(
             if edit_same {
                 continue;
             }
-            return Err(anyhow!("Item not found"));
+            return Err(DomainError::Business("Item not found".into()).into());
         }
         for id in target_ids {
             update_one(db, auth.info.id, id, &p).await?;
@@ -141,7 +143,7 @@ async fn update_one(
     p: &ItemUpdateData,
 ) -> Result<()> {
     let item = item_model::Entity::find_safety_by_id(id).one(db).await?;
-    let item = item.ok_or(anyhow!("Item not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Item not found".into()))?;
     let mut am: item_model::ActiveModel = item.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(operator_id));
@@ -289,11 +291,12 @@ pub async fn do_join_type(
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
-            return Err(anyhow!(
+            return Err(DomainError::Business(format!(
                 "batch too large: {} > {}",
                 payload.len(),
                 MAX_BATCH
-            ));
+            ))
+            .into());
         }
     }
     auth.require_non_anonymous()?;
@@ -304,7 +307,7 @@ pub async fn do_join_type(
         .await?
         .is_none()
     {
-        return Err(anyhow!("类型ID错误"));
+        return Err(DomainError::Business("类型ID错误".into()).into());
     }
     // Java ItemService.joinItemsInType：全部 itemId 必须存在，否则「物品ID存在错误」
     {
@@ -317,7 +320,7 @@ pub async fn do_join_type(
             .map(|m| m.id)
             .collect();
         if payload.iter().any(|id| !existing.contains(id)) {
-            return Err(anyhow!("物品ID存在错误"));
+            return Err(DomainError::Business("物品ID存在错误".into()).into());
         }
     }
     for item_id in payload {
@@ -362,11 +365,12 @@ pub async fn do_get_list_by_id(
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
-            return Err(anyhow!(
+            return Err(DomainError::Business(format!(
                 "batch too large: {} > {}",
                 payload.len(),
                 MAX_BATCH
-            ));
+            ))
+            .into());
         }
     }
     let db = &DB_CONN.wait().pg_conn;
@@ -402,7 +406,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
         .await?
         > 0;
     if is_common {
-        return Err(anyhow!("不允许删除公共物品"));
+        return Err(DomainError::Business("不允许删除公共物品".into()).into());
     }
 
     let mut am: item_model::ActiveModel = item.into();
@@ -456,11 +460,12 @@ pub async fn do_copy_to_area(
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
-            return Err(anyhow!(
+            return Err(DomainError::Business(format!(
                 "batch too large: {} > {}",
                 payload.len(),
                 MAX_BATCH
-            ));
+            ))
+            .into());
         }
     }
 
@@ -567,7 +572,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
             .map(|t| t.id)
             .collect();
         if payload.type_id_list.iter().any(|t| !existing.contains(t)) {
-            return Err(anyhow!("类型ID错误"));
+            return Err(DomainError::Business("类型ID错误".into()).into());
         }
         for t in &payload.type_id_list {
             let now = chrono::Utc::now().naive_utc();

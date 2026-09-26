@@ -14,6 +14,7 @@ use rsa::{
     traits::PublicKeyParts,
 };
 
+use crate::errors::DomainError;
 use crate::models::SysUserVO;
 
 pub static JWT_SECRET: Lazy<(EncodingKey, DecodingKey)> = Lazy::new(|| {
@@ -249,9 +250,14 @@ impl AuthInfo {
     }
 
     /// Reject anonymous (client-credentials) tokens on write operations.
+    /// 业务拒绝（匿名身份调写操作）：经函数层流向 router 的
+    /// internal_error，按 `DomainError::Business` 映射为 200 + 原文案。
     pub fn require_non_anonymous(&self) -> anyhow::Result<()> {
         if self.is_anonymous() {
-            anyhow::bail!("Anonymous token is not allowed for this operation")
+            return Err(DomainError::Business(
+                "Anonymous token is not allowed for this operation".into(),
+            )
+            .into());
         }
         Ok(())
     }

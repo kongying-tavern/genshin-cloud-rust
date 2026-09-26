@@ -1,11 +1,12 @@
 //! User device business logic — mirrors Java `SysUserDeviceService`.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{DB_CONN, models::system::sys_user_device as device_model};
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{SysUserDeviceVo, wrapper::CommonResponse},
     types::DeviceSort,
@@ -92,7 +93,7 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
     let d = device_model::Entity::find_safety_by_id(id)
         .one(db)
         .await?
-        .ok_or_else(|| anyhow!("Device not found"))?;
+        .ok_or_else(|| DomainError::Business("Device not found".into()))?;
     let user_id = d.user_id;
     let old_status = d.status;
     let mut am: device_model::ActiveModel = d.into();

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use chrono::{TimeZone, Utc};
 
@@ -10,6 +10,7 @@ use _database::DB_CONN;
 use _database::models::common::history as history_model;
 use _utils::db_operations::SafeEntityTrait;
 use _utils::{
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         history::HistoryItemVO, history::HistoryListRequest, history::HistoryListResponse,
@@ -31,7 +32,7 @@ pub async fn do_get_list(
         let ndt = Utc
             .timestamp_opt(start_ts as i64, 0)
             .single()
-            .ok_or_else(|| anyhow!("Invalid start timestamp"))?
+            .ok_or_else(|| DomainError::Business("Invalid start timestamp".into()))?
             .naive_utc();
         query = query.filter(history_model::Column::CreateTime.gte(ndt));
     }
@@ -39,7 +40,7 @@ pub async fn do_get_list(
         let ndt = Utc
             .timestamp_opt(end_ts as i64, 0)
             .single()
-            .ok_or_else(|| anyhow!("Invalid end timestamp"))?
+            .ok_or_else(|| DomainError::Business("Invalid end timestamp".into()))?
             .naive_utc();
         query = query.filter(history_model::Column::CreateTime.lte(ndt));
     }

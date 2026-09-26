@@ -75,10 +75,18 @@ jobs:
           AFTER_SHA: ${{ github.event.after }}
         run: |
           set -o pipefail
+          # NOTE: a bare `git log <sha>` walks the commit's ENTIRE ancestry —
+          # linting the whole repository history (which contains legacy
+          # non-conforming subjects) instead of the new commits. The
+          # single-sha fallbacks below must therefore pass `-n 1` explicitly;
+          # ARGS carries the rev args as an array so they stay one argument
+          # each under quoting.
           if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            RANGE="$AFTER_SHA"
+            RANGE="$AFTER_SHA (new ref - tip only)"
+            ARGS=(-n 1 "$AFTER_SHA")
           elif git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
             RANGE="${BEFORE_SHA}..${AFTER_SHA}"
+            ARGS=("${BEFORE_SHA}..${AFTER_SHA}")
           else
             # Force-with-lease push after rebase/amend — the repo-sanctioned
             # recovery flow (AGENTS.md §5) — leaves `before` unreachable, so
@@ -88,10 +96,11 @@ jobs:
             # positively identify as new without the old range (PR-side and
             # merge-group steps still lint every commit in scope).
             echo "before ${BEFORE_SHA} not resolvable (force push?) - linting the pushed tip only"
-            RANGE="$AFTER_SHA"
+            RANGE="$AFTER_SHA (tip only)"
+            ARGS=(-n 1 "$AFTER_SHA")
           fi
           echo "Linting commits in range: $RANGE"
-          git log --format='%s' "$RANGE" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
+          git log --format='%s' "${ARGS[@]}" | python -m celestia_devtools commit-msg-lint check --stdin-subjects
 
       - name: Lint merge group commits
         if: github.event_name == 'merge_group'

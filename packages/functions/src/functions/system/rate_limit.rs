@@ -5,10 +5,11 @@
 
 use std::net::SocketAddr;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use once_cell::sync::Lazy;
 
 use _database::DB_CONN;
+use _utils::errors::DomainError;
 
 /// Redis 不可用/命令失败时的进程内兜底计数表（单实例语义）。
 /// key `rl:{bucket}:{ip}` → (计数, 窗口截止时刻)；截止时刻 = 首次计数时刻
@@ -98,7 +99,9 @@ pub async fn enforce_ip_rate_limit(
         None => count_local(&key, window_secs),
     };
     if count > limit {
-        return Err(anyhow!("Too many requests; please try again later"));
+        return Err(
+            DomainError::Business("Too many requests; please try again later".into()).into(),
+        );
     }
     Ok(())
 }

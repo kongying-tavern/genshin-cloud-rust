@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -11,6 +11,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         item_type::{
@@ -55,7 +56,9 @@ pub async fn do_update(
     auth.require_non_anonymous()?;
     // Java updateItemType：禁止自身父子（同文案）
     if payload.id == payload.parent_id {
-        return Err(anyhow!("物品类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("物品类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
     let item = item_type_model::Entity::find_safety_by_id(payload.id)
         .one(&DB_CONN.wait().pg_conn)
@@ -114,16 +117,19 @@ pub async fn do_move_to_target(
     auth.require_non_anonymous()?;
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
-        return Err(anyhow!(
+        return Err(DomainError::Business(format!(
             "batch too large: {} > {}",
             payload.len(),
             MAX_BATCH
-        ));
+        ))
+        .into());
     }
     let db = &DB_CONN.wait().pg_conn;
     // Java moveItemType：目标类型不得在移动集合内（防自身父子，同文案）
     if payload.contains(&target_type_id) {
-        return Err(anyhow!("物品类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("物品类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
     // 校验目标类型存在
     if item_type_model::Entity::find_safety_by_id(target_type_id)
@@ -131,7 +137,7 @@ pub async fn do_move_to_target(
         .await?
         .is_none()
     {
-        return Err(anyhow!("ItemType not found: {target_type_id}"));
+        return Err(DomainError::Business(format!("ItemType not found: {target_type_id}")).into());
     }
     // 记录被移动类型的原父级，移动后重算 is_final。
     // Java selectList(in ids)：集合中不存在的类型静默跳过。
@@ -166,23 +172,19 @@ pub async fn do_move_to_target(
 }
 
 /// 父级存在（id > 0）时直接设置 isFinal（Java updateItemTypeIsFinal）。
+/// 实现统一见 super::set_derived_is_final；沿用本域吞错语义（失败静默，
+/// 与原实现一致），调用点不感知错误。
 async fn set_parent_is_final(db: &sea_orm::DatabaseConnection, parent_id: i64, is_final: bool) {
-    if parent_id <= 0 {
-        return;
-    }
-    let _: Result<()> = async {
-        let Some(mut am): Option<item_type_model::ActiveModel> =
-            item_type_model::Entity::find_safety_by_id(parent_id)
-                .one(db)
-                .await?
-                .map(|m| m.into())
-        else {
-            return Ok(());
-        };
-        am.is_final = Set(is_final);
-        item_type_model::Entity::update_safety(am)?.exec(db).await?;
-        Ok(())
-    }
+    let _ = super::set_derived_is_final(
+        db,
+        item_type_model::Entity,
+        item_type_model::Column::Id,
+        item_type_model::Column::IsFinal,
+        item_type_model::Column::UpdateTime,
+        item_type_model::Column::DelFlag,
+        parent_id,
+        is_final,
+    )
     .await;
 }
 
@@ -338,7 +340,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     let root = all
         .iter()
         .find(|t| t.id == id)
-        .ok_or(anyhow!("ItemType not found"))?;
+        .ok_or_else(|| DomainError::Business("ItemType not found".into()))?;
     let root_parent_id = root.parent_id;
     let mut children: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
     for t in &all {
@@ -398,7 +400,9 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
     // name 在逻辑上为必填
-    let name = payload.name.ok_or(anyhow!("name required"))?;
+    let name = payload
+        .name
+        .ok_or_else(|| DomainError::Business("name required".into()))?;
 
     let sort_index = payload
         .sort_index
