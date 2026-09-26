@@ -65,3 +65,53 @@ pub(crate) async fn sys_user_map(
     }
     Ok(serde_json::Value::Object(users))
 }
+
+/// 父级 is_final（末端标志）维护的统一实现：子级增删后刷新父级派生字段。
+///
+/// 语义（四域统一）：
+/// - `update_many` 批量直写——is_final 是由子级数量推导的**派生字段**，
+///   维护它不参与乐观锁：并发子级新增不会因版本号互相冲突，也不会让
+///   正在编辑父级实体的用户撞「已更新」；
+/// - 同时刷新 update_time（子树变更也是父级变更，审计时间应前进），
+///   但不动 version / updater_id（前者见上，后者由真实编辑者语义持有）；
+/// - 过滤 del_flag = false（对齐原 find_safety_by_id 语义：软删父级不维护）；
+/// - parent_id <= 0（根级哨兵，如 -1/0）直接 Ok 跳过。
+///
+/// 各域以薄包装传入自己的 Entity 与列（见 area/icon_type/item_type/tag_type
+/// 的 set_parent_is_final），调用方错误处理策略不变。
+// 列参数（id/is_final/update_time/del_flag）由各域显式传入，换取 helper
+// 对任意实体泛化；参数数超 clippy 默认上限，与 action_log 等处同样放行。
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn set_derived_is_final<E>(
+    db: &sea_orm::DatabaseConnection,
+    // sea-orm 2.0 的 update_many() 是关联函数，实体实例不参与调用；
+    // 但 E 无法从 E::Column 参数反推（投影不可逆向推断），必须显式传入
+    // 以锚定泛型，故保留下划线参数。
+    _entity: E,
+    id_col: E::Column,
+    is_final_col: E::Column,
+    update_time_col: E::Column,
+    del_flag_col: E::Column,
+    parent_id: i64,
+    is_final: bool,
+) -> Result<()>
+where
+    E: EntityTrait,
+{
+    if parent_id <= 0 {
+        return Ok(());
+    }
+    // update_time 以 Option<NaiveDateTime> 绑定，与四域实体统一的
+    // Option<DateTime> 可空列定义对齐（值恒为 Some）。
+    E::update_many()
+        .col_expr(is_final_col, Expr::value(is_final))
+        .col_expr(
+            update_time_col,
+            Expr::value(Some(chrono::Utc::now().naive_utc())),
+        )
+        .filter(id_col.eq(parent_id))
+        .filter(del_flag_col.eq(false))
+        .exec(db)
+        .await?;
+    Ok(())
+}

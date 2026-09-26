@@ -3,12 +3,13 @@
 //! 对齐 Java `ItemCommonService`：`item_area_public` 是 **item 的关联表**
 //! （把现有 item 标记为公用，按名称去重），不是 item 表本身。
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QueryOrder, QuerySelect, prelude::*};
 
 use _utils::{
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         item::{ItemAreaPublicListResponse, ItemAreaPublicVo},
@@ -90,11 +91,12 @@ pub async fn do_get_list(
 /// 关联表中的跳过。返回是否成功（至少插入一条）。
 pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResponse<bool>> {
     if item_id_list.len() > MAX_BATCH {
-        return Err(anyhow!(
+        return Err(DomainError::Business(format!(
             "batch too large: {} > {}",
             item_id_list.len(),
             MAX_BATCH
-        ));
+        ))
+        .into());
     }
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;

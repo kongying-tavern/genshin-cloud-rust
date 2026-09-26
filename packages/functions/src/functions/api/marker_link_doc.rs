@@ -10,10 +10,13 @@
 //! Both are cached at the result level, so warm requests perform no database
 //! scan.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use _database::{DB_CONN, models::marker::marker_linkage as ml_model};
-use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{
+    db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
+    models::wrapper::CommonResponse,
+};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -105,5 +108,5 @@ async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
     entries
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow!("empty linkage result"))
+        .ok_or_else(|| DomainError::Business("empty linkage result".into()).into())
 }

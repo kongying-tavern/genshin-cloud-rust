@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{
@@ -15,6 +15,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         notice::{
@@ -60,7 +61,7 @@ pub async fn do_update_notice(
     let n = notice_model::Entity::find_safety_by_id(payload.id)
         .one(db)
         .await?;
-    let n = n.ok_or(anyhow!("Notice not found"))?;
+    let n = n.ok_or_else(|| DomainError::Business("Notice not found".into()))?;
     let mut am: notice_model::ActiveModel = n.into();
 
     let now = Utc::now().naive_utc();
@@ -193,7 +194,7 @@ pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     let n = notice_model::Entity::find_safety_by_id(id).one(db).await?;
-    let n = n.ok_or(anyhow!("Notice not found"))?;
+    let n = n.ok_or_else(|| DomainError::Business("Notice not found".into()))?;
     let mut am: notice_model::ActiveModel = n.into();
     am.del_flag = Set(true);
     notice_model::Entity::delete_safety(am)?.exec(db).await?;

@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -15,6 +15,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         AreaAddRequest, AreaListRequest, AreaListResponse, AreaUpdateRequest, AreaVO,
@@ -27,11 +28,11 @@ use _utils::{
 fn guard_area_request(req: &AreaAddRequest) -> Result<(String, String, String)> {
     let name = req.name.trim().to_string();
     if name.is_empty() {
-        return Err(anyhow!("地区名称不能为空"));
+        return Err(DomainError::Business("地区名称不能为空".into()).into());
     }
     let code = req.code.as_deref().map(str::trim).unwrap_or("");
     if code.is_empty() {
-        return Err(anyhow!("地区代码不能为空"));
+        return Err(DomainError::Business("地区代码不能为空".into()).into());
     }
     let content = req.content.clone().unwrap_or_default();
     Ok((name, code.to_string(), content))
@@ -79,14 +80,14 @@ pub async fn do_update(auth: AuthInfo, payload: AreaUpdateRequest) -> Result<Com
     auth.require_non_anonymous()?;
     // Java updateArea：指定的父节点无效（自己挂到自己下面）。
     if payload.area.parent_id == payload.id {
-        return Err(anyhow!("指定的父节点无效"));
+        return Err(DomainError::Business("指定的父节点无效".into()).into());
     }
     let (name, code, content) = guard_area_request(&payload.area)?;
     let db = &DB_CONN.wait().pg_conn;
     let item = area_model::Entity::find_safety_by_id(payload.id)
         .one(db)
         .await?;
-    let item = item.ok_or(anyhow!("Area not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Area not found".into()))?;
 
     // Java updateArea：父级变化时，新父级不再是末端，旧父级按剩余子级重算。
     let old_parent_id = item.parent_id;
@@ -126,20 +127,23 @@ async fn is_leaf(db: &sea_orm::DatabaseConnection, area_id: i64) -> Result<bool>
 
 /// Java updateAreaIsFinal(parentId, isFinal)：直接设置地区（父级）的末端标志。
 /// parentId <= 0（如根级 -1）表示无父级，跳过。
+/// 实现统一见 super::set_derived_is_final。
 async fn set_parent_is_final(
     db: &sea_orm::DatabaseConnection,
     parent_id: i64,
     is_final: bool,
 ) -> Result<()> {
-    if parent_id <= 0 {
-        return Ok(());
-    }
-    area_model::Entity::update_many()
-        .col_expr(area_model::Column::IsFinal, Expr::value(is_final))
-        .filter(area_model::Column::Id.eq(parent_id))
-        .exec(db)
-        .await?;
-    Ok(())
+    super::set_derived_is_final(
+        db,
+        area_model::Entity,
+        area_model::Column::Id,
+        area_model::Column::IsFinal,
+        area_model::Column::UpdateTime,
+        area_model::Column::DelFlag,
+        parent_id,
+        is_final,
+    )
+    .await
 }
 
 /// Java recalculateAreaIsFinal：按剩余非删除子级数量重算末端标志。
@@ -202,12 +206,12 @@ pub async fn do_get(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaV
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(&DB_CONN.wait().pg_conn)
         .await?;
-    let item = item.ok_or(anyhow!("Area not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Area not found".into()))?;
     // 可见性：不可见 flag 的地区对调用者如同不存在（Java getArea 的
     // hiddenFlagList 过滤同口径）。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     if !allowed.contains(&(item.hidden_flag as i32)) {
-        return Err(anyhow!("Area not found"));
+        return Err(DomainError::Business("Area not found".into()).into());
     }
     Ok(CommonResponse::new(Ok(AreaVO {
         version: item.version,
@@ -238,7 +242,7 @@ pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<bo
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(db)
         .await?;
-    let item = item.ok_or(anyhow!("Area not found"))?;
+    let item = item.ok_or_else(|| DomainError::Business("Area not found".into()))?;
     let parent_area_id = item.parent_id;
 
     // 逐层删除子树：先删本层地区与其中物品/点位，再找下一层子地区。

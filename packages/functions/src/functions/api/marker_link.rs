@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -13,6 +13,7 @@ use _database::{
 use _utils::types::MarkerLinkageLinkAction;
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         marker_link::{
@@ -92,6 +93,42 @@ pub(super) async fn path_marker_coords(
         }
     }
     Ok(coords)
+}
+
+/// 写路径可见性对称（#134 同款，补 marker_link 域）：批量加载涉及的
+/// marker（只取 id + hidden_flag，分块 1000，与本文件既有查询习惯一致），
+/// 任何一个**存在且可见集合之外**的 marker 都拒绝整个操作。不存在的 id
+/// 跳过（与 marker.rs do_tweak 的缺失跳过语义一致——存在性校验不是本
+/// 助手的职责）。
+async fn assert_markers_visible(
+    db: &sea_orm::DatabaseConnection,
+    auth: &AuthInfo,
+    ids: &HashSet<i64>,
+) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
+    let id_vec: Vec<i64> = ids.iter().copied().collect();
+    for chunk in id_vec.chunks(1000) {
+        for (_id, hidden_flag) in marker_model::Entity::find()
+            .filter(marker_model::Column::Id.is_in(chunk))
+            .select_only()
+            .column(marker_model::Column::Id)
+            .column(marker_model::Column::HiddenFlag)
+            .into_tuple::<(i64, _utils::types::HiddenFlag)>()
+            .all(db)
+            .await?
+        {
+            // 写路径可见性对称：不可见点位对调用者如同不存在
+            if !allowed.contains(&(hidden_flag as i32)) {
+                // 权限拒绝按 Business 而非 Forbidden：真实 403 会触发前端登出，这里的
+                // 越权语义应展示文案而非强制下线。
+                return Err(DomainError::Business("无权操作该点位".into()).into());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Java `MarkerLinkageDataHelper.patchPathMarkerCoordsInList`：按 id1/id2 回填
@@ -220,14 +257,14 @@ pub async fn do_link(
 
     // 校验（Java checkLinkList 同文案）：非空、端点合法、禁止自关联。
     if payload.is_empty() {
-        return Err(anyhow!("关联数据不可为空"));
+        return Err(DomainError::Business("关联数据不可为空".into()).into());
     }
     for p in &payload {
         if p.from_id <= 0 || p.to_id <= 0 {
-            return Err(anyhow!("无效的关联节点ID"));
+            return Err(DomainError::Business("无效的关联节点ID".into()).into());
         }
         if p.from_id == p.to_id {
-            return Err(anyhow!("不能将点位关联到自身"));
+            return Err(DomainError::Business("不能将点位关联到自身".into()).into());
         }
     }
 
@@ -263,6 +300,10 @@ pub async fn do_link(
         affected_markers.insert(r.from_id);
         affected_markers.insert(r.to_id);
     }
+    // 写路径可见性对称（#134 同款）：提交端点与既有关联行并入的端点两层
+    // 全部覆盖——related 行可能引用调用者不可见的 marker，对它建组/激活
+    // 同样越权。此时 affected_markers 已定型，且尚未发生任何写库动作。
+    assert_markers_visible(db, &auth, &affected_markers).await?;
 
     // Java getLinkSearchMap + patchLinkSearchMap：无序对 → 行；
     // 先全部标记删除，再激活提交的无序对（复用既有行或新建）。
@@ -770,15 +811,14 @@ pub async fn do_delete(
             markers.push(it.to_id);
         }
     };
+    // 收集与删除拆成两段：ids / group_ids 两个分支先遍历收集涉及的关联行
+    // （组 ID 与点位 ID 一并收集），写库前统一做可见性校验，再执行删除
+    let mut rows: Vec<linkage_model::Model> = Vec::new();
     if let Some(ids) = payload.ids {
         for id in ids {
             if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
                 collect_affected(&item);
-                let mut am: linkage_model::ActiveModel = item.into();
-                am.del_flag = Set(true);
-                // 审计字段：软删也是修改，设置 update 组
-                am.updater_id = Set(Some(auth.info.id));
-                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
+                rows.push(item);
             }
         }
     }
@@ -791,13 +831,23 @@ pub async fn do_delete(
                 .await?;
             for it in items {
                 collect_affected(&it);
-                let mut am: linkage_model::ActiveModel = it.into();
-                am.del_flag = Set(true);
-                // 审计字段：软删也是修改，设置 update 组
-                am.updater_id = Set(Some(auth.info.id));
-                linkage_model::Entity::delete_safety(am)?.exec(db).await?;
+                rows.push(it);
             }
         }
+    }
+
+    // 写路径可见性对称（#134 同款）：两个分支收集到的全部涉及点位在任何
+    // 删除动作开始前统一校验——不可见点位的关联对调用者如同不存在，删除
+    // 同样越权，任何一个不可见即拒绝整个操作
+    let affected: HashSet<i64> = markers.iter().copied().collect();
+    assert_markers_visible(db, &auth, &affected).await?;
+
+    for item in rows {
+        let mut am: linkage_model::ActiveModel = item.into();
+        am.del_flag = Set(true);
+        // 审计字段：软删也是修改，设置 update 组
+        am.updater_id = Set(Some(auth.info.id));
+        linkage_model::Entity::delete_safety(am)?.exec(db).await?;
     }
     super::binary_doc::invalidate_doc_cache().await;
     super::super::ws::ws_broadcast(

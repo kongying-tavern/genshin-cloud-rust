@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{
@@ -16,6 +16,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         marker::MarkerFilterRequest,
@@ -302,8 +303,10 @@ pub async fn do_tweak(
             }
             let m = m.unwrap();
             // 写路径可见性对称：不可见点位对调用者如同不存在
+            // （权限拒绝按 Business 而非 Forbidden：真实 403 会触发前端登出，
+            // 这里的越权/不可见语义应展示文案而非强制下线）
             if !allowed_flags.contains(&(m.hidden_flag as i32)) {
-                return Err(anyhow!("无权操作该点位"));
+                return Err(DomainError::Business("无权操作该点位".into()).into());
             }
             let content = m.content.clone();
             let marker_title = m.marker_title.clone();
@@ -399,7 +402,9 @@ pub async fn do_tweak(
                                 // 写路径可见性对称：不可借 tweak 把点位改成可见
                                 // 集合之外的等级（如 MapPunctate 不可自造 Beta 点位）
                                 if !allowed_flags.contains(&(hf as i32)) {
-                                    return Err(anyhow!("无权设置该内容等级"));
+                                    return Err(
+                                        DomainError::Business("无权设置该内容等级".into()).into()
+                                    );
                                 }
                                 am.hidden_flag = Set(hf);
                             }
@@ -664,7 +669,7 @@ pub async fn do_add_single(
     // 创建 flag=2 的 Beta 点位）。hidden_flag 为必填 HiddenFlag（无 serde 默认）
     let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
     if !allowed_flags.contains(&(payload.hidden_flag as i32)) {
-        return Err(anyhow!("无权创建该内容等级的点位"));
+        return Err(DomainError::Business("无权创建该内容等级的点位".into()).into());
     }
     let now = Utc::now().naive_utc();
     let db = &DB_CONN.wait().pg_conn;
@@ -735,7 +740,7 @@ pub async fn do_update_single(
         .await?;
     let Some(m) = m else {
         // Java：实体不存在时 updateById 影响行数为 0，经乐观锁分支同文案报错
-        return Err(anyhow!("该点位已更新，请重新提交"));
+        return Err(DomainError::Business("该点位已更新，请重新提交".into()).into());
     };
     // 写路径可见性对称：不可见点位不可改写，也不可借更新把点位改成可见
     // 集合之外的等级（改写与新建同一套 hidden_flag 门槛）
@@ -743,7 +748,7 @@ pub async fn do_update_single(
     if !allowed_flags.contains(&(m.hidden_flag as i32))
         || !allowed_flags.contains(&(payload.hidden_flag as i32))
     {
-        return Err(anyhow!("无权操作该点位"));
+        return Err(DomainError::Business("无权操作该点位".into()).into());
     }
     let old_extra = m.extra.clone();
     let old_version = m.version;
@@ -758,7 +763,7 @@ pub async fn do_update_single(
     // update_safety 的 version 条件更新兜底并发窗口。
     if let Some(v) = payload.version {
         if v != old_version {
-            return Err(anyhow!("该点位已更新，请重新提交"));
+            return Err(DomainError::Business("该点位已更新，请重新提交".into()).into());
         }
         am.version = Set(v);
     }
@@ -834,7 +839,7 @@ async fn search_marker_ids(
     let is_item = payload.item_id_list.as_ref().is_some_and(|v| !v.is_empty());
     let is_type = payload.type_id_list.as_ref().is_some_and(|v| !v.is_empty());
     if (is_area && is_item) || (is_area && is_type) || (is_type && is_item) {
-        return Err(anyhow!("条件冲突"));
+        return Err(DomainError::Business("条件冲突".into()).into());
     }
     if !is_area && !is_item && !is_type {
         return Ok(vec![]);
@@ -977,11 +982,12 @@ pub async fn do_get_list_by_id(
     const MAX_BATCH: usize = 1000;
     if payload.len() > MAX_BATCH {
         {
-            return Err(anyhow!(
+            return Err(DomainError::Business(format!(
                 "batch too large: {} > {}",
                 payload.len(),
                 MAX_BATCH
-            ));
+            ))
+            .into());
         }
     }
 
@@ -1053,7 +1059,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）
     if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
         if !allowed_flags.contains(&(m.hidden_flag as i32)) {
-            return Err(anyhow!("无权操作该点位"));
+            return Err(DomainError::Business("无权操作该点位".into()).into());
         }
         let mut am: marker_model::ActiveModel = m.into();
         am.del_flag = Set(true);

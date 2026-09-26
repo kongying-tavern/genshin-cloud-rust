@@ -12,6 +12,7 @@ use _database::DB_CONN;
 use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{CommonResponse, Pagination, SysUserVO},
     text::escape_like,
@@ -21,9 +22,11 @@ use _utils::{
 // 业务处理函数
 /// 密码最小强度策略：至少 8 个字符（按字符数计）且非纯空白。注册/改密
 /// 入口共用，防止空/极短密码进入 bcrypt 落库（短密码可被离线秒级爆破）。
+/// 弱密码文案对客户端可见：注册流程按 Business（200）返回；改密流程在
+/// 调用点转写为 BadRequest（真实 400，见 do_update_password）。
 fn ensure_password_policy(password: &str) -> Result<()> {
     if password.chars().count() < 8 || password.trim().is_empty() {
-        return Err(anyhow!("password must be at least 8 characters"));
+        return Err(DomainError::Business("password must be at least 8 characters".into()).into());
     }
     Ok(())
 }
@@ -48,7 +51,7 @@ pub async fn do_register(
         .await?
         > 0;
     if username_taken {
-        return Err(anyhow!("username exists"));
+        return Err(DomainError::Business("username exists".into()).into());
     }
 
     let now = Utc::now().naive_utc();
@@ -109,7 +112,7 @@ pub async fn do_register_qq(
         .await?
         > 0;
     if username_taken {
-        return Err(anyhow!("username exists"));
+        return Err(DomainError::Business("username exists".into()).into());
     }
     let qq_taken = sys_user_model::Entity::find_safety()
         .filter(sys_user_model::Column::Qq.eq(&qq))
@@ -117,7 +120,7 @@ pub async fn do_register_qq(
         .await?
         > 0;
     if qq_taken {
-        return Err(anyhow!("qq exists"));
+        return Err(DomainError::Business("qq exists".into()).into());
     }
 
     let now = Utc::now().naive_utc();
@@ -155,7 +158,7 @@ pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+    let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
 
     // 字段权限：
     // - Admin：放行全部字段（qq/phone/accessPolicy）；
@@ -179,8 +182,9 @@ pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
 }
 
 #[allow(clippy::too_many_arguments)]
-// 错误类型 (u16, String)：HTTP 状态码 + 消息。functions 包不依赖 axum，用
-// u16 而非 StatusCode，由 router 层透传转换（权限类错误 403，其余保持 500）。
+// 错误统一走 anyhow：业务/输入/权限拒绝用 DomainError 分类（router 层
+// internal_error 按变体映射），DB 等内部错误保持原始类型由内部类型判定
+// 收敛为「请求失败」——不再使用 (u16, String) 透传状态码。
 pub async fn do_update(
     auth: AuthInfo,
     id: i64,
@@ -191,21 +195,19 @@ pub async fn do_update(
     qq: Option<String>,
     remark: Option<String>,
     role_id: Option<SystemUserRole>,
-) -> Result<CommonResponse<bool>, (u16, String)> {
+) -> Result<CommonResponse<bool>> {
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != id {
-        return Err((
-            403,
-            "Forbidden: only admins can update other users".to_string(),
-        ));
+        return Err(
+            DomainError::Forbidden("Forbidden: only admins can update other users".into()).into(),
+        );
     }
     let m = sys_user_model::Entity::find_safety_by_id(id)
         .one(db)
-        .await
-        .map_err(|e| (500, e.to_string()))?;
-    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
+        .await?;
+    let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
     let old_role = m.role_id;
     let mut am: sys_user_model::ActiveModel = m.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
@@ -229,15 +231,16 @@ pub async fn do_update(
     }
     if let Some(q) = qq {
         // qq 唯一性（应用层）：改绑前查重，其他未软删用户已占用则拒绝。
+        // 与 do_register 的「username exists / qq exists」同类业务文案，
+        // 统一按 Business（200 + 原文案）返回。
         let qq_taken = sys_user_model::Entity::find_safety()
             .filter(sys_user_model::Column::Qq.eq(&q))
             .filter(sys_user_model::Column::Id.ne(id))
             .count(db)
-            .await
-            .map_err(|e| (500, e.to_string()))?
+            .await?
             > 0;
         if qq_taken {
-            return Err((409, "qq already exists".to_string()));
+            return Err(DomainError::Business("qq already exists".into()).into());
         }
         am.qq = Set(Some(q));
     }
@@ -251,11 +254,7 @@ pub async fn do_update(
         }
     }
 
-    sys_user_model::Entity::update_safety(am)
-        .map_err(|e| (500, e.to_string()))?
-        .exec(db)
-        .await
-        .map_err(|e| (500, e.to_string()))?;
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     // 角色变更（仅 Admin 操作生效）后吊销该用户全部会话：被降权/换角的
     // 用户不得继续持有旧角色权限（Redis VO 快照最长 15 天）。Redis 不可用
     // 时忽略错误（降级）。
@@ -273,41 +272,38 @@ pub async fn do_update_password(
     user_id: i64,
     old_password: String,
     new_password: String,
-) -> Result<CommonResponse<bool>, (u16, String)> {
-    // 密码最小强度：400（客户端输入错误，先于权限/旧密码校验拒绝弱密码）
-    ensure_password_policy(&new_password).map_err(|e| (400, e.to_string()))?;
+) -> Result<CommonResponse<bool>> {
+    // 密码最小强度：400（客户端输入错误，先于权限/旧密码校验拒绝弱密码）。
+    // ensure_password_policy 返回 Business，这里转写为 BadRequest 以保持
+    // 该端点「弱密码 → 真实 400」的原有契约。
+    ensure_password_policy(&new_password).map_err(|e| DomainError::BadRequest(e.to_string()))?;
     let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != user_id {
-        return Err((
-            403,
-            "Forbidden: only the account owner can update password".to_string(),
-        ));
+        return Err(DomainError::Forbidden(
+            "Forbidden: only the account owner can update password".into(),
+        )
+        .into());
     }
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
-        .await
-        .map_err(|_| (500, "Internal server error".to_string()))?;
-    let m = m.ok_or_else(|| (500, "User not found".to_string()))?;
+        .await?;
+    let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
 
     // 校验旧密码，拒绝错误凭据（400：客户端凭据错误，非服务端故障）
     if !_utils::bcrypt::verify_password(old_password, m.password.clone())
-        .map_err(|_| (500, "Internal server error".to_string()))?
+        .map_err(|_| anyhow!("Internal server error"))?
     {
-        return Err((400, "Old password is incorrect".to_string()));
+        return Err(DomainError::BadRequest("Old password is incorrect".into()).into());
     }
 
     let mut am: sys_user_model::ActiveModel = m.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(user_id));
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
-        .map_err(|_| (500, "Internal server error".to_string()))?);
-    sys_user_model::Entity::update_safety(am)
-        .map_err(|_| (500, "Internal server error".to_string()))?
-        .exec(db)
-        .await
-        .map_err(|_| (500, "Internal server error".to_string()))?;
+        .map_err(|_| anyhow!("Internal server error"))?);
+    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
     // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
     // Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(user_id).await;
@@ -326,7 +322,7 @@ pub async fn do_update_password_by_admin(
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
-    let m = m.ok_or(anyhow!("User not found"))?;
+    let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
     let mut am: sys_user_model::ActiveModel = m.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(_auth.info.id));
@@ -446,7 +442,7 @@ pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
     // JWT 本身无状态，登出/踢出依赖 Redis 会话（jwt:access:{uid}:{jti}）。
     let user_id = work_id
         .parse::<i64>()
-        .map_err(|_| anyhow!("Invalid user id"))?;
+        .map_err(|_| DomainError::Business("Invalid user id".into()))?;
     revoke_user_sessions(user_id).await?;
     // 通知该用户的在线连接立即下线（对齐 Java SysUserController）
     super::super::ws::ws_send_to_users(&[work_id], "UserKickedOut", serde_json::Value::Null);

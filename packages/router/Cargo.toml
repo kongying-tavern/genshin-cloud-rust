@@ -58,3 +58,8 @@ tower-http = { workspace = true }
 md5 = { workspace = true }
 bzip2 = { workspace = true }
 sea-orm = { workspace = true }
+# redis / minio：routes::internal_error 沿错误链 downcast 内部错误类型
+# （RedisError / minio::s3::error::Error）判定「内部错误 → 通用文案」，
+# 与 sea-orm（DbErr）、reqwest（Error）同一清单。
+redis = { workspace = true }
+minio = { workspace = true }

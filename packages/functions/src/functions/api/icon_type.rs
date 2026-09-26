@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
@@ -10,6 +10,7 @@ use _database::DB_CONN;
 use _database::models::icon::{icon_type as icon_type_model, icon_type_link as itl_model};
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         IconTypeAddRequest, IconTypeUpdateRequest,
@@ -21,29 +22,27 @@ use _utils::{
 /// Java `IconTypeService` 同文案：禁止自身父子。
 fn check_id_parent(id: i64, parent_id: i64) -> Result<()> {
     if id == parent_id {
-        return Err(anyhow!("图标类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("图标类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
     Ok(())
 }
 
 /// 父级存在（id > 0）时直接设置 isFinal（Java updateIconTypeIsFinal）。
+/// 实现统一见 super::set_derived_is_final；沿用本域吞错语义（失败静默，
+/// 与原实现一致），调用点不感知错误。
 async fn set_parent_is_final(db: &sea_orm::DatabaseConnection, parent_id: i64, is_final: bool) {
-    if parent_id <= 0 {
-        return;
-    }
-    let _: Result<()> = async {
-        let Some(mut am): Option<icon_type_model::ActiveModel> =
-            icon_type_model::Entity::find_safety_by_id(parent_id)
-                .one(db)
-                .await?
-                .map(|m| m.into())
-        else {
-            return Ok(());
-        };
-        am.is_final = Set(is_final);
-        icon_type_model::Entity::update_safety(am)?.exec(db).await?;
-        Ok(())
-    }
+    let _ = super::set_derived_is_final(
+        db,
+        icon_type_model::Entity,
+        icon_type_model::Column::Id,
+        icon_type_model::Column::IsFinal,
+        icon_type_model::Column::UpdateTime,
+        icon_type_model::Column::DelFlag,
+        parent_id,
+        is_final,
+    )
     .await;
 }
 

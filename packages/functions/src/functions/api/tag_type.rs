@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use chrono::Utc;
 
 use sea_orm::{
@@ -13,6 +13,7 @@ use _database::{
 };
 use _utils::{
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::AuthInfo,
     models::{
         tag_type::{
@@ -66,7 +67,9 @@ pub async fn do_update(
     auth.require_non_anonymous()?;
     let db = &DB_CONN.wait().pg_conn;
     if payload.id == payload.base.parent_id {
-        return Err(anyhow!("标签类型ID不允许与父ID相同，会造成自身父子"));
+        return Err(
+            DomainError::Business("标签类型ID不允许与父ID相同，会造成自身父子".into()).into(),
+        );
     }
 
     let Some(t) = tag_type_model::Entity::find_safety_by_id(payload.id)
@@ -232,23 +235,19 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 }
 
 /// 父级存在（id > 0）时直接设置 isFinal（Java updateTagTypeIsFinal）。
+/// 实现统一见 super::set_derived_is_final；沿用本域吞错语义（失败静默，
+/// 与原实现一致），调用点不感知错误。
 async fn set_parent_is_final(db: &sea_orm::DatabaseConnection, parent_id: i64, is_final: bool) {
-    if parent_id <= 0 {
-        return;
-    }
-    let _: Result<()> = async {
-        let Some(mut am): Option<tag_type_model::ActiveModel> =
-            tag_type_model::Entity::find_safety_by_id(parent_id)
-                .one(db)
-                .await?
-                .map(|m| m.into())
-        else {
-            return Ok(());
-        };
-        am.is_final = Set(is_final);
-        tag_type_model::Entity::update_safety(am)?.exec(db).await?;
-        Ok(())
-    }
+    let _ = super::set_derived_is_final(
+        db,
+        tag_type_model::Entity,
+        tag_type_model::Column::Id,
+        tag_type_model::Column::IsFinal,
+        tag_type_model::Column::UpdateTime,
+        tag_type_model::Column::DelFlag,
+        parent_id,
+        is_final,
+    )
     .await;
 }
 

@@ -19,9 +19,13 @@ async fn authorize<S: Send + Sync>(
 ) -> Result<AuthInfo, Box<Response>> {
     let ExtractAuthInfo(auth) = ExtractAuthInfo::from_request_parts(parts, state).await?;
     if (auth.info.role_id as i32) > (threshold as i32) {
-        return Err((StatusCode::FORBIDDEN, "Forbidden".to_string())
-            .into_response()
-            .into());
+        // 403 与 auth_extrator 的 401 形状对齐：JSON R 包装（而非纯文本），
+        // 前端可用同一套解析读取 errorStatus/message。
+        return Err(
+            crate::routes::status_error(StatusCode::FORBIDDEN.as_u16(), "Forbidden")
+                .into_response()
+                .into(),
+        );
     }
     Ok(auth)
 }

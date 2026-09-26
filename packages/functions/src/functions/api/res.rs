@@ -14,7 +14,7 @@
 use anyhow::{Context, Result, anyhow};
 
 use _database::DB_CONN;
-use _utils::{jwt::AuthInfo, models::wrapper::CommonResponse};
+use _utils::{errors::DomainError, jwt::AuthInfo, models::wrapper::CommonResponse};
 use serde::{Deserialize, Serialize};
 
 /// A file that passed the router's content-type/size gates and is ready to
@@ -87,6 +87,9 @@ pub async fn do_upload_image(
 ) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
 
+    // 配置缺失属内部故障而非业务文案，保持 anyhow（router 层兜底原文返回）。
+    // 注：旧关键字方案会把本文案（含 "minio"）收敛为「请求失败」；现仅含
+    // 环境变量名、无密钥值，原文返回可接受且更利于运维定位。
     let client = DB_CONN.wait().minio_conn.clone().ok_or_else(|| {
         anyhow!("MinIO is not configured (set MINIO_BASE_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)")
     })?;
@@ -100,13 +103,14 @@ pub async fn do_upload_image(
     let f = payload
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow!("no file uploaded"))?;
+        .ok_or_else(|| DomainError::Business("no file uploaded".into()))?;
 
     if !magic_matches_content_type(&f.content_type, &f.bytes) {
-        return Err(anyhow!(
+        return Err(DomainError::Business(format!(
             "uploaded file content does not match declared content type: {}",
             f.content_type
-        ));
+        ))
+        .into());
     }
 
     let key = format!(

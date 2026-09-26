@@ -9,8 +9,14 @@ production, run that file manually once).
 
 Usage:
     python scripts/init_db.py
+    python scripts/init_db.py --check
 
-Exits non-zero when Postgres is unreachable or the schema step fails.
+All arguments are passed through to the bin unchanged (`--` is added for
+cargo), so `--check` (entity ↔ database schema drift check, exit code 1 on
+missing columns) works without further wrapping.
+
+Exits non-zero when Postgres is unreachable, the schema step fails, or the
+wrapped bin exits non-zero (e.g. drift detected with --check).
 """
 
 from __future__ import annotations
@@ -46,8 +52,10 @@ def main() -> int:
     database = os.environ.get("DB_DATABASE", "genshin_map")
     print(f"Initializing schema at postgres://{user}@{host}:{port}/{database} ...")
 
+    # "--" separates cargo's own flags from the bin's arguments; extra CLI
+    # args are forwarded verbatim so `--check` reaches the bin.
     result = subprocess.run(
-        ["cargo", "run", "--bin", "init_db"],
+        ["cargo", "run", "--bin", "init_db", "--", *sys.argv[1:]],
         cwd=str(REPO_ROOT),
         capture_output=True,
         encoding="utf-8",

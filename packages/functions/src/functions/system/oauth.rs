@@ -13,6 +13,7 @@ use _database::{DB_CONN, models};
 use _utils::{
     bcrypt::verify_password,
     db_operations::SafeEntityTrait,
+    errors::DomainError,
     jwt::{Claims, EXPIRED_APPEND_DURATION, REFRESH_APPEND_DURATION, generate_token, verify_token},
     models::SysUserVO,
     types::{
@@ -61,19 +62,21 @@ async fn check_access_policy(
                     && let Some(last_ip) = &dev.ipv4
                     && ip.ip().to_string() != *last_ip
                 {
-                    return Err(anyhow!(
+                    return Err(DomainError::Business(format!(
                         "Access denied: IP {} does not match the last login IP {last_ip}",
                         ip
-                    ));
+                    ))
+                    .into());
                 }
             },
             AccessPolicyItemEnum::DevSameLastDevice => {
                 if let Some(dev) = &last
                     && dev.device_id != *user_agent
                 {
-                    return Err(anyhow!(
-                        "Access denied: device does not match the last login device"
-                    ));
+                    return Err(DomainError::Business(
+                        "Access denied: device does not match the last login device".into(),
+                    )
+                    .into());
                 }
             },
             AccessPolicyItemEnum::IpBlockDisallowIp => {
@@ -87,7 +90,11 @@ async fn check_access_policy(
                     .await
                     .map_err(internal_error)?;
                 if blocked.is_some() {
-                    return Err(anyhow!("Access denied: IP {} is blocked", ip));
+                    return Err(DomainError::Business(format!(
+                        "Access denied: IP {} is blocked",
+                        ip
+                    ))
+                    .into());
                 }
             },
             AccessPolicyItemEnum::DevBlockDisallowDevice => {
@@ -99,7 +106,9 @@ async fn check_access_policy(
                     .await
                     .map_err(internal_error)?;
                 if blocked.is_some() {
-                    return Err(anyhow!("Access denied: device is blocked"));
+                    return Err(
+                        DomainError::Business("Access denied: device is blocked".into()).into(),
+                    );
                 }
             },
             // 允许列表 / 地区类策略：当前数据模型无对应存储，放行
@@ -280,7 +289,7 @@ async fn oauth_password_login_inner(
     user_agent: &str,
 ) -> Result<OauthLoginResponse> {
     if !verify_password(password_raw, item.password.clone())? {
-        return Err(anyhow!("Invalid username or password"));
+        return Err(DomainError::Business("Invalid username or password".into()).into());
     }
 
     // 身份验证通过后，按用户的 access_policy 校验登录环境。
@@ -319,7 +328,10 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     // S2：refresh token 不得当 access token 使用。旧令牌无 token_type
     // 声明（None），走下方 access key 校验路径，保持兼容。
     if claims.token_type.as_deref() == Some("refresh") {
-        return Err(anyhow!("Refresh token cannot be used as an access token"));
+        return Err(DomainError::Business(
+            "Refresh token cannot be used as an access token".into(),
+        )
+        .into());
     }
 
     // S1：会话校验。Redis key 命中 → 放行；key 明确不存在 → 会话已被吊销
@@ -334,7 +346,7 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
                 // 会话命中：以 Redis 中缓存的 VO 为准
                 Ok(Some(item)) => return parse_cached_payload(&item, &claims),
                 // 键明确不存在 = 吊销已生效（登出/踢出/改密/刷新轮换）
-                Ok(None) => return Err(anyhow!("Token revoked")),
+                Ok(None) => return Err(DomainError::Business("Token revoked".into()).into()),
                 // Redis 命令失败（连接中断等）→ 无法判定存在性
                 Err(_) if redis_required => {
                     return Err(anyhow!("Redis unavailable (REDIS_REQUIRED=true)"));
@@ -361,7 +373,7 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
         .one(&DB_CONN.wait().pg_conn)
         .await
         .map_err(internal_error)?
-        .ok_or(anyhow!("User not found for token"))?;
+        .ok_or_else(|| DomainError::Business("User not found for token".into()))?;
     Ok((user.into(), claims))
 }
 
@@ -462,9 +474,10 @@ async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> 
 /// 用时降级到进程内 map（保留原单实例行为）。
 async fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
     match login_failure_count_redis(ip, false).await {
-        Some(count) if count >= LOGIN_RATE_LIMIT_PER_MINUTE => Err(anyhow!(
-            "Too many failed login attempts; try again in a minute"
-        )),
+        Some(count) if count >= LOGIN_RATE_LIMIT_PER_MINUTE => Err(DomainError::Business(
+            "Too many failed login attempts; try again in a minute".into(),
+        )
+        .into()),
         Some(_) => Ok(()),
         None => check_login_rate_limit_local(ip),
     }
@@ -481,9 +494,10 @@ fn check_login_rate_limit_local(ip: SocketAddr) -> Result<()> {
         *entry = (0, now);
     }
     if entry.0 >= LOGIN_RATE_LIMIT_PER_MINUTE {
-        return Err(anyhow!(
-            "Too many failed login attempts; try again in a minute"
-        ));
+        return Err(DomainError::Business(
+            "Too many failed login attempts; try again in a minute".into(),
+        )
+        .into());
     }
     Ok(())
 }
@@ -566,7 +580,7 @@ pub async fn oauth_password_login(
         record_login_failure(ip).await;
         // 用户不存在同样写失败审计日志（user_id 未知，记 None）
         let _ = record_login_log(None, ip, &user_agent, true).await;
-        return Err(anyhow!("Invalid username or password"));
+        return Err(DomainError::Business("Invalid username or password".into()).into());
     };
     let user_id = item.id;
 
@@ -592,7 +606,7 @@ pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
     let normalized = scope.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "" | "all" => Ok(OauthScopeType::All),
-        other => Err(anyhow!("Unsupported scope: {other}")),
+        other => Err(DomainError::Business(format!("Unsupported scope: {other}")).into()),
     }
 }
 
@@ -682,20 +696,20 @@ pub async fn oauth_refresh(
     // S2：只接受 refresh 类型令牌。access token 直接拒绝；旧格式令牌
     // （无 token_type 声明）一律拒绝，强制重新登录（旧格式即本漏洞来源）。
     if claims.token_type.as_deref() != Some("refresh") {
-        return Err(anyhow!("Not a refresh token"));
+        return Err(DomainError::Business("Not a refresh token".into()).into());
     }
 
     // 匿名身份（sub=0）从不签发 refresh token（OauthAnonymousResponse 无
     // refresh_token 字段），提前拒绝，避免查询不存在的用户行。
     if claims.sub == 0 {
-        return Err(anyhow!("Anonymous identity cannot be refreshed"));
+        return Err(DomainError::Business("Anonymous identity cannot be refreshed".into()).into());
     }
 
     let user = models::system::sys_user::Entity::find_safety_by_id(claims.sub)
         .one(&DB_CONN.wait().pg_conn)
         .await
         .map_err(internal_error)?
-        .ok_or_else(|| anyhow::anyhow!("User not found"))?;
+        .ok_or_else(|| DomainError::Business("User not found".into()))?;
     let vo: SysUserVO = user.clone().into();
 
     // 与登录一致地校验 access_policy（IP / 设备绑定策略）：对齐 Java
@@ -740,7 +754,7 @@ pub async fn oauth_refresh(
         .await
         .map_err(internal_error)?;
     if old_access_jti.is_none() {
-        return Err(anyhow!("Refresh token not found or already used"));
+        return Err(DomainError::Business("Refresh token not found or already used".into()).into());
     }
 
     // 吊销旧 access token（其 jti 记录在 refresh key 的 value 中）
