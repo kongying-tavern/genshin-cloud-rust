@@ -1,12 +1,13 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
 use axum::{
-    extract::{Json, Path},
+    extract::{ConnectInfo, Json, Path},
     response::IntoResponse,
 };
 
-use crate::middlewares::{ExtractAdmin, ExtractAuthInfo, ExtractManager};
+use crate::middlewares::{ExtractAdmin, ExtractAuthInfo, ExtractIP, ExtractManager};
 use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
@@ -147,10 +148,16 @@ pub async fn register(
 /// POST /user/register/qq
 #[tracing::instrument(skip(payload))]
 pub async fn register_qq(
+    ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
+    ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<UserRegisterQQParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
+    // 代理头可信时优先用代理解析的客户端 IP，否则回退到连接对端地址
+    //（与 oauth handler 一致；供注册限流使用）
+    let ip = proxy_ip.unwrap_or(native_ip);
     Ok(Json(
         do_register_qq(
+            ip,
             payload.access_policy,
             payload.logo,
             payload.remark,

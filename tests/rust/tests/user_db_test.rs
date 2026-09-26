@@ -145,8 +145,14 @@ async fn user_db_round_trip() {
     assert_eq!(vo.role_id, SystemUserRole::MapUser);
 
     // ── do_update_password: wrong old password must fail ──────────────────────
-    let wrong_pw =
-        user_fns::do_update_password(stub_auth(), id, "wrong_old_pw".into(), "new_pw".into()).await;
+    // 新密码满足最小长度策略（≥8 字符），确保失败来自旧密码校验而非密码策略
+    let wrong_pw = user_fns::do_update_password(
+        stub_auth(),
+        id,
+        "wrong_old_pw".into(),
+        "new_pw_123456".into(),
+    )
+    .await;
     assert!(
         wrong_pw.is_err(),
         "updating the password with a wrong old password must fail"
@@ -154,7 +160,7 @@ async fn user_db_round_trip() {
 
     // ── do_update_password: correct old password succeeds and the new
     //    password verifies ────────────────────────────────────────────────────
-    user_fns::do_update_password(stub_auth(), id, "init_pw".into(), "new_pw".into())
+    user_fns::do_update_password(stub_auth(), id, "init_pw".into(), "new_pw_123456".into())
         .await
         .expect("update password with correct old password");
 
@@ -164,7 +170,7 @@ async fn user_db_round_trip() {
         .expect("fetch updated user")
         .expect("user still exists");
     assert!(
-        _utils::bcrypt::verify_password("new_pw", updated.password.clone()).expect("verify"),
+        _utils::bcrypt::verify_password("new_pw_123456", updated.password.clone()).expect("verify"),
         "the new password must verify after the update"
     );
     assert!(

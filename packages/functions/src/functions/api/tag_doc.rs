@@ -46,7 +46,7 @@ pub async fn do_all_bin_md5(
 /// `GET /tag_doc/all_bin` — the all-tags blob (compressed bytes).
 pub async fn do_all_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
     let entry = tag_result().await?;
-    Ok(entry.bytes)
+    Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) the single tag blob.
@@ -108,7 +108,7 @@ async fn tag_result() -> Result<ResultEntry> {
             Ok(CachedPage {
                 md5: md5_hex,
                 time: chrono::Utc::now().timestamp_millis(),
-                bytes: compressed,
+                bytes: compressed.into(),
             })
         })
         .await?;

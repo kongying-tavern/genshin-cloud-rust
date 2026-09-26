@@ -8,6 +8,7 @@ use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
     models::{SysActionLogVo, wrapper::CommonResponse},
+    text::escape_like,
     types::SystemActionLogAction,
 };
 
@@ -17,13 +18,6 @@ fn action_to_str(action: SystemActionLogAction) -> String {
         .ok()
         .and_then(|v| v.as_str().map(|s| s.to_string()))
         .unwrap_or_default()
-}
-
-/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
 }
 
 /// List action logs with optional filtering by user_id / action.

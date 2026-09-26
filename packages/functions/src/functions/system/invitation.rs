@@ -1,6 +1,7 @@
 //! User invitation business logic — mirrors Java `SysUserInvitationService`.
 
 use std::collections::HashSet;
+use std::net::SocketAddr;
 
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -205,7 +206,13 @@ pub async fn do_update(
 /// Check invitation info by code.
 /// 公开查询（Java 免登 pass-filter）：校验邀请码是否存在并返回邀请信息。
 /// 不做登录态校验——该端点在注册流程中于登录前调用。
-pub async fn do_info_public(code: String) -> Result<CommonResponse<serde_json::Value>> {
+pub async fn do_info_public(
+    ip: SocketAddr,
+    code: String,
+) -> Result<CommonResponse<serde_json::Value>> {
+    // 公开端点限流：每 IP 每分钟最多 30 次查询（邀请码探测/爆破面，
+    // 每次请求都打一次 DB 等值查询）
+    super::rate_limit::enforce_ip_rate_limit("invite_info", ip, 30, 60).await?;
     let db = &DB_CONN.wait().pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(code))
@@ -231,11 +238,15 @@ pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serd
 /// 返回 `{userId, result}`，对齐前端 `SysUserInvitationConsumeResultVo`。
 #[allow(clippy::too_many_arguments)]
 pub async fn do_consume(
+    ip: SocketAddr,
     code: String,
     username: Option<String>,
     password: Option<String>,
     nickname: Option<String>,
 ) -> Result<CommonResponse<serde_json::Value>> {
+    // 公开端点限流：每 IP 每分钟最多 30 次消费尝试（邀请码猜测面；每次
+    // 请求含事务 + bcrypt cost-12，先于任何 DB 工作拒绝滥用）
+    super::rate_limit::enforce_ip_rate_limit("invite_consume", ip, 30, 60).await?;
     let db = &DB_CONN.wait().pg_conn;
 
     let now = Utc::now().naive_utc();

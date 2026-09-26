@@ -375,10 +375,12 @@ fn parse_cached_payload(item: &str, claims: &Claims) -> Result<(SysUserVO, Claim
     Ok((serde_json::from_value::<SysUserVO>(value)?, claims.clone()))
 }
 
-/// 登录暴力破解限流：按 IP 固定窗口（每分钟最多 5 次失败的密码登录尝试）。
-/// 只计数失败尝试（成功登录不消耗额度），窗口过后自动重置。
+/// 登录暴力破解限流：按 IP 固定窗口（每分钟最多 5 次失败的密码登录尝试，
+/// 窗口自首次失败起算，不随后续失败滑动）。只计数失败尝试（成功登录不
+/// 消耗额度），窗口过后自动重置。
 ///
-/// 计数优先走 Redis（key `login_fail:{ip}`，60s 窗口，NX+EXPIRE+INCR 模式）：
+/// 计数优先走 Redis（key `login_fail:{ip}`，自首次失败起 60 秒的固定窗口，
+/// SET NX EX + INCR 模式）：
 /// 多实例部署共享同一计数，攻击者无法靠打 N 个副本把额度放大 N 倍。Redis
 /// 不可用/命令失败时降级为进程内 HashMap（保留原有单实例行为，避免 Redis
 /// 抖动导致全站拒绝登录）。
@@ -395,17 +397,19 @@ fn sweep_stale_login_failures(map: &mut std::collections::HashMap<String, (u32, 
     });
 }
 
-/// 进程内兜底的滚动窗口语义：自**首次失败**起 60 秒内持续计数，与 Redis
-/// 侧 `SET NX EX 60` + INCR 的滚动 TTL 对齐。此前的「时钟分钟桶」实现
-///（`now / 60` 分桶）会在分钟边界把计数清零——5 次失败跨过整分后第 6 次
-/// 放行（CI 无 Redis 走本路径时为确定性抖动源）。
+/// 两条路径（Redis 与进程内兜底）统一为**固定窗口**：自**首次失败**起 60 秒
+/// 内持续计数，窗口起点不随后续失败滑动。此前的「时钟分钟桶」实现（本地，
+/// `now / 60` 分桶）会在分钟边界把计数清零——5 次失败跨过整分后第 6 次
+/// 放行（CI 无 Redis 走本路径时为确定性抖动源）；Redis 侧曾用无条件
+/// EXPIRE 续期，把窗口劣化为随每次失败滑动的滚动窗口，与本地路径不一致。
 ///
 /// Redis 侧失败计数。返回 `None` 表示 Redis 不可用/命令失败，由调用方降级
 /// 到进程内 HashMap。
 ///
-/// `record=true` 用 NX+EXPIRE+INCR 模式写入：`SET key 1 NX EX 60` 原子创建
-/// 窗口（并发首击不会重复建键/续期），已有键则 INCR 累加；INCR 前键恰好
-/// 过期时会新建无 TTL 的键，补设一次过期保证窗口仍为 60s。
+/// `record=true` 用 SET NX + INCR 模式写入：`SET key 1 NX EX 60` 原子创建
+/// 窗口（并发首击不会重复建键），已有键则 INCR 累加且**不**续期（保持首次
+/// 失败锚定的固定窗口）；仅当 INCR 返回 1（键在 SET 与 INCR 之间恰好过期、
+/// 被 INCR 重建为无 TTL 的键）时补设一次过期，防止计数键永不过期。
 async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> {
     let client = DB_CONN.wait().redis_conn.as_ref()?;
     let mut conn = client.get_multiplexed_async_connection().await.ok()?;
@@ -429,12 +433,18 @@ async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> 
                 .query_async(&mut conn)
                 .await
                 .ok()?;
-            let _: i64 = redis::cmd("EXPIRE")
-                .arg(&key)
-                .arg(LOGIN_RATE_LIMIT_WINDOW_SECS)
-                .query_async(&mut conn)
-                .await
-                .ok()?;
+            // 仅当 INCR 返回 1（键在 SET 与 INCR 之间恰好过期、被 INCR 重建
+            // 为无 TTL 的键）时补一次 EXPIRE；无条件续期会把窗口劣化为随
+            // 每次失败滑动的滚动窗口，与本地兜底的「锚定首次失败」固定
+            // 窗口语义不一致。
+            if n == 1 {
+                let _: i64 = redis::cmd("EXPIRE")
+                    .arg(&key)
+                    .arg(LOGIN_RATE_LIMIT_WINDOW_SECS)
+                    .query_async(&mut conn)
+                    .await
+                    .ok()?;
+            }
             n.max(0) as u32
         };
         Some(count)
@@ -586,7 +596,13 @@ pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
     }
 }
 
-pub async fn oauth_client_credentials(scope: String) -> Result<OauthAnonymousResponse> {
+pub async fn oauth_client_credentials(
+    ip: SocketAddr,
+    scope: String,
+) -> Result<OauthAnonymousResponse> {
+    // 公开端点限流：每 IP 每分钟最多 60 次匿名发牌（签发含 JWT 生成，
+    // 不限量时是公开的 CPU 消耗面）。
+    super::rate_limit::enforce_ip_rate_limit("oauth_cc", ip, 60, 60).await?;
     // 使用系统匿名用户 id = 0 表示客户端凭据/匿名访问
     let id: i64 = 0;
 
@@ -657,6 +673,9 @@ pub async fn oauth_refresh(
     ip: SocketAddr,
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
+    // 公开端点限流：每 IP 每分钟最多 60 次刷新尝试（refresh_token 是
+    // 可猜测凭据，先于任何 JWT 验签/DB 工作拒绝滥用）。
+    super::rate_limit::enforce_ip_rate_limit("oauth_refresh", ip, 60, 60).await?;
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;
 

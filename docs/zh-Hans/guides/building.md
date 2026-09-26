@@ -25,12 +25,11 @@ just build --dev   # 调试构建
 just build --clean # 先 cargo clean 再构建
 just check         # cargo check --workspace --all-targets
 just run           # 运行 _router 二进制
+just dev           # 实时调试运行（拉起 Rust 后端 + Vue 前端）
 just test          # 全工作区测试（--no-fail-fast）
 just ci            # fmt-check + clippy + check + test（CI 等价）
 just fmt           # cargo fmt + Markdown 格式化
 ```
-
-实时调试可用文件监听守护：`just dev-watch packages -- just run`。
 
 ## `.env` 文件
 

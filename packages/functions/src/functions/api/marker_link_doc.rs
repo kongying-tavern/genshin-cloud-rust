@@ -33,7 +33,7 @@ pub async fn do_all_list_bin_md5(
 /// `GET /marker_link_doc/all_list_bin` — the flat linkage list blob (compressed bytes).
 pub async fn do_all_list_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
     let entry = linkage_result("link:list-result", false).await?;
-    Ok(entry.bytes)
+    Ok(entry.bytes.to_vec())
 }
 
 /// `GET /marker_link_doc/all_graph_bin_md5` — MD5 of the graph blob.
@@ -48,7 +48,7 @@ pub async fn do_all_graph_bin_md5(
 /// `GET /marker_link_doc/all_graph_bin` — the graph blob (compressed bytes).
 pub async fn do_all_graph_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
     let entry = linkage_result("link:graph-result", true).await?;
-    Ok(entry.bytes)
+    Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) one linkage blob view.
@@ -87,7 +87,7 @@ async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
             Ok(CachedPage {
                 md5: md5_hex,
                 time: chrono::Utc::now().timestamp_millis(),
-                bytes: compressed,
+                bytes: compressed.into(),
             })
         })
         .await?;

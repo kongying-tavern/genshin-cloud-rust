@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 use axum::{
-    body::Bytes,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -16,13 +15,14 @@ pub async fn list_diff_snapshot(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
     match _functions::functions::api::marker_doc::do_list_diff_snapshot(auth).await {
+        // Bytes 直接进响应体：缓存命中时全链路零拷贝（无整包 memcpy）。
         Ok(bytes) => Ok((
             StatusCode::OK,
             [
                 (header::CONTENT_TYPE, "application/octet-stream"),
                 (header::CACHE_CONTROL, "no-store"),
             ],
-            Bytes::from(bytes),
+            bytes,
         )
             .into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),

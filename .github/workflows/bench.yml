@@ -1,0 +1,79 @@
+name: Bench
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: true
+
+jobs:
+  # Informational only — NOT in the branch-protection required contexts (same
+  # tier as Coverage / Hygiene). Runs the criterion benchmarks; the numbers are
+  # for regressions eyeballing, not gating. The Postgres service enables the
+  # DB-backed group (GCS_TEST_DB self-skip mirrors the *_db integration
+  # tests); quick-mode flags keep the run fast — use `just bench` locally for
+  # full runs with baseline comparisons under target/criterion.
+  bench:
+    name: Bench
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: genshin_map
+          POSTGRES_PASSWORD: genshin_map
+          POSTGRES_DB: genshin_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U genshin_map"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      GCS_TEST_DB: "1"
+      DB_USERNAME: genshin_map
+      DB_PASSWORD: genshin_map
+      DB_DATABASE: genshin_map
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Run criterion benches
+        run: cargo bench --workspace -- --warm-up-time 1 --measurement-time 2 --sample-size 10
+
+      - name: Upload criterion reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-reports
+          path: target/criterion
+          if-no-files-found: ignore

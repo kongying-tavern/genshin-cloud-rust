@@ -178,7 +178,7 @@ master  ── 唯一主线，永远可构建、CI 全绿；禁止直推、禁�
 | `feat/jwks-endpoint` | `✨ Add the JWKS public key distribution endpoint.` | F7 后半：JWKS 路由 + 密钥轮换策略 | `/.well-known/jwks.json` 可用 |
 | `feat/qq-login` | `✨ Implement QQ third-party login.` | F7/F8 交集：`do_register_qq` 真实现 | 全流程可登录（mock QQ 侧） |
 
-### M4 — 性能与缓存 — 🟡 部分完成（moka 进程内缓存 + 刷新接线 PR #35–36；Redis 二级缓存未做）
+### M4 — 性能与缓存 — ✅ 已完成（PR #35–36；Redis 二级缓存已实现，由 `tests/rust/tests/redis_cache_db_test.rs` 覆盖）
 
 | 分支 | PR 标题 | 内容 | DoD |
 | --- | --- | --- | --- |
@@ -225,3 +225,28 @@ git checkout master && git pull own master && git branch -d fix/<topic>
 4. **向上游 PR 的 lint 冲突**：upstream 历史有中文提交；给上游提 PR 时其 base 不含
    lint 则无妨，但我们侧 CI 会 lint PR 内 commit——保持我们提交规范即可兼容。
 5. **收口 PR 用 merge commit 不用 squash**：54 个提交已全部合规，squash 只会丢失粒度。
+
+---
+
+## 2026-09 安全与工程审计整改进度
+
+（审计来源：2026-09-26 全仓架构/安全/工程化三路审计；整改以 PR 波次推进，每波过全套 CI 后 squash merge。）
+
+### 已完成
+
+- #133 公开端点限流（register/qq、oauth client_credentials/refresh、invitation）+ 登录限流窗口语义修复 + JWT_SECRET 强度校验 + 密码最小长度
+- #134 WS 握手鉴权（默认开、WS_AUTH_REQUIRED 逃生阀）+ 连接上限/有界通道背压 + marker 写路径 hidden_flag 可见性对称 + history 挡匿名
+- #135 优雅停机（含 WS 配合关闭）+ 60s 请求超时 + nosniff/Referrer-Policy 响应头 + 容器非 root/HEALTHCHECK + 生产模板 REDIS_REQUIRED=fail-closed
+- #136 escape_like 去重 + 死代码清理（crypto.rs 空壳、RouteVO）+ CDN 反代拆出 routes/mod.rs
+- #137 Python 活体回归套件收编 tests/python（凭据走 env）+ CI 补 Redis/redis_cache_db + commit-msg lint 对 force-push 健壮化
+- #138 HTTP 层 oneshot 测试（首个 router 级测试）+ 三语文档漂移修复（JWK 轮换/just dev-watch/route 域口径/M4 状态）
+
+### 待办 backlog（按优先级）
+
+1. thiserror 领域错误枚举替换 internal_error 的关键字子串分类（routes/mod.rs），顺带统一 401/403 响应形状、收编 system/user.rs 的 (u16, String) 例外
+2. schema 迁移体系：引入 sea-orm-migration 或为 init_db 增加 --diff 生成 ALTER，把「实体 ↔ 库结构」漂移变成构建期失败
+3. set_parent_is_final 四份拷贝语义分叉（area 版 update_many 直写 vs tag_type 版乐观锁单行）——统一前需先定语义（Java 对齐口径），不是机械去重
+4. AppState 依赖注入替代 133 处 DB_CONN.wait() 全局单例（可测性 + 故障注入）
+5. marker_link 写路径可见性闭环（link/delete 目前不加载 marker 行，未校验 hidden_flag）
+6. .regression 会话工件目录处置（套件已收编 tests/python；源目录仍 untracked）
+7. 前端联动：WS 鉴权上线需前端在握手时带 token（Authorization 头或 ?token=），与 map_register_v3 / map_front_v3 协调

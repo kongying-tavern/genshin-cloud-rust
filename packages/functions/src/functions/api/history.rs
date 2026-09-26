@@ -18,9 +18,12 @@ use _utils::{
 };
 
 pub async fn do_get_list(
-    _auth: AuthInfo,
+    auth: AuthInfo,
     payload: HistoryListRequest,
 ) -> Result<CommonResponse<HistoryListResponse>> {
+    // Java 网关矩阵把 /api/history/get/** 归 MAP_USER 级：匿名/访客不可读，
+    // 真实登录用户可读（并非 Manager 级）——在函数层挡匿名即对齐该门槛。
+    auth.require_non_anonymous()?;
     // 构建安全查询
     let mut query = history_model::Entity::find_safety();
 

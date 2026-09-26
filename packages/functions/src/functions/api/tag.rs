@@ -21,14 +21,8 @@ use _utils::{
         },
         wrapper::CommonResponse,
     },
+    text::escape_like,
 };
-
-/// 转义 LIKE 通配符（% _ \），防止输入被当作模糊匹配通配符放大（PG 默认 ESCAPE 为反斜杠）。
-fn escape_like(s: &str) -> String {
-    s.replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_")
-}
 
 /// 新增标签
 pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResponse> {

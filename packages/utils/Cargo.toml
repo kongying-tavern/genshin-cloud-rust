@@ -7,6 +7,9 @@ version.workspace = true
 
 [lib]
 crate-type = ["rlib"]
+# Keep `cargo bench --workspace` on the real [[bench]] targets: lib targets
+# default to bench = true and their libtest harness rejects criterion flags.
+bench = false
 
 [dependencies]
 anyhow = { workspace = true }

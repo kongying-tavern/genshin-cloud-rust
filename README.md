@@ -83,6 +83,7 @@ just dev           # 启动开发栈（Rust + Vue）/ start dev stack (Rust + Vu
 just dev mock      # 启动 + Shirabe 浏览器 e2e 测试 / start + Shirabe e2e tests
 just dev stop      # 停止 / stop
 just dev status    # 状态 / check status
+just bench         # 跑 criterion 基准（差异快照流水线）/ run criterion benches
 ```
 
 ## 开发工具链 / Toolchain
@@ -161,7 +162,7 @@ All variables are read from the process environment or the root `.env` file
 
 | 变量 / Variable | 必填 / Required | 默认 / Default | 用途与用法 / Purpose & usage |
 | --- | --- | --- | --- |
-| `JWT_SECRET` | **是** / **Yes** | 无 / none | HS256 签名密钥，缺失直接拒绝启动。生成：`openssl rand -base64 48`。<br>HS256 signing secret; the process refuses to start without it. Generate with `openssl rand -base64 48`. |
+| `JWT_SECRET` | **是** / **Yes** | 无 / none | HS256 签名密钥，缺失或弱值（不足 32 字符 / 占位符）直接拒绝启动。生成：`openssl rand -base64 48`。<br>HS256 signing secret; the process refuses to start without it or with a weak value (shorter than 32 characters / a placeholder). Generate with `openssl rand -base64 48`. |
 | `DB_HOST` | 否 / No | `localhost` | PostgreSQL 主机。/ PostgreSQL host. |
 | `DB_PORT` | 否 / No | `5432` | PostgreSQL 端口；非法值启动报错。/ PostgreSQL port; invalid values fail startup. |
 | `DB_USERNAME` | 否 / No | `genshin_map` | 数据库用户名。/ Database username. |
@@ -186,6 +187,7 @@ All variables are read from the process environment or the root `.env` file
 | `JWT_RSA_PRIVATE_KEY_PEM` | 否 / No | 未设置 / unset | 设置后 token 改用 RS256 签名，`/.well-known/jwks.json` 发布 RSA 公钥。/ When set, tokens are signed with RS256 and the JWKS endpoint publishes the RSA public key. |
 | `JWT_RSA_VERIFY_KEYS` | 否 / No | 空 / empty | 轮换期的历史 RSA 公钥 PEM（逗号分隔），旧 token 保持可验证。/ Historical RSA public-key PEMs (comma-separated) kept verifiable during rotation. |
 | `JWT_ACCEPT_HS256` | 否 / No | `false` | RS256 模式下是否仍接受 HS256 token（**仅本地调试**，线上禁止）。/ Whether HS256 tokens stay accepted in RS256 mode (**local/dev only**; never enable in production). |
+| `WS_AUTH_REQUIRED` | 否 / No | `true` | WebSocket 握手是否要求有效 token（`Authorization: Bearer` 头或 `?token=` 查询参数，路径 userId 必须与 token 主体一致）。设为 `false` 仅用于恢复 Java 网关 pass-filter 语义（匿名连接，仅限迁移期/可信内网）。/ Require a valid token on the `/ws` handshake (via the `Authorization: Bearer` header or the `?token=` query parameter; the path userId must match the token subject). Set to `false` only to restore the Java gateway pass-filter semantics (anonymous connections; migration window / trusted internal network only). |
 | `SKIP_ACCESS_POLICY` | 否 / No | `false` | `true` 跳过 IP/UA 访问策略校验（开发期）。/ `true` skips the IP/User-Agent access-policy checks (dev only). |
 | `TRUST_PROXY_HEADERS` | 否 / No | 未设置 / unset | 设置后信任反代的 `X-Real-IP` / `X-Forwarded-For`（nginx 反代后必须，否则访问策略与审计日志拿到反代地址）。/ When set, trust `X-Real-IP` / `X-Forwarded-For` from the reverse proxy (required behind nginx; otherwise clients could spoof their IP). |
 | `INIT_ADMIN_USERNAME` / `INIT_ADMIN_PASSWORD` | 否 / No | `admin` / `admin123` | 仅 `cargo run --bin init_db` 首次播种开发者管理员时使用。/ Only used by `cargo run --bin init_db` when seeding the dev admin account. |

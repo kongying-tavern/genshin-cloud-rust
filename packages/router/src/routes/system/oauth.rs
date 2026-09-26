@@ -138,7 +138,7 @@ pub async fn oauth(
                     "Scope is required for client credentials",
                 )
             })?;
-            return Ok(Json(oauth_client_credentials(scope).await.map_err(|e| {
+            return Ok(Json(oauth_client_credentials(ip, scope).await.map_err(|e| {
                 tracing::warn!("client_credentials grant failed: {e}");
                 oauth_error(StatusCode::BAD_REQUEST, "invalid_scope", &e.to_string())
             })?)

@@ -14,11 +14,13 @@ use _database::{
     DB_CONN,
     models::{
         item::item as item_model,
-        marker::{marker as marker_model, marker_item_link as mil_model},
+        marker::{
+            marker as marker_model, marker_item_link as mil_model, marker_linkage as linkage_model,
+        },
     },
 };
 use _utils::{db_operations::SafeEntityTrait, jwt::AuthInfo, models::wrapper::CommonResponse};
-use sea_orm::{ColumnTrait, QueryFilter, QuerySelect, prelude::*};
+use sea_orm::{ColumnTrait, JoinType, QueryFilter, QueryOrder, QuerySelect, prelude::*};
 
 use super::binary_doc::{
     BinaryMd5Vo, CachedPage, ResultEntry, get_or_compute, get_result_cached, serialize_compress_md5,
@@ -58,7 +60,7 @@ pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
     entries
         .iter()
         .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
-        .map(|e| e.bytes.clone())
+        .map(|e| e.bytes.to_vec())
         .ok_or_else(|| anyhow!("分页数据未生成或超出获取范围"))
 }
 
@@ -133,7 +135,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                         Ok(CachedPage {
                             md5: md5_hex,
                             time: chrono::Utc::now().timestamp_millis(),
-                            bytes: compressed,
+                            bytes: compressed.into(),
                         })
                     })
                     .await?;
@@ -158,7 +160,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
                     Ok(CachedPage {
                         md5: md5_hex,
                         time: chrono::Utc::now().timestamp_millis(),
-                        bytes: compressed,
+                        bytes: compressed.into(),
                     })
                 })
                 .await?;
@@ -181,7 +183,7 @@ async fn marker_result() -> Result<Vec<ResultEntry>> {
 
 /// `MarkerDiffSnapshotVo { uint64 version = 1; uint64 id = 2;
 /// optional string linkage_id = 15; }` 的一行快照。
-pub(crate) struct DiffSnapshot {
+pub struct DiffSnapshot {
     pub version: u64,
     pub id: u64,
     /// Java 侧 `isNotBlank` 守卫：空串视为未设置。
@@ -227,7 +229,7 @@ fn encode_snapshot(s: &DiffSnapshot) -> Vec<u8> {
 }
 
 /// `MarkerDiffSnapshotVoList { repeated MarkerDiffSnapshotVo snapshots = 1; }`
-pub(crate) fn encode_diff_snapshot_list(snapshots: &[DiffSnapshot]) -> Vec<u8> {
+pub fn encode_diff_snapshot_list(snapshots: &[DiffSnapshot]) -> Vec<u8> {
     let mut out = Vec::new();
     for s in snapshots {
         let msg = encode_snapshot(s);
@@ -246,13 +248,17 @@ pub(crate) fn encode_diff_snapshot_list(snapshots: &[DiffSnapshot]) -> Vec<u8> {
 /// （每点位 {version, id, linkageId}），供前端与本地缓存做增量比对。
 /// 与 bin 页不同，此处不 GZIP —— 前端直接 `arrayBuffer` 后交给
 /// protobuf 解码器。
-pub async fn do_list_diff_snapshot(auth: AuthInfo) -> Result<Vec<u8>> {
+///
+/// 高频接口：结果按可见 flag 集走 `get_result_cached`（本进程 moka →
+/// Redis 跨副本共享 → 计算）。任一副本冷启动或写后失效重建时，先到者
+/// 计算一次并写入 Redis，其余副本直接取字节，避免各自全量重扫数据库。
+/// marker / linkage 写路径的 invalidate_doc_cache() 会整体失效本键。
+/// 返回 [`bytes::Bytes`]，缓存命中时整条服务链路零拷贝。
+pub async fn do_list_diff_snapshot(auth: AuthInfo) -> Result<bytes::Bytes> {
     // 可见性（Java HiddenFlagEnum.getFlagListByMask(userDataLevel)）
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let db = &DB_CONN.wait().pg_conn;
 
-    // 结果按可见 flag 集缓存（moka，TTL 3600s）；marker / linkage 写路径
-    // 的 invalidate_doc_cache() 会整体失效本键。
     let mut flags = allowed.clone();
     flags.sort_unstable();
     let key = format!(
@@ -263,71 +269,114 @@ pub async fn do_list_diff_snapshot(auth: AuthInfo) -> Result<Vec<u8>> {
             .collect::<Vec<_>>()
             .join(",")
     );
-    let page = get_or_compute(key, async {
+    let mut entries = get_result_cached(key, async {
         let bytes = diff_snapshot_bytes(db, &allowed).await?;
         let digest = md5::compute(&bytes);
-        Ok(CachedPage {
-            md5: format!("{:x}", digest),
-            time: chrono::Utc::now().timestamp_millis(),
-            bytes,
-        })
+        Ok(vec![ResultEntry {
+            key: "marker:diff_snapshot".into(),
+            vo: BinaryMd5Vo {
+                md5: format!("{:x}", digest),
+                time: chrono::Utc::now().timestamp_millis(),
+            },
+            bytes: bytes.into(),
+        }])
     })
     .await?;
-    Ok(page.bytes)
+    Ok(entries.pop().map(|e| e.bytes).unwrap_or_default())
+}
+
+/// 可见点位集合查询（`marker ⋈ marker_item_link ⋈ item`），供
+/// `diff_snapshot_bytes` 与其 SQL 形状单测共用。
+fn visible_markers_query(allowed: &[i32]) -> sea_orm::Select<marker_model::Entity> {
+    marker_model::Entity::find()
+        .join_rev(
+            JoinType::InnerJoin,
+            mil_model::Entity::belongs_to(marker_model::Entity)
+                .from(mil_model::Column::MarkerId)
+                .to(marker_model::Column::Id)
+                .into(),
+        )
+        .join(
+            JoinType::InnerJoin,
+            mil_model::Entity::belongs_to(item_model::Entity)
+                .from(mil_model::Column::ItemId)
+                .to(item_model::Column::Id)
+                .into(),
+        )
+        .filter(marker_model::Column::DelFlag.eq(false))
+        .filter(marker_model::Column::HiddenFlag.is_in(allowed.to_vec()))
+        .filter(mil_model::Column::DelFlag.eq(false))
+        .filter(item_model::Column::DelFlag.eq(false))
+        .filter(item_model::Column::HiddenFlag.is_in(allowed.to_vec()))
+        .select_only()
+        .column(marker_model::Column::Version)
+        .column(marker_model::Column::Id)
+        .distinct()
+        .order_by_asc(marker_model::Column::Id)
 }
 
 /// Java `searchMarkerId`（areaIdList = 全部地区）+ `listMarkerById`：
 /// 物品按可见 flag 过滤 → marker_item_link → 点位（del_flag=false 且
 /// 可见 flag）→ (version, id) 集合，再附上每点位首个关联组 ID。
-async fn diff_snapshot_bytes(db: &sea_orm::DatabaseConnection, allowed: &[i32]) -> Result<Vec<u8>> {
-    let item_ids: Vec<i64> = item_model::Entity::find_safety()
-        .filter(item_model::Column::HiddenFlag.is_in(allowed.to_vec()))
-        .select_only()
-        .column(item_model::Column::Id)
-        .into_tuple::<i64>()
+///
+/// 一条 `marker ⋈ marker_item_link ⋈ item` 集合查询取代旧实现
+/// 「物品 ids → 分块 IN 关联 → 分块 IN 点位」的三段式：后者是
+/// ~3×⌈N/1000⌉ 次数据库往返、每块数千字节的字面量 IN 列表，100k 点位
+/// 规模下约两百次往返。语义等价：点位须同时可见、且经未删除的关联
+/// 链接到至少一个可见物品（`DISTINCT` 去掉一点多链的重复）。
+/// `ORDER BY id` 让快照字节跨副本稳定。
+pub async fn diff_snapshot_bytes(
+    db: &sea_orm::DatabaseConnection,
+    allowed: &[i32],
+) -> Result<Vec<u8>> {
+    let markers: Vec<(i64, i64)> = visible_markers_query(allowed)
+        .into_tuple::<(i64, i64)>()
         .all(db)
         .await?;
-    let mut marker_ids: Vec<i64> = Vec::new();
-    for chunk in item_ids.chunks(1000) {
-        marker_ids.extend(
-            mil_model::Entity::find_safety()
-                .filter(mil_model::Column::ItemId.is_in(chunk))
-                .select_only()
-                .column(mil_model::Column::MarkerId)
-                .into_tuple::<i64>()
-                .all(db)
-                .await?,
-        );
-    }
-    marker_ids.sort_unstable();
-    marker_ids.dedup();
 
-    let mut markers: Vec<(i64, i64)> = Vec::new();
-    for chunk in marker_ids.chunks(1000) {
-        markers.extend(
-            marker_model::Entity::find_safety()
-                .filter(marker_model::Column::Id.is_in(chunk))
-                .filter(marker_model::Column::HiddenFlag.is_in(allowed.to_vec()))
-                .select_only()
-                .column(marker_model::Column::Version)
-                .column(marker_model::Column::Id)
-                .into_tuple::<(i64, i64)>()
-                .all(db)
-                .await?,
-        );
-    }
-    let ids: Vec<i64> = markers.iter().map(|(_, id)| *id).collect();
-    let linkage_map = super::marker::marker_linkage_map(db, &ids).await?;
+    // 连线组表远小于点位表：三列全量顺序扫描一次，比按点位 id 分块
+    // OR-IN（又一轮 ⌈N/1000⌉ 次往返）便宜，再在内存里过滤可见集。
+    let linkage_pairs: Vec<(i64, i64, String)> = linkage_model::Entity::find_safety()
+        .select_only()
+        .column(linkage_model::Column::FromId)
+        .column(linkage_model::Column::ToId)
+        .column(linkage_model::Column::GroupId)
+        .into_tuple::<(i64, i64, String)>()
+        .all(db)
+        .await?;
 
-    let snapshots: Vec<DiffSnapshot> = markers
+    Ok(encode_diff_snapshot_list(&assemble_snapshots(
+        markers,
+        &linkage_pairs,
+    )))
+}
+
+/// 把 (version, id) 行集合与连线组三元组 (from_id, to_id, group_id)
+/// 拼装成快照列表。连线命中多组时取第一条（与 `marker_linkage_map`
+/// 的首插即定语义一致）；两端都不在可见点位集内的连线行直接丢弃。
+pub fn assemble_snapshots(
+    markers: Vec<(i64, i64)>,
+    linkage_pairs: &[(i64, i64, String)],
+) -> Vec<DiffSnapshot> {
+    let visible: std::collections::HashSet<i64> = markers.iter().map(|(_, id)| *id).collect();
+    let mut linkage: std::collections::HashMap<i64, &String> =
+        std::collections::HashMap::with_capacity(linkage_pairs.len().min(visible.len()));
+    for (from, to, group_id) in linkage_pairs {
+        if visible.contains(from) {
+            linkage.entry(*from).or_insert(group_id);
+        }
+        if visible.contains(to) {
+            linkage.entry(*to).or_insert(group_id);
+        }
+    }
+    markers
         .into_iter()
         .map(|(version, id)| DiffSnapshot {
             version: version as u64,
             id: id as u64,
-            linkage_id: linkage_map.get(&id).cloned(),
+            linkage_id: linkage.get(&id).map(|g| (*g).clone()),
         })
-        .collect();
-    Ok(encode_diff_snapshot_list(&snapshots))
+        .collect()
 }
 
 #[cfg(test)]
@@ -351,6 +400,29 @@ mod tests {
             encode_snapshot(&snap(5, 123, Some("abc"))),
             vec![0x08, 0x05, 0x10, 0x7b, 0x7a, 0x03, b'a', b'b', b'c']
         );
+    }
+
+    #[test]
+    fn diff_snapshot_join_sql_shape_is_stable() {
+        use sea_orm::QueryTrait;
+        let stmt = visible_markers_query(&[0, 3]).build(sea_orm::DbBackend::Postgres);
+        let sql = &stmt.sql;
+        // 两跳 JOIN 的 ON 条件 + DISTINCT 去重 + 排序稳定，是本查询的
+        // 承重结构；三张表的 del_flag 过滤缺一不可（软删语义）。
+        assert!(sql.contains(r#"SELECT DISTINCT "marker"."version", "marker"."id" FROM "marker""#));
+        assert!(sql.contains(
+            r#"INNER JOIN "marker_item_link" ON "marker_item_link"."marker_id" = "marker"."id""#
+        ));
+        assert!(sql.contains(r#"INNER JOIN "item" ON "marker_item_link"."item_id" = "item"."id""#));
+        assert_eq!(
+            sql.matches(r#"."del_flag" = "#).count(),
+            3,
+            "marker / marker_item_link / item 三表都要过滤软删"
+        );
+        assert!(sql.contains(r#"ORDER BY "marker"."id" ASC"#));
+        // [0, 3] 两个 flag × 两张表 + 三个 del_flag 布尔 = 7 个绑定参数。
+        let params = stmt.values.map(|v| v.0.len()).unwrap_or(0);
+        assert_eq!(params, 7);
     }
 
     #[test]
@@ -382,5 +454,32 @@ mod tests {
         );
         // 空列表 = 空 payload（proto3 空消息序列化为零字节）。
         assert!(encode_diff_snapshot_list(&[]).is_empty());
+    }
+
+    #[test]
+    fn assemble_snapshots_joins_linkage_and_keeps_first_group() {
+        let markers = vec![(3, 1), (7, 2), (1, 3)];
+        let pairs = vec![
+            (1, 3, "g1".to_string()),
+            (1, 3, "g2".to_string()),
+            (99, 1, "g3".to_string()),  // from 不可见，仅 to 命中
+            (98, 97, "g4".to_string()), // 两端均不可见 → 丢弃
+        ];
+        let snaps = assemble_snapshots(markers, &pairs);
+        let ids: Vec<u64> = snaps.iter().map(|s| s.id).collect();
+        assert_eq!(ids, vec![1, 2, 3]);
+        // 多组命中时首插即定（g1 而非 g2）；to_id 命中的点位同样拿到组。
+        assert_eq!(snaps[0].linkage_id.as_deref(), Some("g1"));
+        assert_eq!(snaps[1].linkage_id, None);
+        assert_eq!(snaps[2].linkage_id.as_deref(), Some("g1"));
+    }
+
+    #[test]
+    fn assemble_snapshots_empty_inputs_yield_empty_list() {
+        assert!(assemble_snapshots(Vec::new(), &[]).is_empty());
+        // 无任何连线时全部点位 linkage_id 缺省。
+        let snaps = assemble_snapshots(vec![(1, 5)], &[(9, 8, "g".to_string())]);
+        assert_eq!(snaps.len(), 1);
+        assert_eq!(snaps[0].linkage_id, None);
     }
 }

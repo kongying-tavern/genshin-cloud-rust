@@ -33,7 +33,7 @@ just hooks         # 安裝 commit-msg 鉤子（強制 gitmoji 規範）
 just build         # 構建 router（release）
 just build --dev   # 調試構建
 just run           # 運行 router 二進制（_router）
-just dev-watch packages -- just run   # 文件變動自動重啓
+just dev           # 啓動開發棧（Rust + Vue）
 just test          # 全工作區測試
 just ci            # fmt-check + clippy + check + test（CI 等價）
 ```

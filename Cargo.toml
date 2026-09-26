@@ -27,6 +27,10 @@ async-trait = "^0.1"
 once_cell = "^1"
 
 base64 = "^0.22"
+# bytes: cheap-clone byte buffers for cached doc pages. The diff-snapshot
+# payload is served at high frequency; Bytes makes every cache hit a
+# refcount bump instead of a full-payload memcpy.
+bytes = "^1"
 chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
 
 tokio = { version = "^1", features = ["full"] }
@@ -103,7 +107,10 @@ rustls = { version = "^0.23", default-features = false, features = [
   "tls12",
   "logging",
 ] }
-tower-http = { version = "^0.7", features = ["fs", "trace", "cors"] }
+# timeout: request-wide 60s TimeoutLayer; set-header: nosniff /
+# Referrer-Policy security response headers. Both wired up in
+# packages/router/src/routes/mod.rs.
+tower-http = { version = "^0.7", features = ["fs", "trace", "cors", "timeout", "set-header"] }
 
 # sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
 # have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"

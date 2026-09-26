@@ -22,12 +22,18 @@ COPY tests/rust/Cargo.toml          tests/rust/Cargo.toml
 
 # Stub member sources so cargo can resolve the workspace without the real code,
 # then fetch all dependencies. The stubs are overwritten when real sources land.
+# The bench stub is required too: cargo validates [[bench]] target paths when
+# parsing the manifest, so `cargo fetch` fails without a file there. The router
+# lib stub follows the same rule — the crate is lib+bin, so its [lib] target
+# path must exist before the real sources are copied in.
 RUN mkdir -p packages/utils/src packages/database/src packages/functions/src \
-        packages/router/src tests/rust/src \
+        packages/functions/benches packages/router/src tests/rust/src \
  && printf 'pub fn _stub() {}\n' > packages/utils/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/database/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/functions/src/lib.rs \
+ && printf 'fn main() {}\n' > packages/functions/benches/diff_snapshot.rs \
  && printf 'fn main() {}\n'        > packages/router/src/main.rs \
+ && printf 'pub fn _stub() {}\n' > packages/router/src/lib.rs \
  && printf ''                       > tests/rust/src/lib.rs \
  && cargo fetch --locked
 
@@ -56,6 +62,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Non-root runtime user. LOG_DIR 若在容器内启用，目录需对该 UID 可写。
+RUN groupadd --system --gid 10001 app && useradd --system --uid 10001 --gid app --no-create-home app
+USER app
+
 WORKDIR /app
 COPY --from=builder /usr/local/bin/_router /usr/local/bin/_router
 
@@ -63,6 +73,9 @@ COPY --from=builder /usr/local/bin/_router /usr/local/bin/_router
 # override with the PORT env var if needed.
 ENV RUST_LOG=info
 EXPOSE 80
+
+# Pure-compute probe: JWKS needs no DB/Redis, so it isolates "process alive".
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD wget -q --spider "http://127.0.0.1:${PORT:-80}/.well-known/jwks.json" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--", "_router"]
 

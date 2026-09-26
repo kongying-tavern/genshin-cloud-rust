@@ -25,13 +25,14 @@ use _database::models::{
     common::history as history_model, common::score_stat as score_stat_model,
     icon::icon as icon_model, icon::icon_type_link as itl_model, item::item as item_model,
     item::item_type_link as item_type_link_model, marker::marker as marker_model,
-    marker::marker_item_link as mil_model, system::sys_action_log as action_log_model,
-    system::sys_user as sys_user_model, system::sys_user_device as device_model,
-    tag::tag as tag_model, tag::tag_type as tag_type_model,
+    marker::marker_item_link as mil_model, marker::marker_linkage as linkage_model,
+    system::sys_action_log as action_log_model, system::sys_user as sys_user_model,
+    system::sys_user_device as device_model, tag::tag as tag_model,
+    tag::tag_type as tag_type_model,
 };
 use _functions::functions::api::{
-    area as area_fns, cache as cache_fns, icon_doc, item_common as item_common_fns, item_doc,
-    marker as marker_fns, score as score_fns,
+    area as area_fns, binary_doc, cache as cache_fns, icon_doc, item_common as item_common_fns,
+    item_doc, marker as marker_fns, marker_doc as marker_doc_fns, score as score_fns,
 };
 use _functions::functions::system::{device as device_fns, oauth as oauth_fns, user as user_fns};
 use _utils::{
@@ -48,7 +49,7 @@ use _utils::{
     },
     types::{
         AccessPolicyItemEnum, AccessPolicyList, HiddenFlag, HistoryEditType, HistoryOperationType,
-        IconStyleType, SystemUserRole, auth::OauthScopeType,
+        IconStyleType, MarkerLinkageLinkAction, SystemUserRole, auth::OauthScopeType,
     },
 };
 use redis::AsyncCommands;
@@ -284,7 +285,6 @@ async fn area_and_item_doc_business_assertions() {
     let Some(db) = db().await else {
         return;
     };
-
     // ── Setup: FK-free tables for area + item ────────────────────────────────
     let ddls = [
         ddl_without_foreign_keys(sys_user_model::Entity),
@@ -854,11 +854,21 @@ async fn area_and_item_doc_business_assertions() {
     // ==== Assertion 8: QQ registration stores the QQ number ====
     // Java 契约：`/user/register/qq` 的 username 即 QQ 号，qq 字段缺省时
     // 取 username（不做 openid 语义；openid 需服务端授权码换取）。
-    let qq_id = user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
-        .await
-        .expect("qq register succeeds")
-        .data
-        .expect("qq register returns id");
+    // 密码须满足最小长度策略（≥8 字符）；ip 供公开端点限流使用。
+    let qq_ip = "127.0.0.1:55555".parse::<std::net::SocketAddr>().unwrap();
+    let qq_id = user_fns::do_register_qq(
+        qq_ip,
+        None,
+        None,
+        None,
+        "10001".into(),
+        "pw12345678".into(),
+        None,
+    )
+    .await
+    .expect("qq register succeeds")
+    .data
+    .expect("qq register returns id");
     let qq_row = sys_user_model::Entity::find_by_id(qq_id)
         .one(db)
         .await
@@ -873,9 +883,17 @@ async fn area_and_item_doc_business_assertions() {
 
     // 重复注册同 QQ 号：username 占用被拒
     assert!(
-        user_fns::do_register_qq(None, None, None, "10001".into(), "pw123".into(), None)
-            .await
-            .is_err(),
+        user_fns::do_register_qq(
+            qq_ip,
+            None,
+            None,
+            None,
+            "10001".into(),
+            "pw12345678".into(),
+            None
+        )
+        .await
+        .is_err(),
         "duplicate qq register must fail"
     );
     // ── Assertion 9: score generation weights by field count ────────────────
@@ -1499,7 +1517,8 @@ async fn area_and_item_doc_business_assertions() {
     }
 
     // ── Assertion 12: anonymous client-credentials chain ─────────────────────
-    let anon = oauth_fns::oauth_client_credentials("all".into())
+    let anon_ip = "127.0.0.1:55556".parse::<std::net::SocketAddr>().unwrap();
+    let anon = oauth_fns::oauth_client_credentials(anon_ip, "all".into())
         .await
         .expect("client credentials issues an anonymous token");
     assert!(!anon.access_token.is_empty());
@@ -1767,4 +1786,248 @@ async fn area_and_item_doc_business_assertions() {
             .ok()
             .unwrap_or(0);
     }
+
+    // ── marker_doc::list_diff_snapshot：高频差异快照端点 ─────────────────────
+    //
+    // 三表 JOIN（marker ⋈ marker_item_link ⋈ item）+ 连线组扫描必须与旧的
+    // 分块 IN 链语义一致 —— 物品/点位双侧 hidden_flag 过滤、软删链路排除、
+    // 一点多链去重、ORDER BY id 稳定输出、linkage_id 首组回填（首插即定），
+    // 以及 get_result_cached 缓存命中与失效重建。
+
+    recreate_tables_fklless(
+        db,
+        &["item", "marker", "marker_item_link", "marker_linkage"],
+        &[
+            ddl_without_foreign_keys(item_model::Entity),
+            ddl_without_foreign_keys(marker_model::Entity),
+            ddl_without_foreign_keys(mil_model::Entity),
+            ddl_without_foreign_keys(linkage_model::Entity),
+        ],
+    )
+    .await
+    .expect("recreate snapshot tables");
+
+    // 物品：两个可见 + 一个 Beta（对访客不可见）。
+    let item_v1 = seed_common_item(db, now, "snapshot-item-v1")
+        .await
+        .expect("seed item v1");
+    let item_v2 = seed_common_item(db, now, "snapshot-item-v2")
+        .await
+        .expect("seed item v2");
+    let beta_item = item_model::ActiveModel {
+        version: Set(1),
+        id: NotSet,
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        name: Set("snapshot-item-beta".into()),
+        area_id: Set(1),
+        default_refresh_time: Set(0),
+        default_content: Set(None),
+        default_count: Set(1),
+        icon_id: Set(0),
+        icon_style_type: Set(IconStyleType::Default),
+        hidden_flag: Set(HiddenFlag::Beta),
+        sort_index: Set(0),
+        special_flag: Set(None),
+    };
+    let beta_item_id = item_model::Entity::insert(beta_item)
+        .exec(db)
+        .await
+        .expect("seed beta item")
+        .last_insert_id;
+
+    // 点位矩阵（每个恰好排除/保留一种语义分支）：
+    //   m1 v7 可见 ← item_v1（保留，命中连线组 grp-1）
+    //   m2 v3 可见 ← beta_item（访客不可见：物品侧 flag 过滤）
+    //   m3 v1 Beta ← item_v1（访客不可见：点位侧 flag 过滤）
+    //   m4 v1 可见 ← item_v1（软删链路 → 排除）
+    //   m5 v1 可见 ← item_v1 ×2 + item_v2（保留；多链去重为一条）
+    seed_snapshot_marker(db, now, 1, 7, HiddenFlag::Visible)
+        .await
+        .expect("seed m1");
+    seed_snapshot_marker(db, now, 2, 3, HiddenFlag::Visible)
+        .await
+        .expect("seed m2");
+    seed_snapshot_marker(db, now, 3, 1, HiddenFlag::Beta)
+        .await
+        .expect("seed m3");
+    seed_snapshot_marker(db, now, 4, 1, HiddenFlag::Visible)
+        .await
+        .expect("seed m4");
+    seed_snapshot_marker(db, now, 5, 1, HiddenFlag::Visible)
+        .await
+        .expect("seed m5");
+    seed_snapshot_mil(db, now, item_v1, 1, false)
+        .await
+        .expect("seed mil m1");
+    seed_snapshot_mil(db, now, beta_item_id, 2, false)
+        .await
+        .expect("seed mil m2");
+    seed_snapshot_mil(db, now, item_v1, 3, false)
+        .await
+        .expect("seed mil m3");
+    seed_snapshot_mil(db, now, item_v1, 4, true)
+        .await
+        .expect("seed mil m4 (deleted)");
+    seed_snapshot_mil(db, now, item_v1, 5, false)
+        .await
+        .expect("seed mil m5 #1");
+    seed_snapshot_mil(db, now, item_v2, 5, false)
+        .await
+        .expect("seed mil m5 #2");
+
+    // 连线组：m1 → 一个不存在于可见集的点位（to_id 过滤分支），组 id
+    // 仅回填给 m1。
+    let linkage_am = linkage_model::ActiveModel {
+        id: NotSet,
+        version: Set(1),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        group_id: Set("grp-1".into()),
+        from_id: Set(1),
+        to_id: Set(999_999),
+        link_action: Set(MarkerLinkageLinkAction::Trigger),
+        link_reverse: Set(false),
+        path: Set(None),
+        extra: Set(None),
+    };
+    linkage_model::Entity::insert(linkage_am)
+        .exec(db)
+        .await
+        .expect("seed linkage");
+
+    // 先整体失效一次，避免同进程先前测试留下的快照缓存串味。
+    binary_doc::invalidate_doc_cache().await;
+
+    // 访客可见集 [Visible, Suprise]：只剩 m1（grp-1）与 m5，按 id 升序。
+    // 手工展开的 wire 字节：m1 = {v:7, id:1, linkage:"grp-1"}（11 字节
+    // 消息体）、m5 = {v:1, id:5}（4 字节消息体），每条外面包 field1。
+    let expected_visitor: Vec<u8> = [
+        &[
+            0x0a, 0x0b, // field1 LEN 11
+            0x08, 0x07, // version = 7
+            0x10, 0x01, // id = 1
+            0x7a, 0x05, b'g', b'r', b'p', b'-', b'1', // linkage_id = "grp-1"
+        ][..],
+        &[
+            0x0a, 0x04, // field1 LEN 4
+            0x08, 0x01, // version = 1
+            0x10, 0x05, // id = 5
+        ][..],
+    ]
+    .concat();
+    let bytes = marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
+        .await
+        .expect("visitor diff snapshot");
+    assert_eq!(&*bytes, expected_visitor.as_slice(), "visitor wire bytes");
+
+    // 缓存命中路径：同角色再次请求，字节保持一致。
+    let bytes_again =
+        marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
+            .await
+            .expect("visitor diff snapshot (cached)");
+    assert_eq!(&*bytes_again, expected_visitor.as_slice(), "cached bytes");
+
+    // 管理员可见集 [0,1,2,3]：m2（Beta 物品）与 m3（Beta 点位）也出现。
+    // m1 一条 entry 共 13 字节（2 字节头 + 11 字节消息体）。
+    let expected_admin: Vec<u8> = [
+        &expected_visitor[..13], // m1
+        &[
+            0x0a, 0x04, 0x08, 0x03, 0x10, 0x02, // m2 {v:3, id:2}
+        ][..],
+        &[
+            0x0a, 0x04, 0x08, 0x01, 0x10, 0x03, // m3 {v:1, id:3}
+        ][..],
+        &expected_visitor[13..], // m5
+    ]
+    .concat();
+    let admin_bytes = marker_doc_fns::do_list_diff_snapshot(stub_auth())
+        .await
+        .expect("admin diff snapshot");
+    assert_eq!(&*admin_bytes, expected_admin.as_slice(), "admin wire bytes");
+
+    // 写入新点位 + 失效后重建：快照按新数据重算（缓存未失效则仍是旧值，
+    // 这里显式走 invalidate_doc_cache 的失效路径）。
+    seed_snapshot_marker(db, now, 6, 2, HiddenFlag::Visible)
+        .await
+        .expect("seed m6");
+    seed_snapshot_mil(db, now, item_v2, 6, false)
+        .await
+        .expect("seed mil m6");
+    binary_doc::invalidate_doc_cache().await;
+    let rebuilt =
+        marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
+            .await
+            .expect("rebuilt diff snapshot");
+    let mut expected_rebuilt = expected_visitor.clone();
+    expected_rebuilt.extend_from_slice(&[
+        0x0a, 0x04, 0x08, 0x02, 0x10, 0x06, // m6 {v:2, id:6}
+    ]);
+    assert_eq!(&*rebuilt, expected_rebuilt.as_slice(), "rebuilt bytes");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// marker_doc::list_diff_snapshot —— 高频差异快照端点的 DB 断言
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Seed one snapshot marker row with an explicit id (wire bytes depend on it).
+async fn seed_snapshot_marker(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    id: i64,
+    version: i64,
+    hidden_flag: HiddenFlag,
+) -> anyhow::Result<()> {
+    let am = marker_model::ActiveModel {
+        id: Set(id),
+        version: Set(version),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(false),
+        marker_stamp: Set(None),
+        marker_title: Set(None),
+        position: Set("1.0,2.0".into()),
+        content: Set(None),
+        picture: Set(None),
+        marker_creator_id: Set(1),
+        picture_creator_id: Set(None),
+        video_path: Set(None),
+        refresh_time: Set(0),
+        hidden_flag: Set(hidden_flag),
+        extra: Set(None),
+    };
+    marker_model::Entity::insert(am).exec(db).await?;
+    Ok(())
+}
+
+/// Seed one marker_item_link row (optionally soft-deleted).
+async fn seed_snapshot_mil(
+    db: &sea_orm::DatabaseConnection,
+    now: chrono::NaiveDateTime,
+    item_id: i64,
+    marker_id: i64,
+    del_flag: bool,
+) -> anyhow::Result<()> {
+    let am = mil_model::ActiveModel {
+        id: NotSet,
+        version: Set(1),
+        create_time: Set(now),
+        update_time: Set(None),
+        creator_id: Set(None),
+        updater_id: Set(None),
+        del_flag: Set(del_flag),
+        item_id: Set(item_id),
+        marker_id: Set(marker_id),
+        count: Set(1),
+    };
+    mil_model::Entity::insert(am).exec(db).await?;
+    Ok(())
 }
