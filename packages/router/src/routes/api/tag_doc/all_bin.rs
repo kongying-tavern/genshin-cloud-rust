@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use axum::http::header;
 
 /// 获取所有标签信息的压缩数据
@@ -15,7 +16,7 @@ use axum::http::header;
 pub async fn all_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::tag_doc::do_all_bin(auth).await {
+    match _functions::functions::api::tag_doc::do_all_bin(DB_CONN.wait().as_ref(), auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

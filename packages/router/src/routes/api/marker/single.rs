@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractPunctuate;
+use _database::DB_CONN;
 use _utils::models::marker::{MarkerAddRequest, MarkerUpdateData};
 
 /// 新增点位
@@ -12,7 +13,9 @@ pub async fn add_single(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<MarkerAddRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_add_single(auth, payload).await {
+    match _functions::functions::api::marker::do_add_single(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -25,7 +28,13 @@ pub async fn update_single(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<MarkerUpdateData>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_update_single(auth, payload).await {
+    match _functions::functions::api::marker::do_update_single(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(serde_json::json!(v)))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

@@ -1,0 +1,38 @@
+[package]
+authors = ["langyo <langyo.china@gmail.com>"]
+edition = "2024"
+publish = false
+name = "_migration"
+version.workspace = true
+
+# 与其他 bin/lib 目标一致：不参与 `cargo bench --workspace`（libtest harness
+# 会拒绝 criterion 的 CLI 旗标）。
+[lib]
+bench = false
+
+[[bin]]
+name = "_migration"
+bench = false
+
+[dependencies]
+# baseline 迁移用 `_database` 的实体生成建表 DDL（DDL 与实体定义同源），
+# 并复用 `default_schema()` 做 schema 前缀改写。
+_database = { path = "../database", version = "*" }
+
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+tokio = { workspace = true }
+# 与 sea-orm-migration 内部日志同一套（其 status/迁移日志走 tracing）。
+tracing = { workspace = true }
+
+# 与 workspace 的 sea-orm 2.0.x 配套的迁移框架线。锁死 `=2.0.2` 而非 caret：
+# 其自身对 sea-orm 的依赖是 `~2.0.2`，恰好兼容 lock 里既有的 sea-orm 2.0.2；
+# 若解析到更新的 2.0.3，会连带把整个 sea-orm 家族顶到 2.0.3，为一次纯新增
+# 依赖引入无谓的版本漂移。default-features = false 甩掉自带 CLI（clap +
+# dotenvy + sea-orm-cli 代码生成全家桶）——本 crate 用手写的极简 main（见
+# src/main.rs 顶部注释）；只开 tokio+rustls 运行时与 Postgres 驱动，与
+# workspace 其余部分的 rustls/ring 策略一致。
+sea-orm-migration = { version = "=2.0.2", default-features = false, features = [
+  "runtime-tokio-rustls",
+  "sqlx-postgres",
+] }

@@ -11,7 +11,8 @@ use sea_orm::{ColumnTrait, QueryFilter};
 use serde::Serialize;
 
 use _database::{
-    DB_CONN, models::icon::icon as icon_model, models::icon::icon_type_link as itl_model,
+    DatabaseConnectionMap, models::icon::icon as icon_model,
+    models::icon::icon_type_link as itl_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
@@ -34,24 +35,24 @@ pub struct IconDocVo {
 
 /// `GET /icon_doc/all_bin_md5` — MD5 of the single all-icons blob.
 pub async fn do_all_bin_md5(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let entry = icon_result().await?;
+    let entry = icon_result(db).await?;
     Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /icon_doc/all_bin` — the all-icons blob (compressed bytes).
-pub async fn do_all_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
-    let entry = icon_result().await?;
+pub async fn do_all_bin(db: &DatabaseConnectionMap, _auth: AuthInfo) -> Result<Vec<u8>> {
+    let entry = icon_result(db).await?;
     Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) the single icon blob.
-async fn icon_result() -> Result<ResultEntry> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let entries = get_result_cached("icon:result".into(), async {
+async fn icon_result(db: &DatabaseConnectionMap) -> Result<ResultEntry> {
+    let entries = get_result_cached(db, "icon:result".into(), async {
+        let db = &db.pg_conn;
         let icons = icon_model::Entity::find_safety().all(db).await?;
         let ids: Vec<i64> = icons.iter().map(|i| i.id).collect();
 

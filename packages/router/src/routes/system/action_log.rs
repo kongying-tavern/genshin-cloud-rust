@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
+use _database::DB_CONN;
 use _utils::{models::Pagination, types::ActionLogAction};
 
 /// 格式：字段+ 字段-
@@ -79,6 +80,7 @@ pub async fn list(
     });
 
     match _functions::functions::system::action_log::do_list(
+        DB_CONN.wait().as_ref(),
         auth,
         query.user_id,
         query.action.map(|a| a as i64),

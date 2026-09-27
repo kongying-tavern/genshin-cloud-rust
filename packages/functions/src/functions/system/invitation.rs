@@ -12,7 +12,7 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::system::{sys_user as sys_user_model, sys_user_invitation as inv_model},
 };
 use _utils::{
@@ -26,6 +26,7 @@ use _utils::{
 
 /// List invitations with optional filtering by code / username.
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     code: Option<String>,
     username: Option<String>,
@@ -33,7 +34,7 @@ pub async fn do_list(
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let mut query = inv_model::Entity::find_safety();
 
     if let Some(c) = code {
@@ -102,6 +103,7 @@ pub async fn do_list(
 /// - 否则以给定 code 插入，code 缺省时生成新邀请码；
 /// - 返回 `{code, username}`（Java `SysUserInvitationSmallVo`）。
 pub async fn do_update(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     code: Option<String>,
     username: String,
@@ -109,7 +111,7 @@ pub async fn do_update(
     remark: String,
     access_policy: Vec<_utils::types::AccessPolicyItemEnum>,
 ) -> Result<CommonResponse<SysUserInvitationSmallVo>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     // Java updateInvitation：用户名不能为空
     if username.trim().is_empty() {
@@ -212,13 +214,14 @@ pub async fn do_update(
 /// 公开查询（Java 免登 pass-filter）：校验邀请码是否存在并返回邀请信息。
 /// 不做登录态校验——该端点在注册流程中于登录前调用。
 pub async fn do_info_public(
+    db: &DatabaseConnectionMap,
     ip: SocketAddr,
     code: String,
 ) -> Result<CommonResponse<serde_json::Value>> {
     // 公开端点限流：每 IP 每分钟最多 30 次查询（邀请码探测/爆破面，
     // 每次请求都打一次 DB 等值查询）
-    super::rate_limit::enforce_ip_rate_limit("invite_info", ip, 30, 60).await?;
-    let db = &DB_CONN.wait().pg_conn;
+    super::rate_limit::enforce_ip_rate_limit(db, "invite_info", ip, 30, 60).await?;
+    let db = &db.pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(code))
         .one(db)
@@ -227,9 +230,13 @@ pub async fn do_info_public(
     Ok(CommonResponse::new(Ok(serde_json::to_value(inv)?)))
 }
 
-pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serde_json::Value>> {
+pub async fn do_info(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    code: String,
+) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let inv = inv_model::Entity::find_safety()
         .filter(inv_model::Column::Code.eq(code))
         .one(db)
@@ -243,6 +250,7 @@ pub async fn do_info(auth: AuthInfo, code: String) -> Result<CommonResponse<serd
 /// 返回 `{userId, result}`，对齐前端 `SysUserInvitationConsumeResultVo`。
 #[allow(clippy::too_many_arguments)]
 pub async fn do_consume(
+    db: &DatabaseConnectionMap,
     ip: SocketAddr,
     code: String,
     username: Option<String>,
@@ -251,8 +259,8 @@ pub async fn do_consume(
 ) -> Result<CommonResponse<serde_json::Value>> {
     // 公开端点限流：每 IP 每分钟最多 30 次消费尝试（邀请码猜测面；每次
     // 请求含事务 + bcrypt cost-12，先于任何 DB 工作拒绝滥用）
-    super::rate_limit::enforce_ip_rate_limit("invite_consume", ip, 30, 60).await?;
-    let db = &DB_CONN.wait().pg_conn;
+    super::rate_limit::enforce_ip_rate_limit(db, "invite_consume", ip, 30, 60).await?;
+    let db = &db.pg_conn;
 
     let now = Utc::now().naive_utc();
     let username = username
@@ -349,8 +357,12 @@ pub async fn do_consume(
 }
 
 /// Delete an invitation by id (soft delete).
-pub async fn do_delete(_auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
-    let db = &DB_CONN.wait().pg_conn;
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    _auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
+    let db = &db.pg_conn;
     let inv = inv_model::Entity::find_safety_by_id(id)
         .one(db)
         .await?

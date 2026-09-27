@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 
 /// 物品分页的md5数组
 /// GET /item_doc/list_page_bin_md5
@@ -10,8 +11,12 @@ use crate::middlewares::ExtractAuthInfo;
 pub async fn list_page_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::item_doc::do_list_page_bin_md5(auth, serde_json::json!({}))
-        .await
+    match _functions::functions::api::item_doc::do_list_page_bin_md5(
+        DB_CONN.wait().as_ref(),
+        auth,
+        serde_json::json!({}),
+    )
+    .await
     {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

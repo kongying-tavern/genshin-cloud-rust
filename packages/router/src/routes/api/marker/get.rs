@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use _utils::models::{marker::MarkerFilterRequest, wrapper::Pagination};
 
 /// 根据各种条件筛选查询点位ID
@@ -13,7 +14,9 @@ pub async fn get_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_id(auth, payload).await {
+    match _functions::functions::api::marker::do_get_id(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -27,7 +30,13 @@ pub async fn get_list_by_info(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_list_by_info(auth, payload).await {
+    match _functions::functions::api::marker::do_get_list_by_info(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -41,7 +50,13 @@ pub async fn get_list_by_id(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_list_by_id(auth, payload).await {
+    match _functions::functions::api::marker::do_get_list_by_id(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -55,7 +70,9 @@ pub async fn get_page(
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     // use axum::Json as AxumJson; (removed duplicate alias)
-    match _functions::functions::api::marker::do_get_page(auth, payload).await {
+    match _functions::functions::api::marker::do_get_page(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

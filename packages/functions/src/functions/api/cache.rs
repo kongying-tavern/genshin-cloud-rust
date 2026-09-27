@@ -9,6 +9,7 @@
 
 use anyhow::Result;
 
+use _database::DatabaseConnectionMap;
 use _utils::{jwt::AuthInfo, models::wrapper::CommonResponse};
 
 use super::binary_doc;
@@ -20,9 +21,12 @@ pub async fn do_delete_area_cache(auth: AuthInfo) -> Result<CommonResponse<bool>
 }
 
 /// 清除物品缓存（BinaryMD5 item 页）。
-pub async fn do_delete_item_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
+pub async fn do_delete_item_cache(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all().await;
+    binary_doc::invalidate_all(db).await;
     super::super::ws::ws_broadcast("ItemBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(true)))
 }
@@ -45,17 +49,23 @@ pub async fn do_delete_icon_tag_cache(
 }
 
 /// 清除点位缓存（BinaryMD5 marker 页）。
-pub async fn do_delete_marker_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
+pub async fn do_delete_marker_cache(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all().await;
+    binary_doc::invalidate_all(db).await;
     super::super::ws::ws_broadcast("MarkerBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(true)))
 }
 
 /// 清除点位连线缓存（BinaryMD5 link list/graph 页）。
-pub async fn do_delete_marker_link_cache(auth: AuthInfo) -> Result<CommonResponse<bool>> {
+pub async fn do_delete_marker_link_cache(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all().await;
+    binary_doc::invalidate_all(db).await;
     super::super::ws::ws_broadcast("MarkerLinkageBinaryPurged", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(true)))
 }

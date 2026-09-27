@@ -11,7 +11,7 @@ use anyhow::Result;
 use std::collections::BTreeMap;
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::{
         item::item as item_model,
         marker::{
@@ -41,13 +41,14 @@ fn marker_page_key(flag: i32, page_index: i64) -> String {
 
 /// `GET /marker_doc/list_page_bin_md5`
 pub async fn do_list_page_bin_md5(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<Vec<BinaryMd5Vo>>> {
     // 可见性（Java listMarkerBinaryMD5）：低等级用户拿不到高等级分组的
     // md5，隐藏/测试服页对普通用户如同不存在。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let entries = marker_result().await?;
+    let entries = marker_result(db).await?;
     Ok(CommonResponse::new(Ok(entries
         .iter()
         .filter(|e| allowed.contains(&entry_flag(&e.key)))
@@ -56,10 +57,14 @@ pub async fn do_list_page_bin_md5(
 }
 
 /// `GET /marker_doc/list_page_bin/{md5}`
-pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+pub async fn do_list_page_bin(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    md5: String,
+) -> Result<Vec<u8>> {
     // 与 md5 清单同口径的角色过滤：知道 md5 也不能取到越权分组。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let entries = marker_result().await?;
+    let entries = marker_result(db).await?;
     entries
         .iter()
         .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
@@ -76,10 +81,9 @@ fn entry_flag(key: &str) -> i32 {
 }
 
 /// Compute (and cache) the full marker page set.
-async fn marker_result() -> Result<Vec<ResultEntry>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    get_result_cached("marker:result".into(), async {
+async fn marker_result(db: &DatabaseConnectionMap) -> Result<Vec<ResultEntry>> {
+    get_result_cached(db, "marker:result".into(), async {
+        let db = &db.pg_conn;
         let markers = marker_model::Entity::find()
             .select_only()
             .column(marker_model::Column::Version)
@@ -257,11 +261,12 @@ pub fn encode_diff_snapshot_list(snapshots: &[DiffSnapshot]) -> Vec<u8> {
 /// 计算一次并写入 Redis，其余副本直接取字节，避免各自全量重扫数据库。
 /// marker / linkage 写路径的 invalidate_doc_cache() 会整体失效本键。
 /// 返回 [`bytes::Bytes`]，缓存命中时整条服务链路零拷贝。
-pub async fn do_list_diff_snapshot(auth: AuthInfo) -> Result<bytes::Bytes> {
+pub async fn do_list_diff_snapshot(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<bytes::Bytes> {
     // 可见性（Java HiddenFlagEnum.getFlagListByMask(userDataLevel)）
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let db = &DB_CONN.wait().pg_conn;
-
     let mut flags = allowed.clone();
     flags.sort_unstable();
     let key = format!(
@@ -272,7 +277,8 @@ pub async fn do_list_diff_snapshot(auth: AuthInfo) -> Result<bytes::Bytes> {
             .collect::<Vec<_>>()
             .join(",")
     );
-    let mut entries = get_result_cached(key, async {
+    let mut entries = get_result_cached(db, key, async {
+        let db = &db.pg_conn;
         let bytes = diff_snapshot_bytes(db, &allowed).await?;
         let digest = md5::compute(&bytes);
         Ok(vec![ResultEntry {

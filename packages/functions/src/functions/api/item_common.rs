@@ -21,7 +21,7 @@ use _utils::{
 use _utils::db_operations::SafeEntityTrait;
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::{area::item_area_public as iap_model, item::item as item_model},
 };
 
@@ -35,10 +35,11 @@ const MAX_BATCH: usize = 1000;
 /// 列出公用物品：分页查询 `item_area_public` 关联表，组合 item 信息。
 /// 响应为 `ItemAreaPublicVo`（ItemVO + itemId），与前端 ItemAreaPublicVo 契约一致。
 pub async fn do_get_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: Pagination,
 ) -> Result<CommonResponse<ItemAreaPublicListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let size = payload.size.unwrap_or(10).min(200) as u64;
     let current = payload.current.unwrap_or(1);
@@ -89,7 +90,11 @@ pub async fn do_get_list(
 /// 对齐 Java：把 itemId 列表中**名称尚未成为公用物品**的 item 批量标记为
 /// 公用（写入 `item_area_public`）。同名 item 只取第一个；名称已存在于
 /// 关联表中的跳过。返回是否成功（至少插入一条）。
-pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResponse<bool>> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    item_id_list: Vec<i64>,
+) -> Result<CommonResponse<bool>> {
     if item_id_list.len() > MAX_BATCH {
         return Err(DomainError::Business(format!(
             "batch too large: {} > {}",
@@ -99,16 +104,16 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
         .into());
     }
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     // 已存在的公用名称集合（Java：过滤掉名称已存在的）。
-    let existing_links = iap_model::Entity::find_safety().all(db).await?;
+    let existing_links = iap_model::Entity::find_safety().all(pg).await?;
     let existing_ids: Vec<i64> = existing_links.iter().map(|l| l.item_id).collect();
     let mut existing_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     if !existing_ids.is_empty() {
         for it in item_model::Entity::find_safety()
             .filter(item_model::Column::Id.is_in(existing_ids))
-            .all(db)
+            .all(pg)
             .await?
         {
             existing_names.insert(it.name);
@@ -118,7 +123,7 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
     // 候选 item：按名称分组去重，取每组的第一个 id（Java 逻辑）。
     let candidates = item_model::Entity::find_safety()
         .filter(item_model::Column::Id.is_in(item_id_list))
-        .all(db)
+        .all(pg)
         .await?;
     let mut first_by_name: std::collections::BTreeMap<String, i64> =
         std::collections::BTreeMap::new();
@@ -148,25 +153,29 @@ pub async fn do_add(auth: AuthInfo, item_id_list: Vec<i64>) -> Result<CommonResp
             item_id: Set(item_id),
         });
     }
-    iap_model::Entity::insert_many(models).exec(db).await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+    iap_model::Entity::insert_many(models).exec(pg).await?;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
 /// `DELETE /item_common/delete/{itemId}`
 ///
 /// 对齐 Java：按 item_id 软删 `item_area_public` 关联行（不动 item 表）。
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     iap_model::Entity::update_many()
         .col_expr(
             iap_model::Column::DelFlag,
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(iap_model::Column::ItemId.eq(id))
-        .exec(db)
+        .exec(pg)
         .await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }

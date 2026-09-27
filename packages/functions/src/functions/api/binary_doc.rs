@@ -18,7 +18,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::{io::Write, time::Duration};
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use redis::AsyncCommands;
 
 /// A single MD5 entry in the `list_page_bin_md5` response.
@@ -141,8 +141,8 @@ impl From<RedisResultEntry> for ResultEntry {
 }
 
 /// Current Redis epoch (1 when unset). `None` when Redis is unavailable.
-async fn redis_epoch() -> Option<i64> {
-    let conn = DB_CONN.wait().redis_conn.as_ref()?;
+async fn redis_epoch(db: &DatabaseConnectionMap) -> Option<i64> {
+    let conn = db.redis_conn.as_ref()?;
     let mut c = conn.get_multiplexed_async_connection().await.ok()?;
     let epoch: Option<i64> = c.get(REDIS_EPOCH_KEY).await.ok().flatten();
     match epoch {
@@ -162,9 +162,9 @@ async fn redis_epoch() -> Option<i64> {
 }
 
 /// Try to load the result set for `key` from Redis.
-async fn redis_load(key: &str) -> Option<Vec<ResultEntry>> {
-    let epoch = redis_epoch().await?;
-    let conn = DB_CONN.wait().redis_conn.as_ref()?;
+async fn redis_load(db: &DatabaseConnectionMap, key: &str) -> Option<Vec<ResultEntry>> {
+    let epoch = redis_epoch(db).await?;
+    let conn = db.redis_conn.as_ref()?;
     let mut c = conn.get_multiplexed_async_connection().await.ok()?;
     let raw: Option<String> = c
         .get(format!("{REDIS_RESULT_PREFIX}{epoch}:{key}"))
@@ -176,11 +176,11 @@ async fn redis_load(key: &str) -> Option<Vec<ResultEntry>> {
 }
 
 /// Store the result set for `key` in Redis (best-effort; Redis may be down).
-async fn redis_store(key: &str, entries: &[ResultEntry]) {
-    let Some(epoch) = redis_epoch().await else {
+async fn redis_store(db: &DatabaseConnectionMap, key: &str, entries: &[ResultEntry]) {
+    let Some(epoch) = redis_epoch(db).await else {
         return;
     };
-    let Some(conn) = DB_CONN.wait().redis_conn.as_ref().cloned() else {
+    let Some(conn) = db.redis_conn.as_ref().cloned() else {
         return;
     };
     let Ok(mut c) = conn.get_multiplexed_async_connection().await else {
@@ -205,13 +205,13 @@ async fn redis_store(key: &str, entries: &[ResultEntry]) {
 }
 
 /// Drop every cached page (in-process + Redis across replicas).
-pub async fn invalidate_all() {
+pub async fn invalidate_all(db: &DatabaseConnectionMap) {
     BIN_CACHE.invalidate_all();
     RESULT_CACHE.invalidate_all();
     // Bump the Redis epoch: replicas' copies are keyed by the old epoch and
     // expire on their own; the next request computes + stores under the new
     // one. Best-effort — with Redis down this is a no-op.
-    let Some(conn) = DB_CONN.wait().redis_conn.as_ref() else {
+    let Some(conn) = db.redis_conn.as_ref() else {
         return;
     };
     let Ok(mut c) = conn.get_multiplexed_async_connection().await else {
@@ -228,16 +228,16 @@ pub async fn invalidate_all() {
 /// This is the domain-wide invalidation: moka's `invalidate_all` drops the
 /// in-process pages, and bumping the Redis epoch makes every replica's cached
 /// copies unreachable (old keys expire on their own TTL).
-pub async fn invalidate_item_doc_cache() {
-    invalidate_all().await;
+pub async fn invalidate_item_doc_cache(db: &DatabaseConnectionMap) {
+    invalidate_all(db).await;
 }
 
 /// Invalidate the binary-doc caches for any domain (in-process moka + Redis
 /// across replicas). Marker / marker_link / item writes all change what the
 /// `*_doc` pages serve, so call this after any such write; otherwise other
 /// clients keep seeing stale pages until the TTL expires.
-pub async fn invalidate_doc_cache() {
-    invalidate_all().await;
+pub async fn invalidate_doc_cache(db: &DatabaseConnectionMap) {
+    invalidate_all(db).await;
 }
 
 /// Result-level cache entry: one page's md5 metadata plus its compressed
@@ -272,24 +272,25 @@ static RESULT_CACHE: Lazy<moka::future::Cache<String, Vec<ResultEntry>>> = Lazy:
 /// A Redis hit also warms the in-process cache, so subsequent requests are
 /// zero-DB and zero-Redis.
 pub async fn get_result_cached(
+    db: &DatabaseConnectionMap,
     key: String,
     compute: impl std::future::Future<Output = anyhow::Result<Vec<ResultEntry>>>,
 ) -> anyhow::Result<Vec<ResultEntry>> {
     if let Some(cached) = RESULT_CACHE.get(&key).await {
         return Ok(cached);
     }
-    if let Some(entries) = redis_load(&key).await {
+    if let Some(entries) = redis_load(db, &key).await {
         RESULT_CACHE.insert(key.clone(), entries.clone()).await;
         return Ok(entries);
     }
     // compute 前记录 epoch：compute 期间若有写操作 invalidate（bump epoch），
     // 计算结果是陈旧数据，复检不一致则丢弃回填（下次请求自然重新计算），
     // 防止「失效 = 没失效」竞态把旧结果写进新 epoch 键。
-    let epoch_before = redis_epoch().await;
+    let epoch_before = redis_epoch(db).await;
     let result = compute.await?;
-    if redis_epoch().await == epoch_before {
+    if redis_epoch(db).await == epoch_before {
         RESULT_CACHE.insert(key.clone(), result.clone()).await;
-        redis_store(&key, &result).await;
+        redis_store(db, &key, &result).await;
     }
     Ok(result)
 }

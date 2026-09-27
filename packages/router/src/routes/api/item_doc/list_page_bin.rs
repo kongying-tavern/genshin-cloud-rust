@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use axum::http::header;
 
 /// 物品分页数据（GZIP 压缩二进制）
@@ -17,7 +18,9 @@ pub async fn list_page_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(md5): Path<String>,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::item_doc::do_list_page_bin(auth, md5).await {
+    match _functions::functions::api::item_doc::do_list_page_bin(DB_CONN.wait().as_ref(), auth, md5)
+        .await
+    {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

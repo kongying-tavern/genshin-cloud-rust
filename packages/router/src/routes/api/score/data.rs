@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
+use _database::DB_CONN;
 use _utils::models::score::ScoreDataRequest;
 
 /// 获取评分数据
@@ -11,7 +12,13 @@ pub async fn get_score_data(
     ExtractAdmin(auth): ExtractAdmin,
     Json(request): Json<ScoreDataRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::score::do_get_score_data(auth, request).await {
+    match _functions::functions::api::score::do_get_score_data(
+        DB_CONN.wait().as_ref(),
+        auth,
+        request,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

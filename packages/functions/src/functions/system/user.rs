@@ -8,7 +8,7 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _database::models::system::sys_user as sys_user_model;
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -32,6 +32,7 @@ fn ensure_password_policy(password: &str) -> Result<()> {
 }
 
 pub async fn do_register(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
@@ -41,7 +42,7 @@ pub async fn do_register(
 ) -> Result<CommonResponse<i64>> {
     // 密码最小强度：先于任何查重 / bcrypt 工作拒绝弱密码
     ensure_password_policy(&password)?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     // 注册前查重（应用层）：username 已被占用（未软删）则拒绝，防重复用户名
     // 落库后 oauth_password_login 的 .one() 按名匹配取到错误账户。
@@ -84,7 +85,9 @@ pub async fn do_register(
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn do_register_qq(
+    db: &DatabaseConnectionMap,
     ip: SocketAddr,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
     logo: Option<String>,
@@ -98,10 +101,10 @@ pub async fn do_register_qq(
     // 公开端点限流：每 IP 每小时最多 10 次注册。注册路径含两次查重 +
     // bcrypt cost-12（~250ms CPU），无限流时是公开的 CPU 放大面，先于
     // 任何 DB 工作拒绝滥用。
-    super::rate_limit::enforce_ip_rate_limit("register_qq", ip, 10, 3600).await?;
+    super::rate_limit::enforce_ip_rate_limit(db, "register_qq", ip, 10, 3600).await?;
     // 密码最小强度：与 do_register 一致
     ensure_password_policy(&password)?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let qq = qq.unwrap_or_else(|| username.clone());
 
     // 注册前查重（应用层）：username / qq 任一已被占用（未软删）则拒绝，
@@ -151,10 +154,14 @@ pub async fn do_register_qq(
     Ok(CommonResponse::new(Ok(res.last_insert_id)))
 }
 
-pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
+pub async fn do_get_info(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    user_id: i64,
+) -> Result<SysUserVO> {
     // 匿名（client_credentials）身份一律拒绝：防止未登录枚举任意用户公开字段
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
         .one(db)
         .await?;
@@ -186,6 +193,7 @@ pub async fn do_get_info(auth: AuthInfo, user_id: i64) -> Result<SysUserVO> {
 // internal_error 按变体映射），DB 等内部错误保持原始类型由内部类型判定
 // 收敛为「请求失败」——不再使用 (u16, String) 透传状态码。
 pub async fn do_update(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     id: i64,
     access_policy: Option<Vec<AccessPolicyItemEnum>>,
@@ -196,7 +204,6 @@ pub async fn do_update(
     remark: Option<String>,
     role_id: Option<SystemUserRole>,
 ) -> Result<CommonResponse<bool>> {
-    let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅 Admin 可修改他人资料；普通用户只能改自己。
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != id {
@@ -205,7 +212,7 @@ pub async fn do_update(
         );
     }
     let m = sys_user_model::Entity::find_safety_by_id(id)
-        .one(db)
+        .one(&db.pg_conn)
         .await?;
     let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
     let old_role = m.role_id;
@@ -236,7 +243,7 @@ pub async fn do_update(
         let qq_taken = sys_user_model::Entity::find_safety()
             .filter(sys_user_model::Column::Qq.eq(&q))
             .filter(sys_user_model::Column::Id.ne(id))
-            .count(db)
+            .count(&db.pg_conn)
             .await?
             > 0;
         if qq_taken {
@@ -254,7 +261,9 @@ pub async fn do_update(
         }
     }
 
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?
+        .exec(&db.pg_conn)
+        .await?;
     // 角色变更（仅 Admin 操作生效）后吊销该用户全部会话：被降权/换角的
     // 用户不得继续持有旧角色权限（Redis VO 快照最长 15 天）。Redis 不可用
     // 时忽略错误（降级）。
@@ -262,12 +271,13 @@ pub async fn do_update(
         && let Some(rid) = role_id
         && old_role != rid
     {
-        let _ = revoke_user_sessions(id).await;
+        let _ = revoke_user_sessions(db, id).await;
     }
     Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_update_password(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     user_id: i64,
     old_password: String,
@@ -277,7 +287,6 @@ pub async fn do_update_password(
     // ensure_password_policy 返回 Business，这里转写为 BadRequest 以保持
     // 该端点「弱密码 → 真实 400」的原有契约。
     ensure_password_policy(&new_password).map_err(|e| DomainError::BadRequest(e.to_string()))?;
-    let db = &DB_CONN.wait().pg_conn;
     // 权限校验：仅本人可凭旧密码改密；Admin 例外可改任意用户
     let is_admin = auth.info.role_id == SystemUserRole::Admin;
     if !is_admin && auth.info.id != user_id {
@@ -287,7 +296,7 @@ pub async fn do_update_password(
         .into());
     }
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
-        .one(db)
+        .one(&db.pg_conn)
         .await?;
     let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
 
@@ -303,14 +312,17 @@ pub async fn do_update_password(
     am.updater_id = Set(Some(user_id));
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
         .map_err(|_| anyhow!("Internal server error"))?);
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?
+        .exec(&db.pg_conn)
+        .await?;
     // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
     // Redis 不可用时忽略错误（降级）。
-    let _ = revoke_user_sessions(user_id).await;
+    let _ = revoke_user_sessions(db, user_id).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
 pub async fn do_update_password_by_admin(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     password: String,
     user_id: i64,
@@ -318,34 +330,36 @@ pub async fn do_update_password_by_admin(
     // 密码最小强度：管理员重置同样不得落库弱密码（该通道无旧密码校验，
     // 弱密码会直接成为该账号的唯一凭据）
     ensure_password_policy(&password)?;
-    let db = &DB_CONN.wait().pg_conn;
     let m = sys_user_model::Entity::find_safety_by_id(user_id)
-        .one(db)
+        .one(&db.pg_conn)
         .await?;
     let m = m.ok_or_else(|| DomainError::Business("User not found".into()))?;
     let mut am: sys_user_model::ActiveModel = m.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(_auth.info.id));
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
-    sys_user_model::Entity::update_safety(am)?.exec(db).await?;
+    sys_user_model::Entity::update_safety(am)?
+        .exec(&db.pg_conn)
+        .await?;
     // 管理员重置密码后吊销该用户全部会话，旧 token 一律失效（无旧密码
     // 校验的管理员通道同样生效）。Redis 不可用时忽略错误（降级）。
-    let _ = revoke_user_sessions(user_id).await;
+    let _ = revoke_user_sessions(db, user_id).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
-pub async fn do_delete(_auth: AuthInfo, work_id: i64) -> Result<()> {
+pub async fn do_delete(db: &DatabaseConnectionMap, _auth: AuthInfo, work_id: i64) -> Result<()> {
     // 管理员删除用户：使用软删除 by id
     sys_user_model::Entity::delete_safety_by_id(work_id)?
-        .exec(&DB_CONN.wait().pg_conn)
+        .exec(&db.pg_conn)
         .await?;
     // 删除后吊销该用户全部 Redis 会话：软删用户的 token 靠缓存 VO 仍能
     // 最长有效 15 天，必须立即失效。Redis 不可用时忽略错误（降级）。
-    let _ = revoke_user_sessions(work_id).await;
+    let _ = revoke_user_sessions(db, work_id).await;
     Ok(())
 }
 
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     pagination: Pagination,
     nickname: Option<String>,
@@ -353,7 +367,7 @@ pub async fn do_list(
     sort: Option<Vec<UserSort>>,
     username: Option<String>,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let mut query = sys_user_model::Entity::find_safety();
     if let Some(nickname) = nickname
@@ -411,8 +425,8 @@ pub async fn do_list(
 /// 旧权限、改密后旧设备仍可访问）。用 SCAN + pipeline 而非 KEYS：KEYS 会阻塞
 /// Redis 主线程（大 key 空间下长时间阻塞），SCAN 按游标分批遍历，收集后一次
 /// pipeline 删除。Redis 不可用时退化为无操作（与 oauth 的降级策略一致）。
-pub(crate) async fn revoke_user_sessions(user_id: i64) -> Result<()> {
-    let Some(redis_client) = &DB_CONN.wait().redis_conn else {
+pub(crate) async fn revoke_user_sessions(db: &DatabaseConnectionMap, user_id: i64) -> Result<()> {
+    let Some(redis_client) = &db.redis_conn else {
         // Redis 不可用时退化为无操作（与 oauth 的降级策略一致）
         return Ok(());
     };
@@ -437,13 +451,17 @@ pub(crate) async fn revoke_user_sessions(user_id: i64) -> Result<()> {
     Ok(())
 }
 
-pub async fn do_kick_out(_auth: AuthInfo, work_id: String) -> Result<()> {
+pub async fn do_kick_out(
+    db: &DatabaseConnectionMap,
+    _auth: AuthInfo,
+    work_id: String,
+) -> Result<()> {
     // 踢出用户：删除该用户在 Redis 中的全部会话令牌。
     // JWT 本身无状态，登出/踢出依赖 Redis 会话（jwt:access:{uid}:{jti}）。
     let user_id = work_id
         .parse::<i64>()
         .map_err(|_| DomainError::Business("Invalid user id".into()))?;
-    revoke_user_sessions(user_id).await?;
+    revoke_user_sessions(db, user_id).await?;
     // 通知该用户的在线连接立即下线（对齐 Java SysUserController）
     super::super::ws::ws_send_to_users(&[work_id], "UserKickedOut", serde_json::Value::Null);
     Ok(())

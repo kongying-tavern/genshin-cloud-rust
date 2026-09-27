@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
+use _database::DB_CONN;
 use _utils::models::wrapper::Pagination;
 use _utils::types::DeviceSort;
 
@@ -44,6 +45,7 @@ pub async fn list(
         .unwrap_or(1);
 
     match _functions::functions::system::device::do_list(
+        DB_CONN.wait().as_ref(),
         auth,
         payload.user_id,
         payload.device_id,
@@ -77,7 +79,14 @@ pub async fn update(
     let status = payload
         .status
         .ok_or_else(|| crate::routes::route_error("status required"))?;
-    match _functions::functions::system::device::do_update(auth, payload.id, status as i32).await {
+    match _functions::functions::system::device::do_update(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload.id,
+        status as i32,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

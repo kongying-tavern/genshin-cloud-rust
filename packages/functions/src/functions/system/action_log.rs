@@ -3,7 +3,7 @@
 use anyhow::Result;
 use sea_orm::{QueryFilter, QueryOrder, QuerySelect, prelude::*};
 
-use _database::{DB_CONN, models::system::sys_action_log as log_model};
+use _database::{DatabaseConnectionMap, models::system::sys_action_log as log_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     jwt::AuthInfo,
@@ -23,6 +23,7 @@ fn action_to_str(action: SystemActionLogAction) -> String {
 /// List action logs with optional filtering by user_id / action.
 #[allow(clippy::too_many_arguments)]
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     user_id: Option<i64>,
     action: Option<i64>,
@@ -33,7 +34,7 @@ pub async fn do_list(
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let mut query = log_model::Entity::find_safety();
 
     if let Some(uid) = user_id {

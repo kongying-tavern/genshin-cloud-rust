@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
+use _database::DB_CONN;
 use _utils::models::notice::NoticeAddRequest;
 
 /// 新增公告
@@ -11,7 +12,9 @@ pub async fn add_notice(
     ExtractAdmin(auth): ExtractAdmin,
     Json(request): Json<NoticeAddRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::notice::do_add_notice(auth, request).await {
+    match _functions::functions::api::notice::do_add_notice(DB_CONN.wait().as_ref(), auth, request)
+        .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

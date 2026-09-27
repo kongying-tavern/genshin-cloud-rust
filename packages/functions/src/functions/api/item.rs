@@ -9,8 +9,9 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN, models::area::item_area_public as common_item_model, models::item::item as item_model,
-    models::item::item_type as item_type_model, models::item::item_type_link as link_model,
+    DatabaseConnectionMap, models::area::item_area_public as common_item_model,
+    models::item::item as item_model, models::item::item_type as item_type_model,
+    models::item::item_type_link as link_model,
     models::marker::marker_item_link as marker_link_model,
 };
 use _utils::{
@@ -85,6 +86,7 @@ pub(crate) fn item_to_vo(
 
 // 批量更新物品（支持单条或多条）
 pub async fn do_update(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     edit_same: bool,
     payload: Vec<ItemUpdateData>,
@@ -101,13 +103,13 @@ pub async fn do_update(
         }
     }
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     for p in payload {
         // editSame=1：按 name 找到全部同名物品一起更新（Java 语义）
         let target_ids: Vec<i64> = if edit_same {
             item_model::Entity::find_safety()
                 .filter(item_model::Column::Name.eq(p.name.clone()))
-                .all(db)
+                .all(pg)
                 .await?
                 .into_iter()
                 .map(|m| m.id)
@@ -123,10 +125,10 @@ pub async fn do_update(
             return Err(DomainError::Business("Item not found".into()).into());
         }
         for id in target_ids {
-            update_one(db, auth.info.id, id, &p).await?;
+            update_one(pg, auth.info.id, id, &p).await?;
         }
     }
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -148,7 +150,7 @@ async fn update_one(
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(operator_id));
 
-    am.icon_id = Set(resolve_icon_id(p.icon_id, p.icon_tag.as_deref()).await?);
+    am.icon_id = Set(resolve_icon_id(db, p.icon_id, p.icon_tag.as_deref()).await?);
 
     am.name = Set(p.name.clone());
     am.area_id = Set(p.area_id);
@@ -207,10 +209,11 @@ async fn update_one(
 
 // 列表（带过滤、分页、排序）
 pub async fn do_get_list(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: ItemFilterRequest,
 ) -> Result<CommonResponse<ItemListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     // 可见性（Java listItem 的 hiddenFlagList）：按调用者角色过滤。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let mut query =
@@ -284,6 +287,7 @@ pub async fn do_get_list(
 
 // 将多个物品加入到某个类型（在 link 表中插入或更新）
 pub async fn do_join_type(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     type_id: i64,
     payload: Vec<i64>,
@@ -300,10 +304,10 @@ pub async fn do_join_type(
         }
     }
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     // 校验类型存在（item_type 表）
     if item_type_model::Entity::find_safety_by_id(type_id)
-        .one(db)
+        .one(pg)
         .await?
         .is_none()
     {
@@ -314,7 +318,7 @@ pub async fn do_join_type(
         let ids: Vec<i64> = payload.clone();
         let existing: std::collections::HashSet<i64> = item_model::Entity::find_safety()
             .filter(item_model::Column::Id.is_in(ids))
-            .all(db)
+            .all(pg)
             .await?
             .into_iter()
             .map(|m| m.id)
@@ -328,7 +332,7 @@ pub async fn do_join_type(
         let ex = link_model::Entity::find_safety()
             .filter(link_model::Column::ItemId.eq(item_id))
             .filter(link_model::Column::TypeId.eq(type_id))
-            .one(db)
+            .one(pg)
             .await?;
         if ex.is_some() {
             continue;
@@ -347,9 +351,9 @@ pub async fn do_join_type(
             type_id: Set(type_id),
             item_id: Set(item_id),
         };
-        active.insert(db).await?;
+        active.insert(pg).await?;
     }
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -359,6 +363,7 @@ pub async fn do_join_type(
 }
 
 pub async fn do_get_list_by_id(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<Vec<ItemVO>>> {
@@ -373,7 +378,7 @@ pub async fn do_get_list_by_id(
             .into());
         }
     }
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let icon_tag_map = super::icon::icon_tag_map(db).await?;
     // 可见性：不可见 flag 的物品对调用者如同不存在。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
@@ -391,10 +396,14 @@ pub async fn do_get_list_by_id(
     Ok(CommonResponse::new(Ok(arr)))
 }
 
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
-    let Some(item) = item_model::Entity::find_safety_by_id(id).one(db).await? else {
+    let pg = &db.pg_conn;
+    let Some(item) = item_model::Entity::find_safety_by_id(id).one(pg).await? else {
         // Java deleteItem：不存在的 id 返回 data:false（200 + R）
         return Ok(CommonResponse::new(Ok(false)));
     };
@@ -402,7 +411,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     // Java ItemService：公共物品（item_common 命中）不允许删除
     let is_common = common_item_model::Entity::find_safety()
         .filter(common_item_model::Column::ItemId.eq(id))
-        .count(db)
+        .count(pg)
         .await?
         > 0;
     if is_common {
@@ -413,7 +422,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(auth.info.id));
-    item_model::Entity::delete_safety(am)?.exec(db).await?;
+    item_model::Entity::delete_safety(am)?.exec(pg).await?;
 
     // 清理 item_type_link 关联（软删）
     link_model::Entity::update_many()
@@ -422,7 +431,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(link_model::Column::ItemId.eq(id))
-        .exec(db)
+        .exec(pg)
         .await?;
 
     // Java ItemService：同步清理 marker_item_link（Java 为物理删除，此处软删）
@@ -432,11 +441,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(marker_link_model::Column::ItemId.eq(id))
-        .exec(db)
+        .exec(pg)
         .await?;
 
     // Java ItemController：删除成功后同时清 item 缓存与 marker 缓存
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -453,6 +462,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 // 复制物品到指定地区（简单实现：复制记录并关联相同类型）
 // 前端契约 RListLong：返回新复制出的物品 ID 列表（data: number[]）。
 pub async fn do_copy_to_area(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     area_id: i64,
     payload: Vec<i64>,
@@ -473,7 +483,7 @@ pub async fn do_copy_to_area(
     let mut new_ids = Vec::with_capacity(payload.len());
     for id in payload {
         if let Some(item) = item_model::Entity::find_safety_by_id(id)
-            .one(&DB_CONN.wait().pg_conn)
+            .one(&db.pg_conn)
             .await?
         {
             let mut am: item_model::ActiveModel = item.into();
@@ -488,12 +498,12 @@ pub async fn do_copy_to_area(
             am.version = Set(0);
             am.creator_id = Set(Some(auth.info.id));
             am.updater_id = Set(Some(auth.info.id));
-            let res = am.insert(&DB_CONN.wait().pg_conn).await?;
+            let res = am.insert(&db.pg_conn).await?;
             let new_id = res.id;
             // 复制类型关联
             let links = link_model::Entity::find_safety()
                 .filter(link_model::Column::ItemId.eq(id))
-                .all(&DB_CONN.wait().pg_conn)
+                .all(&db.pg_conn)
                 .await?;
             for l in links {
                 let active = link_model::ActiveModel {
@@ -509,12 +519,12 @@ pub async fn do_copy_to_area(
                     type_id: Set(l.type_id),
                     item_id: Set(new_id),
                 };
-                active.insert(&DB_CONN.wait().pg_conn).await?;
+                active.insert(&db.pg_conn).await?;
             }
             new_ids.push(new_id);
         }
     }
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -523,11 +533,16 @@ pub async fn do_copy_to_area(
     Ok(CommonResponse::new(Ok(new_ids)))
 }
 
-pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonResponse<i64>> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: ItemAddRequest,
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
 
-    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
+    let icon_id =
+        resolve_icon_id(&db.pg_conn, payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = item_model::ActiveModel {
         version: Set(1),
@@ -558,7 +573,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
             .map(|v| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32)),
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(&db.pg_conn).await?;
     let new_id = res.id;
 
     // 插入类型关联前校验类型存在（item_type 表）：
@@ -566,7 +581,7 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
     if !payload.type_id_list.is_empty() {
         let existing: std::collections::HashSet<i64> = item_type_model::Entity::find_safety()
             .filter(item_type_model::Column::Id.is_in(payload.type_id_list.clone()))
-            .all(&DB_CONN.wait().pg_conn)
+            .all(&db.pg_conn)
             .await?
             .into_iter()
             .map(|t| t.id)
@@ -589,11 +604,11 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
                 type_id: Set(*t),
                 item_id: Set(new_id),
             };
-            active.insert(&DB_CONN.wait().pg_conn).await?;
+            active.insert(&db.pg_conn).await?;
         }
     }
 
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -605,14 +620,16 @@ pub async fn do_add(auth: AuthInfo, payload: ItemAddRequest) -> Result<CommonRes
 /// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
 /// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
 /// 查不到则回退 0（不强制失败，保持与旧行为一致）。
-async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+async fn resolve_icon_id(
+    db: &sea_orm::DatabaseConnection,
+    icon_id: i64,
+    icon_tag: Option<&str>,
+) -> Result<i64> {
     if icon_id != 0 {
         return Ok(icon_id);
     }
     let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
         return Ok(0);
     };
-    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
-        .await?
-        .unwrap_or(0))
+    Ok(super::icon::icon_id_by_tag(db, tag).await?.unwrap_or(0))
 }

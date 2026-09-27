@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use _utils::models::AreaListRequest;
 
 /// 列出地区
@@ -13,7 +14,7 @@ pub async fn list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<AreaListRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::area::do_list(auth, payload).await {
+    match _functions::functions::api::area::do_list(DB_CONN.wait().as_ref(), auth, payload).await {
         Ok(list) => Ok((StatusCode::OK, Json(list))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

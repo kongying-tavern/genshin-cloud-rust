@@ -19,7 +19,11 @@
 //! dependency graph (sys_user → icon → icon_type → area → item → ...) just to
 //! test one domain. Future domain tests can reuse `recreate_tables_fklless`.
 
-use _database::DB_CONN;
+use std::sync::Arc;
+
+use tokio::sync::OnceCell;
+
+use _database::DatabaseConnectionMap;
 use _database::models::{
     area::area as area_model, area::item_area_public as iap_model,
     common::history as history_model, common::score_stat as score_stat_model,
@@ -58,16 +62,32 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, Schema,
     sea_query::TableCreateStatement,
 };
-/// Skip when no database is configured. Mirrors `user_db_test::db`.
-async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
+
+/// 自持连接映射：本 binary 只构建一次，**不写 `DB_CONN` 全局单例**——
+/// 连接注入重构的可测性验收点（测试隔离不依赖全局状态；下方测试开头的
+/// `DB_CONN.get().is_none()` 断言即 connect_db_map 不碰全局的证据）。
+/// 连接失败缓存为 `None`，与原先 `init_db_conn` 失败后按「跳过」处理的
+/// 语义一致。
+static MAP: OnceCell<Option<Arc<DatabaseConnectionMap>>> = OnceCell::const_new();
+
+async fn map() -> Option<&'static DatabaseConnectionMap> {
     if std::env::var("GCS_TEST_DB").is_err() {
         eprintln!("skipped: set GCS_TEST_DB=1 with a reachable Postgres to run");
         return None;
     }
-    if DB_CONN.get().is_none() {
-        let _ = _database::init_db_conn().await;
-    }
-    DB_CONN.get().map(|m| &m.pg_conn)
+    let arc = MAP
+        .get_or_init(|| async {
+            match _database::connect_db_map().await {
+                Ok(m) => Some(Arc::new(m)),
+                Err(e) => {
+                    eprintln!("skipped: connect_db_map failed: {e}");
+                    None
+                },
+            }
+        })
+        .await
+        .as_ref()?;
+    Some(arc)
 }
 
 /// Build a CREATE TABLE statement for an entity with all FOREIGN KEY
@@ -245,7 +265,8 @@ fn stub_anonymous_auth() -> AuthInfo {
 /// multiplexer: `redis_conn` is `Some` as long as the URL parses, even with
 /// no server behind it.
 async fn oauth_redis_conn() -> Option<redis::aio::MultiplexedConnection> {
-    let client = DB_CONN.wait().redis_conn.as_ref()?;
+    let map = map().await?;
+    let client = map.redis_conn.as_ref()?;
     let mut conn = client.get_multiplexed_async_connection().await.ok()?;
     redis::cmd("PING")
         .query_async::<String>(&mut conn)
@@ -256,6 +277,14 @@ async fn oauth_redis_conn() -> Option<redis::aio::MultiplexedConnection> {
 
 #[tokio::test]
 async fn area_and_item_doc_business_assertions() {
+    // 可测性验收（连接注入重构）：本 binary 全程自持连接映射，绝无任何
+    // 代码路径写 DB_CONN 全局——此断言即 connect_db_map 不碰全局的证据。
+    // 若未来有人把测试（或被测代码）改回全局初始化，这里会当场失败。
+    assert!(
+        _database::DB_CONN.get().is_none(),
+        "self-held test connections must leave the global DB_CONN uninitialized"
+    );
+
     // Enable RS256 signing for the whole test process: generate an ephemeral
     // RSA key and set JWT_RSA_PRIVATE_KEY_PEM BEFORE any JWT operation touches
     // the lazy key material. Every login/token flow below then exercises the
@@ -282,9 +311,10 @@ async fn area_and_item_doc_business_assertions() {
         std::env::set_var("REDIS_REQUIRED", "false");
     }
 
-    let Some(db) = db().await else {
+    let Some(map) = map().await else {
         return;
     };
+    let db = &map.pg_conn;
     // ── Setup: FK-free tables for area + item ────────────────────────────────
     let ddls = [
         ddl_without_foreign_keys(sys_user_model::Entity),
@@ -385,6 +415,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // ── Assertion 1: area do_list returns the seeded area ────────────────────
     let list_resp = area_fns::do_list(
+        map,
         auth.clone(),
         AreaListRequest {
             is_traverse: None,
@@ -403,6 +434,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // ── Assertion 2: area do_add inserts a second area ───────────────────────
     let add_resp = area_fns::do_add(
+        map,
         auth.clone(),
         AreaAddRequest {
             name: "Second Area".into(),
@@ -427,7 +459,7 @@ async fn area_and_item_doc_business_assertions() {
     // Java 契约：isFinal 由后端计算——新地区恒为末端（客户端不传/传任意值
     // 均被忽略），父级因新增子级不再是末端（回归：isFinal 曾是必填字段，
     // 前端不传直接 422）。
-    let seeded_after = area_fns::do_get(auth.clone(), seeded_area_id)
+    let seeded_after = area_fns::do_get(map, auth.clone(), seeded_area_id)
         .await
         .expect("area do_get seeded after add")
         .data
@@ -436,7 +468,7 @@ async fn area_and_item_doc_business_assertions() {
         !seeded_after.is_final,
         "parent is no longer a leaf once a child is added"
     );
-    let new_area = area_fns::do_get(auth.clone(), new_id)
+    let new_area = area_fns::do_get(map, auth.clone(), new_id)
         .await
         .expect("area do_get new after add")
         .data
@@ -447,6 +479,7 @@ async fn area_and_item_doc_business_assertions() {
     );
 
     let after = area_fns::do_list(
+        map,
         auth.clone(),
         AreaListRequest {
             is_traverse: None,
@@ -463,6 +496,7 @@ async fn area_and_item_doc_business_assertions() {
     // A second business-layer insert must not collide on the identity column
     // (regression for the id: Set(0) bug — identity columns must be NotSet).
     area_fns::do_add(
+        map,
         auth.clone(),
         AreaAddRequest {
             name: "Third Area".into(),
@@ -482,6 +516,7 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("area add payload");
     let after_third = area_fns::do_list(
+        map,
         auth.clone(),
         AreaListRequest {
             is_traverse: None,
@@ -498,6 +533,7 @@ async fn area_and_item_doc_business_assertions() {
     // Anonymous (client-credentials, id=0) tokens must be rejected on writes.
     assert!(
         area_fns::do_add(
+            map,
             stub_anonymous_auth(),
             AreaAddRequest {
                 name: "Anonymous Rejected".into(),
@@ -520,7 +556,7 @@ async fn area_and_item_doc_business_assertions() {
     // ── Assertion 3: item_doc do_list_page_bin_md5 returns one MD5 per
     //    hidden_flag group (2 items, 2 distinct flags → 2 entries), each a
     //    32-char hex MD5. ────────────────────────────────────────────────────
-    let md5_resp = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+    let md5_resp = item_doc::do_list_page_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc do_list_page_bin_md5")
         .data
@@ -546,7 +582,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // The BinaryMD5 pages are cached in-process: a second call must return the
     // same md5 AND the same stable `time` (not a fresh request timestamp).
-    let md5_resp_2 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+    let md5_resp_2 = item_doc::do_list_page_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc md5 second call")
         .data
@@ -566,12 +602,12 @@ async fn area_and_item_doc_business_assertions() {
 
     // The refresh endpoint must invalidate the cache: the next md5 list is
     // regenerated (fresh time), proving the flush is wired.
-    cache_fns::do_delete_item_cache(auth.clone())
+    cache_fns::do_delete_item_cache(map, auth.clone())
         .await
         .expect("delete item cache")
         .data
         .expect("cache delete ok");
-    let md5_resp_3 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+    let md5_resp_3 = item_doc::do_list_page_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc md5 after refresh")
         .data
@@ -620,6 +656,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // Append item 1001 + 1002
     marker_fns::do_tweak(
+        map,
         auth.clone(),
         vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
@@ -651,6 +688,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // InsertIfAbsent with an existing id must not duplicate
     marker_fns::do_tweak(
+        map,
         auth.clone(),
         vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
@@ -679,6 +717,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // Replace with a single item 1003
     marker_fns::do_tweak(
+        map,
         auth.clone(),
         vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
@@ -707,6 +746,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // RemoveLeft removes 1003
     marker_fns::do_tweak(
+        map,
         auth.clone(),
         vec![MarkerTweakRequest {
             marker_ids: vec![marker_id],
@@ -750,9 +790,15 @@ async fn area_and_item_doc_business_assertions() {
     )
     .await
     .expect("seed policy user");
-    oauth_fns::oauth_password_login("policy_same_ip".into(), "pw123".into(), ip_a, ua.into())
-        .await
-        .expect("first login from ip_a succeeds");
+    oauth_fns::oauth_password_login(
+        map,
+        "policy_same_ip".into(),
+        "pw123".into(),
+        ip_a,
+        ua.into(),
+    )
+    .await
+    .expect("first login from ip_a succeeds");
     let device = device_model::Entity::find_safety()
         .filter(device_model::Column::DeviceId.eq(ua))
         .one(db)
@@ -761,9 +807,15 @@ async fn area_and_item_doc_business_assertions() {
         .expect("device registered after login");
     assert_eq!(device.ipv4.as_deref(), Some("1.2.3.4"));
     assert!(
-        oauth_fns::oauth_password_login("policy_same_ip".into(), "pw123".into(), ip_b, ua.into())
-            .await
-            .is_ok(),
+        oauth_fns::oauth_password_login(
+            map,
+            "policy_same_ip".into(),
+            "pw123".into(),
+            ip_b,
+            ua.into()
+        )
+        .await
+        .is_ok(),
         "same_last_ip violation is a warning (Java-compatible), login still succeeds"
     );
 
@@ -798,6 +850,7 @@ async fn area_and_item_doc_business_assertions() {
         .expect("seed disabled device");
     assert!(
         oauth_fns::oauth_password_login(
+            map,
             "policy_block_dev".into(),
             "pw123".into(),
             ip_a,
@@ -857,6 +910,7 @@ async fn area_and_item_doc_business_assertions() {
     // 密码须满足最小长度策略（≥8 字符）；ip 供公开端点限流使用。
     let qq_ip = "127.0.0.1:55555".parse::<std::net::SocketAddr>().unwrap();
     let qq_id = user_fns::do_register_qq(
+        map,
         qq_ip,
         None,
         None,
@@ -884,6 +938,7 @@ async fn area_and_item_doc_business_assertions() {
     // 重复注册同 QQ 号：username 占用被拒
     assert!(
         user_fns::do_register_qq(
+            map,
             qq_ip,
             None,
             None,
@@ -949,6 +1004,7 @@ async fn area_and_item_doc_business_assertions() {
         .timestamp_millis() as f64;
 
     score_fns::do_generate_score(
+        map,
         auth.clone(),
         ScoreGenerateRequest {
             generator_id: None,
@@ -980,6 +1036,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // do_get_score_data reads the real score (not a fixed 1.0).
     let data = score_fns::do_get_score_data(
+        map,
         auth.clone(),
         ScoreDataRequest {
             end_time: end_ms,
@@ -1030,6 +1087,7 @@ async fn area_and_item_doc_business_assertions() {
     .expect("seed java-form score_stat");
 
     let data = score_fns::do_get_score_data(
+        map,
         auth.clone(),
         ScoreDataRequest {
             end_time: end_ms,
@@ -1060,13 +1118,14 @@ async fn area_and_item_doc_business_assertions() {
     let item_c = seed_common_item(db, now, "日落果").await.expect("seed c");
 
     // add([a, c]) → true; list shows exactly those two (link rows, not all items).
-    let added = item_common_fns::do_add(stub_auth(), vec![item_a, item_c])
+    let added = item_common_fns::do_add(map, stub_auth(), vec![item_a, item_c])
         .await
         .expect("item_common add")
         .data
         .expect("add ok");
     assert!(added, "new names must be marked as common items");
     let list = item_common_fns::do_get_list(
+        map,
         stub_auth(),
         _utils::models::Pagination {
             current: Some(1),
@@ -1089,13 +1148,14 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(item_rows, 3, "add must not insert item rows");
 
     // add([a_dup, c]) → a_dup shares a name already common, c already linked → false.
-    let added = item_common_fns::do_add(stub_auth(), vec![item_a_dup, item_c])
+    let added = item_common_fns::do_add(map, stub_auth(), vec![item_a_dup, item_c])
         .await
         .expect("item_common add dup")
         .data
         .expect("add dup ok");
     assert!(!added, "duplicate names / existing links must be skipped");
     let list = item_common_fns::do_get_list(
+        map,
         stub_auth(),
         _utils::models::Pagination {
             current: Some(1),
@@ -1109,10 +1169,11 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(list.total, 2, "dup add must not grow the list");
 
     // delete(a) → the link row is soft-deleted (item rows remain), list drops to 1.
-    item_common_fns::do_delete(stub_auth(), item_a)
+    item_common_fns::do_delete(map, stub_auth(), item_a)
         .await
         .expect("item_common delete");
     let list = item_common_fns::do_get_list(
+        map,
         stub_auth(),
         _utils::models::Pagination {
             current: Some(1),
@@ -1141,13 +1202,13 @@ async fn area_and_item_doc_business_assertions() {
     //    Java `ItemVo`/`MarkerVo`/`IconVo` names) ───────────────────────────
     // item_doc page: decompress and check camelCase keys.
     // Re-fetch the md5 list: the write operations above invalidated the doc cache.
-    let fresh_md5 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+    let fresh_md5 = item_doc::do_list_page_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc md5 refresh")
         .data
         .expect("item_doc md5 payload");
     assert!(!fresh_md5.is_empty(), "fresh item pages exist");
-    let item_bin = item_doc::do_list_page_bin(auth.clone(), fresh_md5[0].md5.clone())
+    let item_bin = item_doc::do_list_page_bin(map, auth.clone(), fresh_md5[0].md5.clone())
         .await
         .expect("fetch item page bin");
     let mut decoder = flate2::read::GzDecoder::new(item_bin.as_slice());
@@ -1179,13 +1240,13 @@ async fn area_and_item_doc_business_assertions() {
     .await
     .expect("seed icon type link");
 
-    let icon_md5 = icon_doc::do_all_bin_md5(auth.clone(), serde_json::Value::Null)
+    let icon_md5 = icon_doc::do_all_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("icon_doc md5")
         .data
         .expect("icon_doc md5 payload");
     assert_eq!(icon_md5.md5.len(), 32, "icon blob md5");
-    let icon_bin = icon_doc::do_all_bin(auth.clone())
+    let icon_bin = icon_doc::do_all_bin(map, auth.clone())
         .await
         .expect("fetch icon bin");
     let mut decoder = flate2::read::GzDecoder::new(icon_bin.as_slice());
@@ -1229,10 +1290,10 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("seed item type link");
     // The item page cached earlier predates item_a — flush and recompute.
-    cache_fns::do_delete_item_cache(auth.clone())
+    cache_fns::do_delete_item_cache(map, auth.clone())
         .await
         .expect("flush item doc cache");
-    let fresh_md5 = item_doc::do_list_page_bin_md5(auth.clone(), serde_json::Value::Null)
+    let fresh_md5 = item_doc::do_list_page_bin_md5(map, auth.clone(), serde_json::Value::Null)
         .await
         .expect("item_doc md5 (fresh)")
         .data
@@ -1242,7 +1303,7 @@ async fn area_and_item_doc_business_assertions() {
         .find(|v| !v.md5.is_empty())
         .map(|v| v.md5.clone())
         .expect("at least one md5");
-    let item_bin = item_doc::do_list_page_bin(auth.clone(), fresh_hash)
+    let item_bin = item_doc::do_list_page_bin(map, auth.clone(), fresh_hash)
         .await
         .expect("fetch item page bin (2)");
     let mut decoder = flate2::read::GzDecoder::new(item_bin.as_slice());
@@ -1271,6 +1332,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("seed oauth_issue user");
     let issue = oauth_fns::oauth_password_login(
+        map,
         "oauth_issue".into(),
         "pw123".into(),
         ip_issue,
@@ -1349,7 +1411,7 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(issue_refresh_claims.sub, uid_issue);
 
     // Parse round-trip: the access token resolves to the seeded user VO.
-    let (issue_vo, _) = oauth_fns::oauth_parse_token(issue.access_token.clone())
+    let (issue_vo, _) = oauth_fns::oauth_parse_token(map, issue.access_token.clone())
         .await
         .expect("access token parses to a user VO");
     assert_eq!(issue_vo.id, uid_issue);
@@ -1389,6 +1451,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("seed oauth_refresh user");
     let r1 = oauth_fns::oauth_password_login(
+        map,
         "oauth_refresh".into(),
         "pw123".into(),
         ip_refresh,
@@ -1403,6 +1466,7 @@ async fn area_and_item_doc_business_assertions() {
     // An access token must never be accepted for refresh (S2) — this check
     // runs before any Redis logic, so it holds in both environments.
     let err = oauth_fns::oauth_refresh(
+        map,
         r1.access_token.clone(),
         ip_refresh,
         "oauth-refresh/1.0".into(),
@@ -1416,6 +1480,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // First refresh rotates: new pair, new jti, same user.
     let r2 = oauth_fns::oauth_refresh(
+        map,
         r1.refresh_token.clone(),
         ip_refresh,
         "oauth-refresh/1.0".into(),
@@ -1439,7 +1504,7 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(r2_access_claims.token_type.as_deref(), Some("access"));
     assert_eq!(r2_refresh_claims.token_type.as_deref(), Some("refresh"));
     assert_eq!(r2_access_claims.jti, r2.jti);
-    let (vo2, _) = oauth_fns::oauth_parse_token(r2.access_token.clone())
+    let (vo2, _) = oauth_fns::oauth_parse_token(map, r2.access_token.clone())
         .await
         .expect("rotated access token parses");
     assert_eq!(vo2.id, uid_refresh);
@@ -1447,6 +1512,7 @@ async fn area_and_item_doc_business_assertions() {
     if let Some(mut r) = oauth_redis_conn().await {
         // Replay of the consumed refresh token is rejected (GETDEL atomicity).
         let err = oauth_fns::oauth_refresh(
+            map,
             r1.refresh_token.clone(),
             ip_refresh,
             "oauth-refresh/1.0".into(),
@@ -1459,7 +1525,7 @@ async fn area_and_item_doc_business_assertions() {
             "got: {err}"
         );
         // The old access token was revoked by the rotation.
-        let err = oauth_fns::oauth_parse_token(r1.access_token.clone())
+        let err = oauth_fns::oauth_parse_token(map, r1.access_token.clone())
             .await
             .expect_err("old access token revoked by rotation");
         assert!(err.to_string().contains("Token revoked"), "got: {err}");
@@ -1503,6 +1569,7 @@ async fn area_and_item_doc_business_assertions() {
         // degradation in oauth.rs oauth_refresh). Signature/token_type and
         // the response contract are still verified above.
         let r3 = oauth_fns::oauth_refresh(
+            map,
             r1.refresh_token.clone(),
             ip_refresh,
             "oauth-refresh/1.0".into(),
@@ -1518,7 +1585,7 @@ async fn area_and_item_doc_business_assertions() {
 
     // ── Assertion 12: anonymous client-credentials chain ─────────────────────
     let anon_ip = "127.0.0.1:55556".parse::<std::net::SocketAddr>().unwrap();
-    let anon = oauth_fns::oauth_client_credentials(anon_ip, "all".into())
+    let anon = oauth_fns::oauth_client_credentials(map, anon_ip, "all".into())
         .await
         .expect("client credentials issues an anonymous token");
     assert!(!anon.access_token.is_empty());
@@ -1530,9 +1597,10 @@ async fn area_and_item_doc_business_assertions() {
     assert_eq!(anon_claims.token_type.as_deref(), Some("access"));
     assert_eq!(anon_claims.jti, anon.jti);
 
-    let (anon_vo, anon_parsed_claims) = oauth_fns::oauth_parse_token(anon.access_token.clone())
-        .await
-        .expect("anonymous token parses to the anonymous VO");
+    let (anon_vo, anon_parsed_claims) =
+        oauth_fns::oauth_parse_token(map, anon.access_token.clone())
+            .await
+            .expect("anonymous token parses to the anonymous VO");
     assert_eq!(anon_vo.id, 0, "anonymous VO id is 0");
     assert_eq!(anon_parsed_claims.sub, 0);
 
@@ -1575,6 +1643,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("seed oauth_kick user");
     let k1 = oauth_fns::oauth_password_login(
+        map,
         "oauth_kick".into(),
         "pw123".into(),
         ip_kick_a,
@@ -1582,11 +1651,11 @@ async fn area_and_item_doc_business_assertions() {
     )
     .await
     .expect("login before kick");
-    oauth_fns::oauth_parse_token(k1.access_token.clone())
+    oauth_fns::oauth_parse_token(map, k1.access_token.clone())
         .await
         .expect("token valid before kick");
 
-    user_fns::do_kick_out(stub_auth(), uid_kick.to_string())
+    user_fns::do_kick_out(map, stub_auth(), uid_kick.to_string())
         .await
         .expect("kick out revokes the user's sessions");
 
@@ -1601,14 +1670,18 @@ async fn area_and_item_doc_business_assertions() {
 
         // The kicked access token is rejected with the explicit revocation
         // error (not a DB-fallback pass-through).
-        let err = oauth_fns::oauth_parse_token(k1.access_token.clone())
+        let err = oauth_fns::oauth_parse_token(map, k1.access_token.clone())
             .await
             .expect_err("kicked access token rejected");
         assert!(err.to_string().contains("Token revoked"), "got: {err}");
-        let err =
-            oauth_fns::oauth_refresh(k1.refresh_token.clone(), ip_kick_a, "oauth-kick/1.0".into())
-                .await
-                .expect_err("kicked refresh token rejected");
+        let err = oauth_fns::oauth_refresh(
+            map,
+            k1.refresh_token.clone(),
+            ip_kick_a,
+            "oauth-kick/1.0".into(),
+        )
+        .await
+        .expect_err("kicked refresh token rejected");
         assert!(
             err.to_string()
                 .contains("Refresh token not found or already used"),
@@ -1622,9 +1695,15 @@ async fn area_and_item_doc_business_assertions() {
             ("oauth-kick/4.0", ip_kick_d),
         ];
         for (ua, ip) in sessions {
-            oauth_fns::oauth_password_login("oauth_kick".into(), "pw123".into(), ip, ua.into())
-                .await
-                .expect("repeated login");
+            oauth_fns::oauth_password_login(
+                map,
+                "oauth_kick".into(),
+                "pw123".into(),
+                ip,
+                ua.into(),
+            )
+            .await
+            .expect("repeated login");
         }
         let all: Vec<String> = redis::cmd("KEYS")
             .arg(format!("jwt:*:{uid_kick}:*"))
@@ -1632,7 +1711,7 @@ async fn area_and_item_doc_business_assertions() {
             .await
             .expect("redis keys before batch kick");
         assert_eq!(all.len(), 6, "three logins leave six session keys");
-        user_fns::do_kick_out(stub_auth(), uid_kick.to_string())
+        user_fns::do_kick_out(map, stub_auth(), uid_kick.to_string())
             .await
             .expect("batch kick");
         let left: Vec<String> = redis::cmd("KEYS")
@@ -1641,7 +1720,7 @@ async fn area_and_item_doc_business_assertions() {
             .await
             .expect("redis keys after batch kick");
         assert!(left.is_empty(), "batch kick clears all six keys: {left:?}");
-        let err = oauth_fns::oauth_parse_token(k1.access_token.clone())
+        let err = oauth_fns::oauth_parse_token(map, k1.access_token.clone())
             .await
             .expect_err("first-session token also rejected after batch kick");
         assert!(err.to_string().contains("Token revoked"), "got: {err}");
@@ -1649,7 +1728,7 @@ async fn area_and_item_doc_business_assertions() {
         // Degraded branch (no Redis): revoke is a documented no-op and the
         // token survives via the DB-fallback parse path (design, user.rs
         // revoke_user_sessions).
-        let (vo, _) = oauth_fns::oauth_parse_token(k1.access_token.clone())
+        let (vo, _) = oauth_fns::oauth_parse_token(map, k1.access_token.clone())
             .await
             .expect("no-Redis revoke is a no-op; token still parses via DB");
         assert_eq!(vo.id, uid_kick);
@@ -1671,6 +1750,7 @@ async fn area_and_item_doc_business_assertions() {
     .await
     .expect("seed policy_refresh user");
     let pr1 = oauth_fns::oauth_password_login(
+        map,
         "policy_refresh".into(),
         "pw123".into(),
         ip_pa,
@@ -1679,6 +1759,7 @@ async fn area_and_item_doc_business_assertions() {
     .await
     .expect("policy-bound login from ip_pa");
     let pr2 = oauth_fns::oauth_refresh(
+        map,
         pr1.refresh_token.clone(),
         ip_pb,
         "policy-refresh/1.0".into(),
@@ -1688,6 +1769,7 @@ async fn area_and_item_doc_business_assertions() {
     // The rotated pair keeps working: a follow-up refresh from the bound IP
     // succeeds (in both Redis rotation and degraded no-rotation modes).
     oauth_fns::oauth_refresh(
+        map,
         pr2.refresh_token.clone(),
         ip_pa,
         "policy-refresh/1.0".into(),
@@ -1703,6 +1785,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("seed oauth_device_block user");
     let bk = oauth_fns::oauth_password_login(
+        map,
         "oauth_device_block".into(),
         "pw123".into(),
         ip_bk,
@@ -1710,7 +1793,7 @@ async fn area_and_item_doc_business_assertions() {
     )
     .await
     .expect("login before device block");
-    oauth_fns::oauth_parse_token(bk.access_token.clone())
+    oauth_fns::oauth_parse_token(map, bk.access_token.clone())
         .await
         .expect("token valid before device block");
     let dev = device_model::Entity::find_safety()
@@ -1719,7 +1802,7 @@ async fn area_and_item_doc_business_assertions() {
         .await
         .expect("fetch device row")
         .expect("device registered by login");
-    device_fns::do_update(stub_auth(), dev.id, 1)
+    device_fns::do_update(map, stub_auth(), dev.id, 1)
         .await
         .expect("block the device");
 
@@ -1733,14 +1816,14 @@ async fn area_and_item_doc_business_assertions() {
             left.is_empty(),
             "device block revokes all sessions for the user: {left:?}"
         );
-        let err = oauth_fns::oauth_parse_token(bk.access_token.clone())
+        let err = oauth_fns::oauth_parse_token(map, bk.access_token.clone())
             .await
             .expect_err("blocked user's access token rejected");
         assert!(err.to_string().contains("Token revoked"), "got: {err}");
     } else {
         // Degraded branch (no Redis): revoke is a documented no-op; the token
         // survives via the DB-fallback parse path (same as do_kick_out).
-        let (vo, _) = oauth_fns::oauth_parse_token(bk.access_token.clone())
+        let (vo, _) = oauth_fns::oauth_parse_token(map, bk.access_token.clone())
             .await
             .expect("no-Redis device-block revoke is a no-op; token still parses");
         assert_eq!(vo.id, uid_bk);
@@ -1753,6 +1836,7 @@ async fn area_and_item_doc_business_assertions() {
     let ip_lim = "10.80.7.1:5678".parse::<std::net::SocketAddr>().unwrap();
     for _ in 0..5 {
         let err = oauth_fns::oauth_password_login(
+            map,
             "oauth_issue".into(),
             "wrong-password".into(),
             ip_lim,
@@ -1766,6 +1850,7 @@ async fn area_and_item_doc_business_assertions() {
         );
     }
     let err = oauth_fns::oauth_password_login(
+        map,
         "oauth_issue".into(),
         "pw123".into(),
         ip_lim,
@@ -1903,7 +1988,7 @@ async fn area_and_item_doc_business_assertions() {
         .expect("seed linkage");
 
     // 先整体失效一次，避免同进程先前测试留下的快照缓存串味。
-    binary_doc::invalidate_doc_cache().await;
+    binary_doc::invalidate_doc_cache(map).await;
 
     // 访客可见集 [Visible, Suprise]：只剩 m1（grp-1）与 m5，按 id 升序。
     // 手工展开的 wire 字节：m1 = {v:7, id:1, linkage:"grp-1"}（11 字节
@@ -1922,14 +2007,15 @@ async fn area_and_item_doc_business_assertions() {
         ][..],
     ]
     .concat();
-    let bytes = marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
-        .await
-        .expect("visitor diff snapshot");
+    let bytes =
+        marker_doc_fns::do_list_diff_snapshot(map, stub_auth_with_role(SystemUserRole::Visitor))
+            .await
+            .expect("visitor diff snapshot");
     assert_eq!(&*bytes, expected_visitor.as_slice(), "visitor wire bytes");
 
     // 缓存命中路径：同角色再次请求，字节保持一致。
     let bytes_again =
-        marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
+        marker_doc_fns::do_list_diff_snapshot(map, stub_auth_with_role(SystemUserRole::Visitor))
             .await
             .expect("visitor diff snapshot (cached)");
     assert_eq!(&*bytes_again, expected_visitor.as_slice(), "cached bytes");
@@ -1947,7 +2033,7 @@ async fn area_and_item_doc_business_assertions() {
         &expected_visitor[13..], // m5
     ]
     .concat();
-    let admin_bytes = marker_doc_fns::do_list_diff_snapshot(stub_auth())
+    let admin_bytes = marker_doc_fns::do_list_diff_snapshot(map, stub_auth())
         .await
         .expect("admin diff snapshot");
     assert_eq!(&*admin_bytes, expected_admin.as_slice(), "admin wire bytes");
@@ -1960,9 +2046,9 @@ async fn area_and_item_doc_business_assertions() {
     seed_snapshot_mil(db, now, item_v2, 6, false)
         .await
         .expect("seed mil m6");
-    binary_doc::invalidate_doc_cache().await;
+    binary_doc::invalidate_doc_cache(map).await;
     let rebuilt =
-        marker_doc_fns::do_list_diff_snapshot(stub_auth_with_role(SystemUserRole::Visitor))
+        marker_doc_fns::do_list_diff_snapshot(map, stub_auth_with_role(SystemUserRole::Visitor))
             .await
             .expect("rebuilt diff snapshot");
     let mut expected_rebuilt = expected_visitor.clone();

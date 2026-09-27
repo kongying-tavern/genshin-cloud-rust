@@ -1,4 +1,5 @@
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use anyhow::Result;
 use axum::{
     body::Bytes,
@@ -14,6 +15,7 @@ pub async fn all_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_list_bin_md5(
+        DB_CONN.wait().as_ref(),
         auth,
         serde_json::json!({}),
     )
@@ -30,7 +32,12 @@ pub async fn all_bin_md5(
 pub async fn all_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::marker_link_doc::do_all_list_bin(auth).await {
+    match _functions::functions::api::marker_link_doc::do_all_list_bin(
+        DB_CONN.wait().as_ref(),
+        auth,
+    )
+    .await
+    {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [
@@ -51,6 +58,7 @@ pub async fn all_graph_bin_md5(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_graph_bin_md5(
+        DB_CONN.wait().as_ref(),
         auth,
         serde_json::json!({}),
     )
@@ -67,7 +75,12 @@ pub async fn all_graph_bin_md5(
 pub async fn all_graph_bin(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::marker_link_doc::do_all_graph_bin(auth).await {
+    match _functions::functions::api::marker_link_doc::do_all_graph_bin(
+        DB_CONN.wait().as_ref(),
+        auth,
+    )
+    .await
+    {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

@@ -6,7 +6,7 @@ use sea_orm::{QueryOrder, QuerySelect, prelude::*};
 
 use std::collections::HashSet;
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _database::models::common::history as history_model;
 use _utils::db_operations::SafeEntityTrait;
 use _utils::{
@@ -19,6 +19,7 @@ use _utils::{
 };
 
 pub async fn do_get_list(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: HistoryListRequest,
 ) -> Result<CommonResponse<HistoryListResponse>> {
@@ -81,7 +82,7 @@ pub async fn do_get_list(
     }
 
     // 统计总数
-    let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
+    let total = query.clone().count(&db.pg_conn).await?;
 
     // 分页（apply a default limit when page params are missing to avoid
     // loading the entire history table — it can have 400K+ rows)
@@ -91,7 +92,7 @@ pub async fn do_get_list(
     let offset = (current.saturating_sub(1) as u64).saturating_mul(size as u64);
     select = select.limit(size as u64).offset(offset);
 
-    let items = select.all(&DB_CONN.wait().pg_conn).await?;
+    let items = select.all(&db.pg_conn).await?;
     let creator_ids: HashSet<i64> = items.iter().filter_map(|it| it.creator_id).collect();
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
@@ -114,7 +115,7 @@ pub async fn do_get_list(
         });
     }
 
-    let users = super::sys_user_map(&DB_CONN.wait().pg_conn, &creator_ids).await?;
+    let users = super::sys_user_map(&db.pg_conn, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(HistoryListResponse {
         total: total as usize,
         items: arr,

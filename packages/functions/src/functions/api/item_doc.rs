@@ -11,7 +11,7 @@
 use anyhow::Result;
 use std::collections::BTreeMap;
 
-use _database::{DB_CONN, models::item::item as item_model};
+use _database::{DatabaseConnectionMap, models::item::item as item_model};
 use _utils::{
     db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
     models::wrapper::CommonResponse,
@@ -29,12 +29,13 @@ use super::item::{item_to_vo, marker_count_map, type_id_map};
 /// single page (index 0). Served from the result cache — no DB scan on a
 /// warm hit.
 pub async fn do_list_page_bin_md5(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<Vec<BinaryMd5Vo>>> {
     // 可见性（Java ItemDoc）：低等级用户拿不到高等级分组的 md5。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let entries = item_result().await?;
+    let entries = item_result(db).await?;
     Ok(CommonResponse::new(Ok(entries
         .iter()
         .filter(|e| allowed.contains(&entry_flag(&e.key)))
@@ -46,10 +47,14 @@ pub async fn do_list_page_bin_md5(
 ///
 /// Returns the GZIP-compressed JSON bytes for the page whose MD5 matches.
 /// Served from the result cache — no DB scan on a warm hit.
-pub async fn do_list_page_bin(auth: AuthInfo, md5: String) -> Result<Vec<u8>> {
+pub async fn do_list_page_bin(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    md5: String,
+) -> Result<Vec<u8>> {
     // 与 md5 清单同口径的角色过滤：知道 md5 也不能取到越权分组。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let entries = item_result().await?;
+    let entries = item_result(db).await?;
     entries
         .iter()
         .find(|e| e.vo.md5 == md5 && allowed.contains(&entry_flag(&e.key)))
@@ -66,10 +71,9 @@ fn entry_flag(key: &str) -> i32 {
 }
 
 /// Compute (and cache) the full item page set.
-async fn item_result() -> Result<Vec<ResultEntry>> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    get_result_cached("item:result".into(), async {
+async fn item_result(db: &DatabaseConnectionMap) -> Result<Vec<ResultEntry>> {
+    get_result_cached(db, "item:result".into(), async {
+        let db = &db.pg_conn;
         // Query all non-deleted items (once per TTL window)
         let items = item_model::Entity::find_safety().all(db).await?;
         let type_map = type_id_map(db).await?;

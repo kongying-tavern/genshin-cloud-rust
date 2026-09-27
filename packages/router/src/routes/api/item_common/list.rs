@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
+use _database::DB_CONN;
 use _utils::models::Pagination;
 
 /// 列出地区公用物品
@@ -13,7 +14,9 @@ pub async fn get_list(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match crate::functions::api::item_common::do_get_list(auth, payload).await {
+    match crate::functions::api::item_common::do_get_list(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

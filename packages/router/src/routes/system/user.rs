@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::middlewares::{ExtractAdmin, ExtractAuthInfo, ExtractIP, ExtractManager};
+use _database::DB_CONN;
 use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
@@ -131,6 +132,7 @@ pub async fn register(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
         do_register(
+            DB_CONN.wait().as_ref(),
             auth,
             payload.access_policy,
             payload.logo,
@@ -157,6 +159,7 @@ pub async fn register_qq(
     let ip = proxy_ip.unwrap_or(native_ip);
     Ok(Json(
         do_register_qq(
+            DB_CONN.wait().as_ref(),
             ip,
             payload.access_policy,
             payload.logo,
@@ -179,7 +182,7 @@ pub async fn get_info(
     Path(user_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(_utils::models::wrapper::CommonResponse::new(
-        do_get_info(auth, user_id).await,
+        do_get_info(DB_CONN.wait().as_ref(), auth, user_id).await,
     ))
     .into_response())
 }
@@ -197,6 +200,7 @@ pub async fn update(
         .ok_or_else(|| crate::routes::route_error("user id is required"))?;
     Ok(Json(
         do_update(
+            DB_CONN.wait().as_ref(),
             auth,
             uid,
             payload.access_policy,
@@ -225,9 +229,15 @@ pub async fn update_password(
         return Err(crate::routes::route_error("new password is required"));
     };
     Ok(Json(
-        do_update_password(auth, payload.user_id, payload.old_password, new_pw)
-            .await
-            .map_err(crate::routes::internal_error)?,
+        do_update_password(
+            DB_CONN.wait().as_ref(),
+            auth,
+            payload.user_id,
+            payload.old_password,
+            new_pw,
+        )
+        .await
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -240,9 +250,14 @@ pub async fn update_password_by_admin(
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
-        do_update_password_by_admin(auth, payload.password, payload.user_id)
-            .await
-            .map_err(crate::routes::internal_error)?,
+        do_update_password_by_admin(
+            DB_CONN.wait().as_ref(),
+            auth,
+            payload.password,
+            payload.user_id,
+        )
+        .await
+        .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
@@ -254,7 +269,7 @@ pub async fn delete(
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    do_delete(auth, work_id)
+    do_delete(DB_CONN.wait().as_ref(), auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())
@@ -270,6 +285,7 @@ pub async fn list(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
         do_list(
+            DB_CONN.wait().as_ref(),
             auth,
             payload.pagination,
             payload.nickname,
@@ -290,7 +306,7 @@ pub async fn kick_out(
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<String>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    do_kick_out(auth, work_id)
+    do_kick_out(DB_CONN.wait().as_ref(), auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())

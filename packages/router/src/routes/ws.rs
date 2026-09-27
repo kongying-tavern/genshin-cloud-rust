@@ -17,6 +17,7 @@
 //! - 服务端业务事件（公告/点位/缓存刷新等）经 `_functions::functions::ws`
 //!   注册表转发到对应连接。
 
+use _database::DB_CONN;
 use axum::{
     extract::{
         Path, Query,
@@ -91,9 +92,17 @@ pub async fn ws_handshake_key(
     let Some(token) = header_token.or(query_token) else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    let (vo, _claims) = _functions::functions::system::oauth::oauth_parse_token(token.to_string())
-        .await
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    // 同 auth_extrator：get() 而非 wait()——参数求值先于函数体，wait() 在
+    // 全局未初始化时会把无 DB 场景（HTTP 层测试的握手）永久阻塞；未初始
+    // 化按「无法认证」401（生产环境启动即 init_db_conn，不触达此分支）。
+    let db = DB_CONN
+        .get()
+        .map(|m| m.as_ref())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let (vo, _claims) =
+        _functions::functions::system::oauth::oauth_parse_token(db, token.to_string())
+            .await
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
     // 匿名 client_credentials 身份（id=0）不建立推送连接
     if vo.id == 0 {
         return Err(StatusCode::UNAUTHORIZED);
