@@ -2,29 +2,23 @@ use anyhow::Result;
 
 use axum::{
     body::Bytes,
-    extract::Path,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 use axum::http::header;
 
 /// 点位分页数据（GZIP 压缩二进制）
 /// GET /marker_doc/list_page_bin/{md5}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn list_page_bin(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(md5): Path<String>,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::marker_doc::do_list_page_bin(
-        DB_CONN.wait().as_ref(),
-        auth,
-        md5,
-    )
-    .await
-    {
+    match _functions::functions::api::marker_doc::do_list_page_bin(db.as_ref(), auth, md5).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

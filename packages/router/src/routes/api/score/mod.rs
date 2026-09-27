@@ -4,7 +4,7 @@ mod generate;
 use anyhow::Result;
 use axum::{Router, routing::post};
 
-pub async fn router() -> Result<Router> {
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         .route("/generate", post(generate::generate_score))
         .route("/data", post(data::get_score_data));

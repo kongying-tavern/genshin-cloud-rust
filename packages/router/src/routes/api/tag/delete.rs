@@ -1,22 +1,22 @@
 use anyhow::Result;
 
 use axum::{
-    extract::{Json, Path},
+    extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
 
 use crate::middlewares::ExtractManager;
-use _database::DB_CONN;
 
 /// 软删除标签
 /// DELETE /tag/delete/{tagId}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn delete(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Path(tag_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::tag::do_delete(DB_CONN.wait().as_ref(), auth, tag_id).await {
+    match _functions::functions::api::tag::do_delete(db.as_ref(), auth, tag_id).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

@@ -1,24 +1,22 @@
 use anyhow::Result;
 
-use axum::{extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractManager;
-use _database::DB_CONN;
 
 /// 新增标签（前端兼容路由，仅传标签名）
 /// PUT /tag/{tagName}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn create(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Path(tag_name): Path<String>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::tag::do_create_by_name(
-        DB_CONN.wait().as_ref(),
-        auth,
-        tag_name,
-    )
-    .await
-    {
+    match _functions::functions::api::tag::do_create_by_name(db.as_ref(), auth, tag_name).await {
         Ok(resp) => Ok((StatusCode::OK, axum::Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

@@ -20,6 +20,7 @@
 | --- | --- | --- |
 | [BinaryMD5 歸檔導出](./binarymd5-archive-export.md) | `*_doc` GZIP 壓縮批量導出管線 | 客戶端冷啓動如何快速拉取數千個 POI，且只同步變更頁 |
 | [隱藏標記與特殊標記](./hidden-and-special-flags.md) | `hidden_flag` / `special_flag` / `del_flag` 三套正交標記 | 防劇透、測試服隔離、UI 過濾、軟刪除如何互不干擾 |
+| [WebSocket 前端契約](./ws-frontend-contract.md) | 已鑑權 `/ws/{userId}` 推送通道契約 | 前端實際消費情況與協定收斂選項 |
 
 ## 爲什麼單獨成文
 

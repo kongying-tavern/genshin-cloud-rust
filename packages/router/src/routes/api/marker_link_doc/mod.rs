@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use axum::{Router, routing::get};
 
-pub async fn router() -> Result<Router> {
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         .route("/all_list_bin_md5", get(doc::all_bin_md5))
         .route("/all_list_bin", get(doc::all_bin))

@@ -1,25 +1,23 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 
 /// 根据物品ID查询物品
 /// 输入ID列表查询，单个查询也用此API
 /// POST /item/get/list_by_id
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_list_by_id(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::item::do_get_list_by_id(
-        DB_CONN.wait().as_ref(),
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::item::do_get_list_by_id(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

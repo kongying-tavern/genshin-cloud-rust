@@ -1,21 +1,21 @@
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 use anyhow::Result;
 use axum::{
     body::Bytes,
-    extract::Json,
+    extract::{Json, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 
 /// 获取所有 marker_link 的二进制 md5
 /// GET /marker_link_doc/all-bin/md5
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_bin_md5(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_list_bin_md5(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         serde_json::json!({}),
     )
@@ -28,16 +28,12 @@ pub async fn all_bin_md5(
 
 /// 获取所有 marker_link 的二进制文件（GZIP 压缩）
 /// GET /marker_link_doc/all-bin
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_bin(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::marker_link_doc::do_all_list_bin(
-        DB_CONN.wait().as_ref(),
-        auth,
-    )
-    .await
-    {
+    match _functions::functions::api::marker_link_doc::do_all_list_bin(db.as_ref(), auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [
@@ -53,12 +49,13 @@ pub async fn all_bin(
 
 /// 获取所有 marker_link 的图谱 md5
 /// GET /marker_link_doc/all-graph-bin/md5
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_graph_bin_md5(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::marker_link_doc::do_all_graph_bin_md5(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         serde_json::json!({}),
     )
@@ -71,16 +68,12 @@ pub async fn all_graph_bin_md5(
 
 /// 获取所有 marker_link 的图谱二进制文件（GZIP 压缩）
 /// GET /marker_link_doc/all-graph-bin
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_graph_bin(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::marker_link_doc::do_all_graph_bin(
-        DB_CONN.wait().as_ref(),
-        auth,
-    )
-    .await
-    {
+    match _functions::functions::api::marker_link_doc::do_all_graph_bin(db.as_ref(), auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

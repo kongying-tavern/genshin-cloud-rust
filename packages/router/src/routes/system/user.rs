@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
 use axum::{
-    extract::{ConnectInfo, Json, Path},
+    extract::{ConnectInfo, Json, Path, State},
     response::IntoResponse,
 };
 
 use crate::middlewares::{ExtractAdmin, ExtractAuthInfo, ExtractIP, ExtractManager};
-use _database::DB_CONN;
 use _functions::functions::system::user::*;
 use _utils::{models::Pagination, types::AccessPolicyItemEnum, types::SystemUserRole};
 
@@ -125,14 +124,15 @@ pub struct UserKickOutParams {
 /// 注册用户（地图管理员及以上，Java authorities-filter 将
 /// /system/user/register 划给 MAP_MANAGER）
 /// POST /user/register
-#[tracing::instrument(skip(auth, payload))]
+#[tracing::instrument(skip(db, auth, payload))]
 pub async fn register(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<UserRegisterParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
         do_register(
-            DB_CONN.wait().as_ref(),
+            db.as_ref(),
             auth,
             payload.access_policy,
             payload.logo,
@@ -148,8 +148,9 @@ pub async fn register(
 
 /// 用QQ注册用户（公开接口：QQ 授权后未登录调用）
 /// POST /user/register/qq
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(db, payload))]
 pub async fn register_qq(
+    State(db): State<crate::routes::SharedDb>,
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<UserRegisterQQParams>,
@@ -159,7 +160,7 @@ pub async fn register_qq(
     let ip = proxy_ip.unwrap_or(native_ip);
     Ok(Json(
         do_register_qq(
-            DB_CONN.wait().as_ref(),
+            db.as_ref(),
             ip,
             payload.access_policy,
             payload.logo,
@@ -176,21 +177,23 @@ pub async fn register_qq(
 
 /// 获取用户信息
 /// GET /user/info/{userId}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_info(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Path(user_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(_utils::models::wrapper::CommonResponse::new(
-        do_get_info(DB_CONN.wait().as_ref(), auth, user_id).await,
+        do_get_info(db.as_ref(), auth, user_id).await,
     ))
     .into_response())
 }
 
 /// 更新用户信息
 /// POST /user/update
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn update(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdateParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -200,7 +203,7 @@ pub async fn update(
         .ok_or_else(|| crate::routes::route_error("user id is required"))?;
     Ok(Json(
         do_update(
-            DB_CONN.wait().as_ref(),
+            db.as_ref(),
             auth,
             uid,
             payload.access_policy,
@@ -219,8 +222,9 @@ pub async fn update(
 
 /// 更新用户密码
 /// POST /user/update_password
-#[tracing::instrument(skip(auth, payload))]
+#[tracing::instrument(skip(db, auth, payload))]
 pub async fn update_password(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<UserUpdatePasswordParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -230,7 +234,7 @@ pub async fn update_password(
     };
     Ok(Json(
         do_update_password(
-            DB_CONN.wait().as_ref(),
+            db.as_ref(),
             auth,
             payload.user_id,
             payload.old_password,
@@ -244,32 +248,29 @@ pub async fn update_password(
 
 /// 更新用户密码（管理员）
 /// POST /user/update_password_by_admin
-#[tracing::instrument(skip(auth, payload))]
+#[tracing::instrument(skip(db, auth, payload))]
 pub async fn update_password_by_admin(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<UserUpdatePasswordByAdminParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
-        do_update_password_by_admin(
-            DB_CONN.wait().as_ref(),
-            auth,
-            payload.password,
-            payload.user_id,
-        )
-        .await
-        .map_err(crate::routes::internal_error)?,
+        do_update_password_by_admin(db.as_ref(), auth, payload.password, payload.user_id)
+            .await
+            .map_err(crate::routes::internal_error)?,
     )
     .into_response())
 }
 
 /// 删除用户
 /// DELETE /user/{workId}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn delete(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    do_delete(DB_CONN.wait().as_ref(), auth, work_id)
+    do_delete(db.as_ref(), auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())
@@ -278,14 +279,15 @@ pub async fn delete(
 /// 用户信息(批量查询)
 /// POST /user/info/list
 /// Java authorities-filter 将本端点划给 MAP_MANAGER
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn list(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<UserListParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     Ok(Json(
         do_list(
-            DB_CONN.wait().as_ref(),
+            db.as_ref(),
             auth,
             payload.pagination,
             payload.nickname,
@@ -301,12 +303,13 @@ pub async fn list(
 
 /// 踢出用户
 /// DELETE /user/kick_out/{workId}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn kick_out(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Path(work_id): Path<String>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    do_kick_out(DB_CONN.wait().as_ref(), auth, work_id)
+    do_kick_out(db.as_ref(), auth, work_id)
         .await
         .map_err(crate::routes::internal_error)?;
     Ok(Json(_utils::models::wrapper::CommonResponse::new(Ok(true))).into_response())

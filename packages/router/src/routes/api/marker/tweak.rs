@@ -1,9 +1,12 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractPunctuate;
-use _database::DB_CONN;
 use _utils::models::marker::MarkerTweakRequest;
 
 /// 点位调整
@@ -19,12 +22,13 @@ use _utils::models::marker::MarkerTweakRequest;
 /// 2. 【视频地址】无需进行接入，此功能仅为特殊用途开启的方案。
 ///
 /// POST /marker/tweak
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn tweak(
+    State(db): State<crate::routes::SharedDb>,
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<Vec<MarkerTweakRequest>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match crate::functions::api::marker::do_tweak(DB_CONN.wait().as_ref(), auth, payload).await {
+    match crate::functions::api::marker::do_tweak(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

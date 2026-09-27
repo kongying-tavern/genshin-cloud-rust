@@ -39,6 +39,10 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 tower = { version = "^0.5", features = ["util"] }
 # Request/Response/StatusCode building blocks for the http_layer oneshot test.
 axum = { workspace = true }
+# sea-orm mock 连接：http_layer 测试构建带 State 的 router 不再需要活库
+# （mock feature 只开代码门，无新增传递依赖；与上方 [dependencies] 的
+# sea-orm 在测试目标上合并特性）。
+sea-orm = { workspace = true, features = ["mock"] }
 # Same ring-only rustls line the workspace pins: the test binary must install
 # the process-level CryptoProvider that main.rs normally installs, because
 # router() builds reqwest clients (CDN proxy) at assembly time.

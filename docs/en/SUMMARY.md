@@ -18,3 +18,4 @@
 - [Design Index](./designs/README.md)
 - [BinaryMD5 Archive Export](./designs/binarymd5-archive-export.md)
 - [Hidden and Special Flags](./designs/hidden-and-special-flags.md)
+- [WebSocket Frontend Contract](./designs/ws-frontend-contract.md)

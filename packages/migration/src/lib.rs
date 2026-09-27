@@ -30,6 +30,7 @@
 pub use sea_orm_migration::prelude::*;
 
 mod m20260927_000001_baseline;
+mod m20261001_000001_marker_visibility_index;
 
 /// 全部 24 个实体的唯一清单，顺序即外键依赖顺序（被引用表在前：sys_user
 /// → 独立主表 → 链接表 → 系统辅助表），与建表的 FOREIGN KEY 约束要求一致。
@@ -87,7 +88,10 @@ pub struct Migrator;
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(m20260927_000001_baseline::Migration)]
+        vec![
+            Box::new(m20260927_000001_baseline::Migration),
+            Box::new(m20261001_000001_marker_visibility_index::Migration),
+        ]
     }
 }
 

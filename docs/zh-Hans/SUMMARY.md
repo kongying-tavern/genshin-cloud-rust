@@ -18,3 +18,4 @@
 - [设计文档索引](./designs/README.md)
 - [BinaryMD5 归档导出](./designs/binarymd5-archive-export.md)
 - [隐藏标记与特殊标记](./designs/hidden-and-special-flags.md)
+- [WebSocket 前端契约](./designs/ws-frontend-contract.md)

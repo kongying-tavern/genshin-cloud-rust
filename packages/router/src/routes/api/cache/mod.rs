@@ -10,7 +10,7 @@ use anyhow::Result;
 
 use axum::{Router, routing::delete};
 
-pub async fn router() -> Result<Router> {
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         // 前端契约：camelCase（openapi 生成）；保留 snake 别名兼容旧调用。
         .route("/iconTag", delete(icon_tag::delete_icon_tag_cache))

@@ -2,21 +2,22 @@ use anyhow::Result;
 
 use axum::{
     body::Bytes,
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 use axum::http::header;
 
 /// 获取所有标签信息的压缩数据
 /// GET /tag_doc/all_bin
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_bin(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<Response, crate::routes::RouteError> {
-    match _functions::functions::api::tag_doc::do_all_bin(DB_CONN.wait().as_ref(), auth).await {
+    match _functions::functions::api::tag_doc::do_all_bin(db.as_ref(), auth).await {
         Ok(bytes) => Ok((
             StatusCode::OK,
             [

@@ -28,7 +28,9 @@ use anyhow::Result;
 
 use axum::{Router, middleware::from_extractor};
 
-pub async fn router() -> Result<Router> {
+/// 以 `Router<SharedDb>` 返回（泛型贯穿说明见 [`crate::routes::router`]）：
+/// 本层与各域子路由均不做 `with_state`，连接值由组合根统一注入。
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         .nest("/app", app::router().await?)
         .nest("/area", area::router().await?)

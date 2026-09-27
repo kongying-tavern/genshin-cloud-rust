@@ -1,18 +1,22 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 
 /// 获取所有图标信息的 MD5
 /// GET /icon_doc/all_bin_md5
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn all_bin_md5(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::api::icon_doc::do_all_bin_md5(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         serde_json::json!({}),
     )
