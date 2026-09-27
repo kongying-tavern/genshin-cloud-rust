@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use _utils::models::marker_link::{MarkerLinkGraphRequest, MarkerLinkListRequest};
 
 /// 点位关联列表
@@ -13,7 +14,13 @@ pub async fn get_list(
     Json(payload): Json<MarkerLinkListRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     // removed local alias
-    match _functions::functions::api::marker_link::do_get_list(auth, payload).await {
+    match _functions::functions::api::marker_link::do_get_list(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -26,7 +33,13 @@ pub async fn get_graph(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerLinkGraphRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker_link::do_get_graph(auth, payload).await {
+    match _functions::functions::api::marker_link::do_get_graph(
+        DB_CONN.wait().as_ref(),
+        auth,
+        payload,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

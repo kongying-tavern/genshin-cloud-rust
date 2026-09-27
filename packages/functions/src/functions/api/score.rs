@@ -3,7 +3,7 @@ use chrono::{NaiveDateTime, Utc};
 use sea_orm::{ActiveValue::Set, ColumnTrait, QueryFilter, QuerySelect, prelude::*};
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::common::{history as history_model, score_stat as score_stat_model},
     models::system::sys_user as sys_user_model,
 };
@@ -28,11 +28,12 @@ use _utils::{
 /// Deleted 计 1，content 无法解析时按 1 计）。相比旧的「每条计 1」，
 /// 改动字段越多的贡献得分越高。
 pub async fn do_generate_score(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: ScoreGenerateRequest,
 ) -> Result<CommonResponse<String>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     // 解析时间范围
     let span_start = timestamp_to_naive(payload.start_time);
@@ -141,10 +142,11 @@ fn entry_weight(h: &history_model::Model) -> f64 {
 /// - 本服务 `do_generate_score` 写入的简化形态 `{type, count, fieldWeight}`：
 ///   编辑次数归入 `fields.content`，加权得分（取整）归入 `chars.content`。
 pub async fn do_get_score_data(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: ScoreDataRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let start = timestamp_to_naive(payload.start_time);
     let end = timestamp_to_naive(payload.end_time);

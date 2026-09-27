@@ -16,7 +16,7 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::{DB_CONN, models::system::sys_user_archive as archive_model};
+use _database::{DatabaseConnectionMap, models::system::sys_user_archive as archive_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     errors::DomainError,
@@ -138,11 +138,12 @@ fn extract_archive(body: &serde_json::Value) -> String {
 /// Get the latest archive for a given slot index.
 /// 最新存档即 1 号历史记录（`data` 数组首条）。
 pub async fn do_get_last(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
 ) -> Result<CommonResponse<Option<SysArchiveVo>>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index).await?;
     let Some(row) = row else {
@@ -155,11 +156,12 @@ pub async fn do_get_last(
 /// Get all history archives for a given slot index.
 /// 返回单个 `SysArchiveSlotVo`（Java `getSlot`；槽位不存在报错同 Java 语义）。
 pub async fn do_get_history(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
 ) -> Result<CommonResponse<SysArchiveSlotVo>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
@@ -171,10 +173,11 @@ pub async fn do_get_history(
 /// 按 slotIndex 升序返回 `SysArchiveSlotVo` 列表；脏数据同槽位多行时
 /// 每槽位只保留取值规则（最新 update_time + 最大 ID）命中的那一行。
 pub async fn do_get_all_history(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     user_id: i64,
 ) -> Result<CommonResponse<Vec<SysArchiveSlotVo>>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let items = archive_model::Entity::find_safety()
         .filter(archive_model::Column::UserId.eq(user_id))
         .order_by_asc(archive_model::Column::SlotIndex)
@@ -212,6 +215,7 @@ pub async fn do_get_all_history(
 /// 请求体为任意 JSON：前端直接上传存档 JSON 字符串；兼容
 /// `{time, archive, historyIndex}` 包装体。`name`（PUT 端点）非空时顺带更新槽位名。
 pub async fn do_save(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
@@ -224,7 +228,7 @@ pub async fn do_save(
     // 槽位列类型为 i32：路由层已限定 0..=4，此处兜底做收窄校验，不做截断
     let slot_index: i32 =
         i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let archive = extract_archive(&body);
     let now = Utc::now().naive_utc();
     // time 字段使用毫秒级数字时间戳（服务端时间，不信任客户端传入）
@@ -279,13 +283,14 @@ pub async fn do_save(
 
 /// Rename an archive slot.
 pub async fn do_rename_by_slot(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
     new_name: String,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
@@ -302,13 +307,14 @@ pub async fn do_rename_by_slot(
 /// Java `restoreArchive`/`restoreHistory`：删除最近一次存档并返回被删除的
 /// 那条（historyIndex=1）；存档为空时报「存档为空，无历史存档」。
 pub async fn do_restore_slot(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
 ) -> Result<CommonResponse<SysArchiveVo>> {
     // 恢复即删除最新一条历史，属写操作
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     let row = find_slot_row(db, user_id, slot_index)
         .await?
@@ -332,12 +338,13 @@ pub async fn do_restore_slot(
 /// Delete an archive slot (soft-delete the slot row(s)).
 /// 脏数据同槽位多行时一并清理；槽位不存在报「槽位不存在」（Java 同文案）。
 pub async fn do_delete_slot(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     user_id: i64,
     slot_index: i64,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let slot_index = i32::try_from(slot_index).map_err(|_| anyhow!("slot_index out of range"))?;
     if find_slot_row(db, user_id, slot_index).await?.is_none() {
         return Err(DomainError::Business("槽位不存在".into()).into());

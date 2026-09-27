@@ -7,7 +7,7 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::{
         area::area as area_model, item::item as item_model, marker::marker as marker_model,
         marker::marker_item_link as mil_model,
@@ -39,13 +39,17 @@ fn guard_area_request(req: &AreaAddRequest) -> Result<(String, String, String)> 
 }
 
 // 新增地区
-pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonResponse<i64>> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: AreaAddRequest,
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let now = chrono::Utc::now().naive_utc();
     let (name, code, content) = guard_area_request(&payload)?;
 
-    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
+    let icon_id = resolve_icon_id(db, payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     let active = area_model::ActiveModel {
         version: Set(1),
@@ -76,14 +80,18 @@ pub async fn do_add(auth: AuthInfo, payload: AreaAddRequest) -> Result<CommonRes
 }
 
 // 更新地区
-pub async fn do_update(auth: AuthInfo, payload: AreaUpdateRequest) -> Result<CommonResponse<bool>> {
+pub async fn do_update(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: AreaUpdateRequest,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     // Java updateArea：指定的父节点无效（自己挂到自己下面）。
     if payload.area.parent_id == payload.id {
         return Err(DomainError::Business("指定的父节点无效".into()).into());
     }
     let (name, code, content) = guard_area_request(&payload.area)?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let item = area_model::Entity::find_safety_by_id(payload.id)
         .one(db)
         .await?;
@@ -103,7 +111,7 @@ pub async fn do_update(auth: AuthInfo, payload: AreaUpdateRequest) -> Result<Com
     am.code = Set(Some(code));
     am.content = Set(Some(content));
     am.icon_id =
-        Set(resolve_icon_id(payload.area.icon_id, payload.area.icon_tag.as_deref()).await?);
+        Set(resolve_icon_id(db, payload.area.icon_id, payload.area.icon_tag.as_deref()).await?);
     am.parent_id = Set(payload.area.parent_id);
     // Java updateAreaIsFinal(area)：本地区是否末端按子级数量重算，
     // 客户端传入的 isFinal 被忽略。
@@ -153,6 +161,7 @@ async fn recalc_is_final(db: &sea_orm::DatabaseConnection, area_id: i64) -> Resu
 
 // 列表
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: AreaListRequest,
 ) -> Result<CommonResponse<AreaListResponse>> {
@@ -172,8 +181,8 @@ pub async fn do_list(
         query = query.filter(area_model::Column::HiddenFlag.eq(hidden_flag));
     }
 
-    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
-    let items = query.all(&DB_CONN.wait().pg_conn).await?;
+    let icon_tag_map = super::icon::icon_tag_map(&db.pg_conn).await?;
+    let items = query.all(&db.pg_conn).await?;
     let mut ret = Vec::with_capacity(items.len());
     for it in items {
         ret.push(AreaVO {
@@ -201,10 +210,14 @@ pub async fn do_list(
 }
 
 // 获取单个
-pub async fn do_get(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaVO>> {
-    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
+pub async fn do_get(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    area_id: i64,
+) -> Result<CommonResponse<AreaVO>> {
+    let icon_tag_map = super::icon::icon_tag_map(&db.pg_conn).await?;
     let item = area_model::Entity::find_safety_by_id(area_id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Area not found".into()))?;
     // 可见性：不可见 flag 的地区对调用者如同不存在（Java getArea 的
@@ -236,9 +249,13 @@ pub async fn do_get(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<AreaV
 }
 
 // 删除（软删除，递归子树并级联物品/点位，Java deleteArea 同语义）
-pub async fn do_delete(auth: AuthInfo, area_id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    area_id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let item = area_model::Entity::find_safety_by_id(area_id)
         .one(db)
         .await?;
@@ -339,14 +356,16 @@ async fn delete_marker_and_item_in_area(
 /// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
 /// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
 /// 查不到则回退 0（不强制失败，保持与旧行为一致）。
-async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+async fn resolve_icon_id(
+    db: &sea_orm::DatabaseConnection,
+    icon_id: i64,
+    icon_tag: Option<&str>,
+) -> Result<i64> {
     if icon_id != 0 {
         return Ok(icon_id);
     }
     let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
         return Ok(0);
     };
-    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
-        .await?
-        .unwrap_or(0))
+    Ok(super::icon::icon_id_by_tag(db, tag).await?.unwrap_or(0))
 }

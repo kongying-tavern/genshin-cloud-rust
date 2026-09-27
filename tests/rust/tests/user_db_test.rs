@@ -6,7 +6,8 @@
 //! `cargo test --workspace` stays green without a database.
 //!
 //! What it verifies (the full DB harness, not just schema):
-//!   1. `init_db_conn()` connects to Postgres (Redis/MinIO degrade gracefully).
+//!   1. `connect_db_map()` connects to Postgres (Redis/MinIO degrade
+//!      gracefully) without touching the global `DB_CONN` singleton.
 //!   2. `Schema::create_table_from_entity` builds the `sys_user` table on a live
 //!      database (so entity definitions are executable DDL, not just string
 //!      matches — a stronger guarantee than `schema_test.rs`).
@@ -16,11 +17,14 @@
 //! Future domain ports (icon, item, tag, ...) should copy this file, swap the
 //! entity, and extend the assertions — the harness setup is reusable as-is.
 
+use std::sync::Arc;
+
 use sea_orm::{
     ActiveValue::NotSet, ConnectionTrait, EntityTrait, Schema, sea_query::TableCreateStatement,
 };
+use tokio::sync::OnceCell;
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _database::models::system::sys_user;
 use _functions::functions::system::user as user_fns;
 use _utils::{
@@ -30,19 +34,29 @@ use _utils::{
     types::{AccessPolicyItemEnum, AccessPolicyList, SystemUserRole},
 };
 
-/// Skip the test when no database is configured. Returns the shared connection
-/// on success, or prints a skip notice and returns `None`.
-async fn db() -> Option<&'static sea_orm::DatabaseConnection> {
+/// 自持连接映射：本 binary 只构建一次，**不写 `DB_CONN` 全局单例**——
+/// 连接注入重构的可测性验收点（测试隔离不依赖全局状态）。连接失败缓存
+/// 为 `None`，与原先 `init_db_conn` 失败后按「跳过」处理的语义一致。
+static MAP: OnceCell<Option<Arc<DatabaseConnectionMap>>> = OnceCell::const_new();
+
+async fn map() -> Option<&'static DatabaseConnectionMap> {
     if std::env::var("GCS_TEST_DB").is_err() {
         eprintln!("skipped: set GCS_TEST_DB=1 with a reachable Postgres to run");
         return None;
     }
-    if DB_CONN.get().is_none() {
-        // init_db_conn is idempotent in practice: if another test already set
-        // the global, this returns Err and we fall through to the get() below.
-        let _ = _database::init_db_conn().await;
-    }
-    DB_CONN.get().map(|m| &m.pg_conn)
+    let arc = MAP
+        .get_or_init(|| async {
+            match _database::connect_db_map().await {
+                Ok(m) => Some(Arc::new(m)),
+                Err(e) => {
+                    eprintln!("skipped: connect_db_map failed: {e}");
+                    None
+                },
+            }
+        })
+        .await
+        .as_ref()?;
+    Some(arc)
 }
 
 /// Recreate the `sys_user` table in the configured schema (default
@@ -126,9 +140,10 @@ async fn user_db_round_trip() {
         std::env::set_var("JWT_SECRET", "integration-test-secret");
     }
 
-    let Some(db) = db().await else {
+    let Some(map) = map().await else {
         return;
     };
+    let db = &map.pg_conn;
 
     // ── Setup: rebuild the table ────────────────────────────────────────────
     recreate_table(db).await.expect("recreate sys_user table");
@@ -138,7 +153,7 @@ async fn user_db_round_trip() {
     assert!(id != 0, "IDENTITY column should assign a non-zero id");
 
     // ── Read via the business layer (do_get_info → find_safety_by_id) ────────
-    let vo = user_fns::do_get_info(stub_auth(), id)
+    let vo = user_fns::do_get_info(map, stub_auth(), id)
         .await
         .expect("do_get_info reads the seeded user");
     assert_eq!(vo.username, "db_test_user");
@@ -147,6 +162,7 @@ async fn user_db_round_trip() {
     // ── do_update_password: wrong old password must fail ──────────────────────
     // 新密码满足最小长度策略（≥8 字符），确保失败来自旧密码校验而非密码策略
     let wrong_pw = user_fns::do_update_password(
+        map,
         stub_auth(),
         id,
         "wrong_old_pw".into(),
@@ -160,9 +176,15 @@ async fn user_db_round_trip() {
 
     // ── do_update_password: correct old password succeeds and the new
     //    password verifies ────────────────────────────────────────────────────
-    user_fns::do_update_password(stub_auth(), id, "init_pw".into(), "new_pw_123456".into())
-        .await
-        .expect("update password with correct old password");
+    user_fns::do_update_password(
+        map,
+        stub_auth(),
+        id,
+        "init_pw".into(),
+        "new_pw_123456".into(),
+    )
+    .await
+    .expect("update password with correct old password");
 
     let updated = sys_user::Entity::find_safety_by_id(id)
         .one(db)
@@ -179,12 +201,12 @@ async fn user_db_round_trip() {
     );
 
     // ── do_kick_out: no-op degradation without Redis (must not error) ────────
-    user_fns::do_kick_out(stub_auth(), id.to_string())
+    user_fns::do_kick_out(map, stub_auth(), id.to_string())
         .await
         .expect("kick_out degrades gracefully without Redis");
 
     // ── do_delete (soft delete via delete_safety_by_id) ──────────────────────
-    user_fns::do_delete(stub_auth(), id)
+    user_fns::do_delete(map, stub_auth(), id)
         .await
         .expect("do_delete soft-deletes the user");
 
@@ -210,7 +232,7 @@ async fn user_db_round_trip() {
 
     // 首次保存：新建槽位行，data = [entry]，返回 true
     let body = serde_json::json!({"Data_KYJG": 1});
-    let saved = archive_fns::do_save(auth.clone(), id, 0, None, body.clone())
+    let saved = archive_fns::do_save(map, auth.clone(), id, 0, None, body.clone())
         .await
         .expect("first save")
         .data
@@ -239,7 +261,7 @@ async fn user_db_round_trip() {
     assert!(rows[0].update_time.is_some(), "update_time set on insert");
 
     // 幂等：与最新一条一致 → false，不新增条目
-    let dup = archive_fns::do_save(auth.clone(), id, 0, None, body.clone())
+    let dup = archive_fns::do_save(map, auth.clone(), id, 0, None, body.clone())
         .await
         .expect("dup save")
         .data
@@ -249,6 +271,7 @@ async fn user_db_round_trip() {
     // 再存 5 条不同内容：头插 + 上限 5（共 6 条不同 → 挤掉最旧 1 条）
     for i in 2..=6 {
         archive_fns::do_save(
+            map,
             auth.clone(),
             id,
             0,
@@ -259,7 +282,7 @@ async fn user_db_round_trip() {
         .expect("save variant");
     }
     // 最新在前
-    let last = archive_fns::do_get_last(auth.clone(), id, 0)
+    let last = archive_fns::do_get_last(map, auth.clone(), id, 0)
         .await
         .expect("get last")
         .data
@@ -271,7 +294,7 @@ async fn user_db_round_trip() {
         serde_json::json!({"Data_KYJG": 6}).to_string()
     );
 
-    let history = archive_fns::do_get_history(auth.clone(), id, 0)
+    let history = archive_fns::do_get_history(map, auth.clone(), id, 0)
         .await
         .expect("get history")
         .data
@@ -319,7 +342,7 @@ async fn user_db_round_trip() {
         .exec(db)
         .await
         .expect("seed dirty duplicate row");
-    let dirty_last = archive_fns::do_get_last(auth.clone(), id, 0)
+    let dirty_last = archive_fns::do_get_last(map, auth.clone(), id, 0)
         .await
         .expect("get last with dirty rows")
         .data
@@ -329,14 +352,14 @@ async fn user_db_round_trip() {
 
     // 恢复：弹出最新一条并返回（historyIndex=1）；胜出的脏行仅 1 条，
     // 弹出后 data=[]（其 update_time 被刷新，继续作为取值命中行）
-    let removed = archive_fns::do_restore_slot(auth.clone(), id, 0)
+    let removed = archive_fns::do_restore_slot(map, auth.clone(), id, 0)
         .await
         .expect("restore")
         .data
         .expect("removed entry");
     assert_eq!(removed.archive, "\"dirty winner\"");
     assert_eq!(removed.history_index, 1);
-    let after = archive_fns::do_get_history(auth.clone(), id, 0)
+    let after = archive_fns::do_get_history(map, auth.clone(), id, 0)
         .await
         .expect("history after restore")
         .data
@@ -345,12 +368,13 @@ async fn user_db_round_trip() {
 
     // 重命名 + 删除槽位（RBoolean）；缺失槽位按 Java 文案报错
     assert!(
-        archive_fns::do_rename_by_slot(auth.clone(), id, 1, "新档名".into())
+        archive_fns::do_rename_by_slot(map, auth.clone(), id, 1, "新档名".into())
             .await
             .is_err(),
         "rename a missing slot errors (槽位不存在)"
     );
     archive_fns::do_save(
+        map,
         auth.clone(),
         id,
         1,
@@ -359,19 +383,19 @@ async fn user_db_round_trip() {
     )
     .await
     .expect("save slot 1 with name");
-    let renamed = archive_fns::do_rename_by_slot(auth.clone(), id, 1, "新档名".into())
+    let renamed = archive_fns::do_rename_by_slot(map, auth.clone(), id, 1, "新档名".into())
         .await
         .expect("rename")
         .data
         .expect("bool payload");
     assert!(renamed, "rename returns RBoolean true");
-    let deleted = archive_fns::do_delete_slot(auth.clone(), id, 1)
+    let deleted = archive_fns::do_delete_slot(map, auth.clone(), id, 1)
         .await
         .expect("delete slot")
         .data
         .expect("bool payload");
     assert!(deleted, "delete returns RBoolean true");
-    let missing = archive_fns::do_get_history(auth.clone(), id, 1).await;
+    let missing = archive_fns::do_get_history(map, auth.clone(), id, 1).await;
     assert!(missing.is_err(), "deleted slot reports 槽位不存在");
 }
 

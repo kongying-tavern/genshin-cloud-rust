@@ -240,13 +240,27 @@ git checkout master && git pull own master && git branch -d fix/<topic>
 - #136 escape_like 去重 + 死代码清理（crypto.rs 空壳、RouteVO）+ CDN 反代拆出 routes/mod.rs
 - #137 Python 活体回归套件收编 tests/python（凭据走 env）+ CI 补 Redis/redis_cache_db + commit-msg lint 对 force-push 健壮化
 - #138 HTTP 层 oneshot 测试（首个 router 级测试）+ 三语文档漂移修复（JWK 轮换/just dev-watch/route 域口径/M4 状态）
+- #139 marker_link 写路径可见性闭环（do_link/do_delete 批量校验涉及点位）+ .regression 工件目录 gitignore 锚定
+- #140 set_parent_is_final 四份分叉拷贝统一为 set_derived_is_final（派生字段维护不参与乐观锁；Java updateById 口径）
+- #142 DomainError（thiserror）三层错误分类替换关键字子串猜测 + 401/403 形状统一 + (u16, String) 例外收编
+- #141 init_db --check schema 漂移检测 + 全新库播种自引用外键修复 + CI 补 --bins + commit-msg lint 降级路径修复（单 SHA 遍历全历史缺陷）
+- #143 sea-orm-migration 迁移体系：_migration crate（冻结幂等 baseline + 手写极简 CLI status/up/down/fresh/refresh）+ init_db 接 Migrator::up + for_each_entity 单一实体清单
+- #144 连接注入：132 个业务函数显式收 &DatabaseConnectionMap（functions 层 DB_CONN 清零）+ connect_db_map 纯构造器 + DB 集成测试自持实例（不写全局，有断言为证）
+
+> **定位变化（2026-09-27）**：Java 参考实现（genshin-map-cloud）已冻结、基本不再变动——
+> 本仓库自此为唯一演进主轴。此前「与 Java 对齐」的约束降级为「兼容既有线上契约」：
+> wire 契约（前端在用）继续保持，内部实现可自由演进；有意偏离 Java 的加固（如 WS
+> 握手鉴权）不必再对照 Java 行为。
 
 ### 待办 backlog（按优先级）
 
-1. thiserror 领域错误枚举替换 internal_error 的关键字子串分类（routes/mod.rs），顺带统一 401/403 响应形状、收编 system/user.rs 的 (u16, String) 例外
-2. schema 迁移体系：引入 sea-orm-migration 或为 init_db 增加 --diff 生成 ALTER，把「实体 ↔ 库结构」漂移变成构建期失败
-3. set_parent_is_final 四份拷贝语义分叉（area 版 update_many 直写 vs tag_type 版乐观锁单行）——统一前需先定语义（Java 对齐口径），不是机械去重
-4. AppState 依赖注入替代 133 处 DB_CONN.wait() 全局单例（可测性 + 故障注入）
-5. marker_link 写路径可见性闭环（link/delete 目前不加载 marker 行，未校验 hidden_flag）
-6. .regression 会话工件目录处置（套件已收编 tests/python；源目录仍 untracked）
-7. 前端联动：WS 鉴权上线需前端在握手时带 token（Authorization 头或 ?token=），与 map_register_v3 / map_front_v3 协调
+1. router 层连接 State 接线：业务函数已可注入（#144），但 handler 仍经组合根传
+   DB_CONN 全局——接线需先解决「无 DB 的 HTTP 层测试」约束（测试专用 state 构造
+   或 trait 化连接），价值与成本需再评估
+2. schema 迁移的实战首演：下一次实体加列走新迁移文件（packages/migration 加
+   mYYYYMMDD_NNNNNN_*.rs 并注册），验证演进纪律顺路成立；存量生产库升级前先跑
+   init_db -- --check
+3. 前端联动：WS 鉴权上线需前端在握手时带 token（Authorization 头或 ?token=）。
+   已核实 map_register_v3 用 socket.io-client、map_front_v3 无 WS 使用——现存前端
+   均不消费裸 /ws/{userId} 端点，协议适配（socket.io → 裸 WS 或后端补 socket.io
+   端点）属前端仓/跨仓架构决策，待与前端侧协调

@@ -9,6 +9,7 @@ use axum::{
 };
 
 use crate::middlewares::{ExtractIP, ExtractUserAgent};
+use _database::DB_CONN;
 use _functions::functions::system::oauth::{
     oauth_client_credentials, oauth_password_login, oauth_refresh,
 };
@@ -112,7 +113,7 @@ pub async fn oauth(
             )
         })?;
         return Ok(Json(
-            oauth_password_login(username, password, ip, user_agent)
+            oauth_password_login(DB_CONN.wait().as_ref(), username, password, ip, user_agent)
                 .await
                 .map_err(|e| {
                     // Java/Spring OAuth2 契约：账密失败 -> 400 invalid_grant
@@ -138,10 +139,14 @@ pub async fn oauth(
                     "Scope is required for client credentials",
                 )
             })?;
-            return Ok(Json(oauth_client_credentials(ip, scope).await.map_err(|e| {
-                tracing::warn!("client_credentials grant failed: {e}");
-                oauth_error(StatusCode::BAD_REQUEST, "invalid_scope", &e.to_string())
-            })?)
+            return Ok(Json(
+                oauth_client_credentials(DB_CONN.wait().as_ref(), ip, scope)
+                    .await
+                    .map_err(|e| {
+                        tracing::warn!("client_credentials grant failed: {e}");
+                        oauth_error(StatusCode::BAD_REQUEST, "invalid_scope", &e.to_string())
+                    })?,
+            )
             .into_response());
         },
         Some("refresh_token") => {
@@ -152,7 +157,7 @@ pub async fn oauth(
                     "Refresh token is required for refresh token grant type",
                 )
             })?;
-            let ret = oauth_refresh(refresh_token, ip, user_agent)
+            let ret = oauth_refresh(DB_CONN.wait().as_ref(), refresh_token, ip, user_agent)
                 .await
                 .map_err(|e| {
                     tracing::warn!("refresh grant failed: {e}");

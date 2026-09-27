@@ -10,15 +10,19 @@
 -- Idempotent: every statement uses CREATE INDEX IF NOT EXISTS, so this file
 -- can be re-run safely at any time.
 --
--- Where it runs:
---   1. local / e2e databases: applied automatically by `cargo run --bin
---      init_db` (init_db.rs embeds this file via include_str!).
---   2. production database: run once manually by ops, e.g.:
---        psql "postgres://<user>:<pass>@<host>:<port>/genshin_map" \
---          -f scripts/indexes_dev.sql
---      (init_db is never pointed at the production DB; the CREATE TABLE pass
---      would be skipped there anyway, and the indexes below are exactly what
---      production needs.)
+-- STATUS: the content below is FROZEN into the baseline migration
+-- (packages/migration/src/m20260927_000001_baseline.rs embeds this file via
+-- include_str! and applies it on `init_db` / `_migration up`). Future index
+-- changes must go through a NEW migration file, never by editing this file —
+-- existing databases already recorded the baseline as applied and would never
+-- re-run an edited copy.
+--
+-- The file itself is kept as the ops reference for the production database:
+-- run it there manually, e.g.:
+--   psql "postgres://<user>:<pass>@<host>:<port>/genshin_map" \
+--     -f scripts/indexes_dev.sql
+-- (init_db is never pointed at the production DB; the migration pass is a
+-- no-op there, and the indexes below are exactly what production needs.)
 
 -- history: per-creator filters, per-edit_type filters, and the default
 -- ORDER BY update_time DESC used by history.rs list queries.

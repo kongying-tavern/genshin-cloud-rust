@@ -10,7 +10,7 @@ use sea_orm::{ColumnTrait, QueryFilter};
 use serde::Serialize;
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::{icon::icon as icon_model, tag::tag as tag_model, tag::tag_type_link as ttl_model},
 };
 use _utils::{
@@ -39,24 +39,24 @@ pub struct TagDocVo {
 
 /// `GET /tag_doc/all_bin_md5` — MD5 of the single all-tags blob.
 pub async fn do_all_bin_md5(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let entry = tag_result().await?;
+    let entry = tag_result(db).await?;
     Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /tag_doc/all_bin` — the all-tags blob (compressed bytes).
-pub async fn do_all_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
-    let entry = tag_result().await?;
+pub async fn do_all_bin(db: &DatabaseConnectionMap, _auth: AuthInfo) -> Result<Vec<u8>> {
+    let entry = tag_result(db).await?;
     Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) the single tag blob.
-async fn tag_result() -> Result<ResultEntry> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let entries = get_result_cached("tag:result".into(), async {
+async fn tag_result(db: &DatabaseConnectionMap) -> Result<ResultEntry> {
+    let entries = get_result_cached(db, "tag:result".into(), async {
+        let db = &db.pg_conn;
         let tags = tag_model::Entity::find_safety().all(db).await?;
 
         // typeIdList per tag (tag_type_link is keyed by tag_name).

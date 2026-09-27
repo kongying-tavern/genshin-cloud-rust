@@ -12,7 +12,7 @@
 
 use anyhow::Result;
 
-use _database::{DB_CONN, models::marker::marker_linkage as ml_model};
+use _database::{DatabaseConnectionMap, models::marker::marker_linkage as ml_model};
 use _utils::{
     db_operations::SafeEntityTrait, errors::DomainError, jwt::AuthInfo,
     models::wrapper::CommonResponse,
@@ -26,39 +26,44 @@ use _utils::models::marker_link::MarkerLinkVO;
 
 /// `GET /marker_link_doc/all_list_bin_md5` — MD5 of the flat linkage list blob.
 pub async fn do_all_list_bin_md5(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let entry = linkage_result("link:list-result", false).await?;
+    let entry = linkage_result(db, "link:list-result", false).await?;
     Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /marker_link_doc/all_list_bin` — the flat linkage list blob (compressed bytes).
-pub async fn do_all_list_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
-    let entry = linkage_result("link:list-result", false).await?;
+pub async fn do_all_list_bin(db: &DatabaseConnectionMap, _auth: AuthInfo) -> Result<Vec<u8>> {
+    let entry = linkage_result(db, "link:list-result", false).await?;
     Ok(entry.bytes.to_vec())
 }
 
 /// `GET /marker_link_doc/all_graph_bin_md5` — MD5 of the graph blob.
 pub async fn do_all_graph_bin_md5(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     _payload: serde_json::Value,
 ) -> Result<CommonResponse<BinaryMd5Vo>> {
-    let entry = linkage_result("link:graph-result", true).await?;
+    let entry = linkage_result(db, "link:graph-result", true).await?;
     Ok(CommonResponse::new(Ok(entry.vo)))
 }
 
 /// `GET /marker_link_doc/all_graph_bin` — the graph blob (compressed bytes).
-pub async fn do_all_graph_bin(_auth: AuthInfo) -> Result<Vec<u8>> {
-    let entry = linkage_result("link:graph-result", true).await?;
+pub async fn do_all_graph_bin(db: &DatabaseConnectionMap, _auth: AuthInfo) -> Result<Vec<u8>> {
+    let entry = linkage_result(db, "link:graph-result", true).await?;
     Ok(entry.bytes.to_vec())
 }
 
 /// Compute (and cache) one linkage blob view.
-async fn linkage_result(key: &'static str, graph: bool) -> Result<ResultEntry> {
-    let db = &DB_CONN.wait().pg_conn;
-
-    let entries = get_result_cached(key.to_string(), async {
+async fn linkage_result(
+    db: &DatabaseConnectionMap,
+    key: &'static str,
+    graph: bool,
+) -> Result<ResultEntry> {
+    let entries = get_result_cached(db, key.to_string(), async {
+        let db = &db.pg_conn;
         let linkages = ml_model::Entity::find_safety().all(db).await?;
         // 读侧变换（Java getAllMarkerLinkage）：reverse + 路径坐标回填。
         // blob 内字段为 camelCase `MarkerLinkageVo` 命名（Java wire contract），

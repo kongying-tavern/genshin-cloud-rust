@@ -8,7 +8,7 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::{icon::icon as icon_model, tag::tag as tag_model, tag::tag_type_link as ttl_model},
 };
 use _utils::{
@@ -26,9 +26,13 @@ use _utils::{
 };
 
 /// 新增标签
-pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResponse> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: TagAddRequest,
+) -> Result<TagAddResponse> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     let now = Utc::now().naive_utc();
 
     let am = tag_model::ActiveModel {
@@ -46,8 +50,8 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
         sort_index: Set(Some(0)),
     };
 
-    let res = tag_model::Entity::insert(am).exec(db).await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    let res = tag_model::Entity::insert(am).exec(pg).await?;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -59,12 +63,16 @@ pub async fn do_add(auth: AuthInfo, payload: TagAddRequest) -> Result<TagAddResp
 }
 
 /// 更新标签
-pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<CommonResponse<bool>> {
+pub async fn do_update(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: TagUpdateRequest,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let t = tag_model::Entity::find_safety_by_id(payload.id)
-        .one(db)
+        .one(pg)
         .await?;
     let t = t.ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let old_tag = t.tag.clone();
@@ -76,7 +84,7 @@ pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<Comm
     am.tag = Set(new_tag.clone());
     am.icon_id = Set(payload.base.icon_id);
 
-    tag_model::Entity::update_safety(am)?.exec(db).await?;
+    tag_model::Entity::update_safety(am)?.exec(pg).await?;
 
     // 改名时同步 tag_type_link（该表以 tag_name 为键，否则旧关联悬空）
     if new_tag != old_tag {
@@ -86,10 +94,10 @@ pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<Comm
                 sea_orm::sea_query::Expr::value(new_tag.clone()),
             )
             .filter(ttl_model::Column::TagName.eq(old_tag))
-            .exec(db)
+            .exec(pg)
             .await?;
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -100,10 +108,11 @@ pub async fn do_update(auth: AuthInfo, payload: TagUpdateRequest) -> Result<Comm
 
 /// 标签列表（分页 + 模糊搜索）
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: TagListRequest,
 ) -> Result<CommonResponse<TagListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let mut query = tag_model::Entity::find_safety();
 
     if let Some(tag) = payload.tag {
@@ -159,18 +168,22 @@ pub async fn do_list(
 }
 
 /// 软删除标签
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
-    let t = tag_model::Entity::find_safety_by_id(id).one(db).await?;
+    let t = tag_model::Entity::find_safety_by_id(id).one(pg).await?;
     let t = t.ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(auth.info.id));
-    tag_model::Entity::delete_safety(am)?.exec(db).await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    tag_model::Entity::delete_safety(am)?.exec(pg).await?;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -182,16 +195,17 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 /// 修改标签的分类信息（Java `updateTypeInTag`，仅供后台使用）：
 /// 重建 `tag_type_link`（按 tag_name 全量替换 typeIdList）。
 pub async fn do_update_type(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: TagUpdateTypeRequest,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     let now = Utc::now().naive_utc();
 
     let _tag = tag_model::Entity::find_safety()
         .filter(tag_model::Column::Tag.eq(&payload.tag))
-        .one(db)
+        .one(pg)
         .await?
         .ok_or_else(|| DomainError::Business("Tag not found".into()))?;
 
@@ -203,7 +217,7 @@ pub async fn do_update_type(
                     _database::models::tag::tag_type::Column::Id
                         .is_in(payload.type_id_list.clone()),
                 )
-                .all(db)
+                .all(pg)
                 .await?
                 .into_iter()
                 .map(|t| t.id)
@@ -216,13 +230,13 @@ pub async fn do_update_type(
     // 删除该 tag 的旧关联
     let links = ttl_model::Entity::find_safety()
         .filter(ttl_model::Column::TagName.eq(&payload.tag))
-        .all(db)
+        .all(pg)
         .await?;
     for mut link in links {
         // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
         link.updater_id = Some(auth.info.id);
         ttl_model::Entity::delete_safety(link.into())?
-            .exec(db)
+            .exec(pg)
             .await?;
     }
 
@@ -240,11 +254,11 @@ pub async fn do_update_type(
             type_id: Set(type_id),
             tag_name: Set(payload.tag.clone()),
         })
-        .exec(db)
+        .exec(pg)
         .await?;
     }
 
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -255,13 +269,17 @@ pub async fn do_update_type(
 
 /// 按标签名新增标签（前端 `createTag` 兼容路由，仅传标签名）：
 /// 已存在同名标签时返回 `false`（对齐 Java 语义，前端据此回退为查询）。
-pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<bool>> {
+pub async fn do_create_by_name(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    tag_name: String,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let exists = tag_model::Entity::find_safety()
         .filter(tag_model::Column::Tag.eq(&tag_name))
-        .count(db)
+        .count(pg)
         .await?;
     if exists > 0 {
         return Ok(CommonResponse::new(Ok(false)));
@@ -282,9 +300,9 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
         hidden_flag: Set(Some(0)),
         sort_index: Set(Some(0)),
     })
-    .exec(db)
+    .exec(pg)
     .await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -294,13 +312,17 @@ pub async fn do_create_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
 }
 
 /// 按标签名软删除标签（前端 `deleteTag` 兼容路由）。
-pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<bool>> {
+pub async fn do_delete_by_name(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    tag_name: String,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let t = tag_model::Entity::find_safety()
         .filter(tag_model::Column::Tag.eq(&tag_name))
-        .one(db)
+        .one(pg)
         .await?
         .ok_or_else(|| DomainError::Business("无删除的标签".into()))?;
     // Java deleteTag：先删 tag_type_link 再删 tag，避免悬空关联
@@ -310,14 +332,14 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(ttl_model::Column::TagName.eq(&tag_name))
-        .exec(db)
+        .exec(pg)
         .await?;
     let mut am: tag_model::ActiveModel = t.into();
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(auth.info.id));
-    tag_model::Entity::delete_safety(am)?.exec(db).await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    tag_model::Entity::delete_safety(am)?.exec(pg).await?;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -328,24 +350,25 @@ pub async fn do_delete_by_name(auth: AuthInfo, tag_name: String) -> Result<Commo
 
 /// 按标签名更新图标绑定（前端 `updateTag` 兼容路由）。
 pub async fn do_update_by_name(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     tag_name: String,
     icon_id: i64,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let t = tag_model::Entity::find_safety()
         .filter(tag_model::Column::Tag.eq(&tag_name))
-        .one(db)
+        .one(pg)
         .await?
         .ok_or_else(|| DomainError::Business("Tag not found".into()))?;
     let mut am: tag_model::ActiveModel = t.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
     am.icon_id = Set(icon_id);
-    tag_model::Entity::update_safety(am)?.exec(db).await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    tag_model::Entity::update_safety(am)?.exec(pg).await?;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
         serde_json::Value::Null,
@@ -355,9 +378,13 @@ pub async fn do_update_by_name(
 }
 
 /// 按标签名查询单个标签（前端 `getTag` 兼容路由），返回完整 TagVO。
-pub async fn do_get_single(auth: AuthInfo, tag_name: String) -> Result<CommonResponse<TagVO>> {
+pub async fn do_get_single(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    tag_name: String,
+) -> Result<CommonResponse<TagVO>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let t = tag_model::Entity::find_safety()
         .filter(tag_model::Column::Tag.eq(&tag_name))

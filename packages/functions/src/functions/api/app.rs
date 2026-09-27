@@ -7,14 +7,18 @@
 
 use anyhow::Result;
 
+use _database::DatabaseConnectionMap;
 use _utils::{jwt::AuthInfo, models::wrapper::CommonResponse};
 
 use super::binary_doc;
 
 /// `POST /app/trigger/update` — flush all BinaryMD5 caches and report success.
-pub async fn do_trigger_update(auth: AuthInfo) -> Result<CommonResponse<bool>> {
+pub async fn do_trigger_update(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    binary_doc::invalidate_all().await;
+    binary_doc::invalidate_all(db).await;
     super::super::ws::ws_broadcast("AppUpdated", serde_json::Value::Null);
     Ok(CommonResponse::new(Ok(true)))
 }

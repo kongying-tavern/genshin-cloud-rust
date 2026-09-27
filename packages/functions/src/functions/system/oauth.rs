@@ -9,7 +9,7 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::{DB_CONN, models};
+use _database::{DatabaseConnectionMap, models};
 use _utils::{
     bcrypt::verify_password,
     db_operations::SafeEntityTrait,
@@ -38,6 +38,7 @@ fn internal_error(_err: impl std::fmt::Display) -> anyhow::Error {
 /// - 其余策略（允许列表、地区等）在当前数据模型下无对应存储，放行
 /// - 无任何历史记录（首次登录）时，same_* 类策略放行
 async fn check_access_policy(
+    db: &DatabaseConnectionMap,
     user_id: i64,
     access_policy: &[AccessPolicyItemEnum],
     ip: SocketAddr,
@@ -47,7 +48,7 @@ async fn check_access_policy(
     if std::env::var("SKIP_ACCESS_POLICY").as_deref() == Ok("true") {
         return Ok(());
     }
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let last = models::system::sys_user_device::Entity::find_safety()
         .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
         .order_by_desc(models::system::sys_user_device::Column::LastLoginTime)
@@ -119,8 +120,13 @@ async fn check_access_policy(
 }
 
 /// 登录成功后登记设备（upsert `sys_user_device`：user_id + device_id 唯一）。
-async fn record_device(user_id: i64, ip: SocketAddr, user_agent: &str) -> Result<()> {
-    let db = &DB_CONN.wait().pg_conn;
+async fn record_device(
+    db: &DatabaseConnectionMap,
+    user_id: i64,
+    ip: SocketAddr,
+    user_agent: &str,
+) -> Result<()> {
+    let db = &db.pg_conn;
     let existing = models::system::sys_user_device::Entity::find_safety()
         .filter(models::system::sys_user_device::Column::UserId.eq(Some(user_id)))
         .filter(models::system::sys_user_device::Column::DeviceId.eq(user_agent))
@@ -197,7 +203,10 @@ fn environment_id() -> String {
 /// - `jwt:access:{uid}:{access_jti}` → 用户 VO JSON（受保护端点校验）
 /// - `jwt:refresh:{uid}:{refresh_jti}` → 配对 access_jti 字符串（refresh
 ///   端点校验；轮换时据此吊销旧 access token）
-async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLoginResponse> {
+async fn issue_token(
+    db: &DatabaseConnectionMap,
+    item: &models::system::sys_user::Model,
+) -> Result<OauthLoginResponse> {
     let access_jti = Uuid::now_v7();
     let refresh_jti = Uuid::now_v7();
     let now = chrono::Utc::now();
@@ -224,7 +233,7 @@ async fn issue_token(item: &models::system::sys_user::Model) -> Result<OauthLogi
     // Store token in Redis if available (graceful degradation for e2e mode
     // where Redis is not running — oauth_parse_token will fall back to
     // JWT + DB validation without Redis session lookup).
-    if let Some(redis_client) = &DB_CONN.wait().redis_conn
+    if let Some(redis_client) = &db.redis_conn
         && let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await
     {
         let _ = redis_conn
@@ -283,6 +292,7 @@ fn role_code(role: _utils::types::SystemUserRole) -> String {
 }
 
 async fn oauth_password_login_inner(
+    db: &DatabaseConnectionMap,
     item: models::system::sys_user::Model,
     password_raw: String,
     ip: SocketAddr,
@@ -296,11 +306,11 @@ async fn oauth_password_login_inner(
     // Java `AuthorizationServerConfiguration.checkDeviceAccess`：策略不命中只
     // 影响提示信息与审计日志，登录仍然成功 —— 对齐为「警告放行」而非拒绝。
     let policy: Vec<_> = item.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    if let Err(e) = check_access_policy(item.id, &policy, ip, user_agent).await {
+    if let Err(e) = check_access_policy(db, item.id, &policy, ip, user_agent).await {
         tracing::warn!(user_id = item.id, error = %e, "access policy violation (allowed through, Java-compatible)");
     }
 
-    issue_token(&item).await
+    issue_token(db, &item).await
 }
 
 /// 匿名（client_credentials）身份 VO：id=0 + VISITOR 角色。
@@ -322,7 +332,10 @@ fn anonymous_vo() -> SysUserVO {
     }
 }
 
-pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
+pub async fn oauth_parse_token(
+    db: &DatabaseConnectionMap,
+    token: String,
+) -> Result<(SysUserVO, Claims)> {
     let claims = verify_token(&token).await?;
 
     // S2：refresh token 不得当 access token 使用。旧令牌无 token_type
@@ -339,7 +352,7 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     // （无法判定存在性）时降级 DB 校验。REDIS_REQUIRED=true 时 Redis 不可
     // 用直接失败（fail-closed），不降级。
     let redis_required = std::env::var("REDIS_REQUIRED").as_deref() == Ok("true");
-    if let Some(redis_client) = &DB_CONN.wait().redis_conn {
+    if let Some(redis_client) = &db.redis_conn {
         let key = format!("jwt:access:{}:{}", claims.sub, claims.jti);
         match redis_client.get_multiplexed_async_connection().await {
             Ok(mut redis_conn) => match redis_conn.get::<String>(key).await {
@@ -370,7 +383,7 @@ pub async fn oauth_parse_token(token: String) -> Result<(SysUserVO, Claims)> {
     let user = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::Id.eq(claims.sub))
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await
         .map_err(internal_error)?
         .ok_or_else(|| DomainError::Business("User not found for token".into()))?;
@@ -422,8 +435,12 @@ fn sweep_stale_login_failures(map: &mut std::collections::HashMap<String, (u32, 
 /// 窗口（并发首击不会重复建键），已有键则 INCR 累加且**不**续期（保持首次
 /// 失败锚定的固定窗口）；仅当 INCR 返回 1（键在 SET 与 INCR 之间恰好过期、
 /// 被 INCR 重建为无 TTL 的键）时补设一次过期，防止计数键永不过期。
-async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> {
-    let client = DB_CONN.wait().redis_conn.as_ref()?;
+async fn login_failure_count_redis(
+    db: &DatabaseConnectionMap,
+    ip: SocketAddr,
+    record: bool,
+) -> Option<u32> {
+    let client = db.redis_conn.as_ref()?;
     let mut conn = client.get_multiplexed_async_connection().await.ok()?;
     // 关键 key 只取 IP（不含端口）
     let key = format!("login_fail:{}", ip.ip());
@@ -472,8 +489,8 @@ async fn login_failure_count_redis(ip: SocketAddr, record: bool) -> Option<u32> 
 
 /// 限流检查主入口：Redis 可用时以 Redis 计数为准（跨实例一致），Redis 不可
 /// 用时降级到进程内 map（保留原单实例行为）。
-async fn check_login_rate_limit(ip: SocketAddr) -> Result<()> {
-    match login_failure_count_redis(ip, false).await {
+async fn check_login_rate_limit(db: &DatabaseConnectionMap, ip: SocketAddr) -> Result<()> {
+    match login_failure_count_redis(db, ip, false).await {
         Some(count) if count >= LOGIN_RATE_LIMIT_PER_MINUTE => Err(DomainError::Business(
             "Too many failed login attempts; try again in a minute".into(),
         )
@@ -503,8 +520,8 @@ fn check_login_rate_limit_local(ip: SocketAddr) -> Result<()> {
 }
 
 /// 失败计数入口：Redis 可用时写 Redis，不可用时降级到进程内 map。
-async fn record_login_failure(ip: SocketAddr) {
-    if login_failure_count_redis(ip, true).await.is_some() {
+async fn record_login_failure(db: &DatabaseConnectionMap, ip: SocketAddr) {
+    if login_failure_count_redis(db, ip, true).await.is_some() {
         return;
     }
     record_login_failure_local(ip);
@@ -527,6 +544,7 @@ fn record_login_failure_local(ip: SocketAddr) {
 /// QQ 未注册、密码错误）同样落库保证审计完整；user_id 未知时记 None。
 /// 审计写入失败不影响登录主流程（调用方按需忽略/透传）。
 async fn record_login_log(
+    db: &DatabaseConnectionMap,
     user_id: Option<i64>,
     ip: SocketAddr,
     user_agent: &str,
@@ -549,52 +567,53 @@ async fn record_login_log(
         is_error: Set(is_error),
         extra_data: Set(Some(Default::default())),
     }
-    .insert(&DB_CONN.wait().pg_conn)
+    .insert(&db.pg_conn)
     .await
     .map_err(internal_error)?;
     Ok(())
 }
 
 pub async fn oauth_password_login(
+    db: &DatabaseConnectionMap,
     username: String,
     password_raw: String,
     ip: SocketAddr,
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
     // 限流检查在用户名查询之前：避免攻击者用无效用户名做无代价探测。
-    if let Err(e) = check_login_rate_limit(ip).await {
+    if let Err(e) = check_login_rate_limit(db, ip).await {
         // 限流命中同样写失败审计日志（user_id 未知，记 None）
-        let _ = record_login_log(None, ip, &user_agent, true).await;
+        let _ = record_login_log(db, None, ip, &user_agent, true).await;
         return Err(e);
     }
 
     let item = models::system::sys_user::Entity::find()
         .filter(models::system::sys_user::Column::DelFlag.eq(false))
         .filter(models::system::sys_user::Column::Username.eq(username))
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await
         .map_err(internal_error)?;
     let Some(item) = item else {
         // 与“密码错误”返回同一文案并同样计入失败限流，
         // 避免用户名枚举与无代价探测。
-        record_login_failure(ip).await;
+        record_login_failure(db, ip).await;
         // 用户不存在同样写失败审计日志（user_id 未知，记 None）
-        let _ = record_login_log(None, ip, &user_agent, true).await;
+        let _ = record_login_log(db, None, ip, &user_agent, true).await;
         return Err(DomainError::Business("Invalid username or password".into()).into());
     };
     let user_id = item.id;
 
-    let ret = oauth_password_login_inner(item, password_raw, ip, &user_agent).await;
+    let ret = oauth_password_login_inner(db, item, password_raw, ip, &user_agent).await;
 
     if ret.is_err() {
-        record_login_failure(ip).await;
+        record_login_failure(db, ip).await;
     } else {
         // 登录成功：登记设备（幂等 upsert）
-        let _ = record_device(user_id, ip, &user_agent).await;
+        let _ = record_device(db, user_id, ip, &user_agent).await;
     }
 
     // 成功/失败（密码错误）统一写审计日志
-    record_login_log(Some(user_id), ip, &user_agent, ret.is_err()).await?;
+    record_login_log(db, Some(user_id), ip, &user_agent, ret.is_err()).await?;
 
     ret
 }
@@ -611,12 +630,13 @@ pub fn map_scope(scope: &str) -> Result<OauthScopeType> {
 }
 
 pub async fn oauth_client_credentials(
+    db: &DatabaseConnectionMap,
     ip: SocketAddr,
     scope: String,
 ) -> Result<OauthAnonymousResponse> {
     // 公开端点限流：每 IP 每分钟最多 60 次匿名发牌（签发含 JWT 生成，
     // 不限量时是公开的 CPU 消耗面）。
-    super::rate_limit::enforce_ip_rate_limit("oauth_cc", ip, 60, 60).await?;
+    super::rate_limit::enforce_ip_rate_limit(db, "oauth_cc", ip, 60, 60).await?;
     // 使用系统匿名用户 id = 0 表示客户端凭据/匿名访问
     let id: i64 = 0;
 
@@ -634,7 +654,7 @@ pub async fn oauth_client_credentials(
     // Redis 不可用时静默跳过（与 issue_token 一致）：降级模式下
     // `oauth_parse_token` 对 sub=0 特判构造匿名 VO，不发 Redis 键也能解析；
     // REDIS_REQUIRED=true 的 fail-closed 语义由解析侧（oauth_parse_token）保证。
-    if let Some(redis_client) = &DB_CONN.wait().redis_conn
+    if let Some(redis_client) = &db.redis_conn
         && let Ok(mut redis_conn) = redis_client.get_multiplexed_async_connection().await
     {
         // 对于匿名/客户端凭据，存储一个空的 payload 或简单标记
@@ -683,13 +703,14 @@ pub async fn do_jwks() -> Result<serde_json::Value> {
 }
 
 pub async fn oauth_refresh(
+    db: &DatabaseConnectionMap,
     refresh_token: String,
     ip: SocketAddr,
     user_agent: String,
 ) -> Result<OauthLoginResponse> {
     // 公开端点限流：每 IP 每分钟最多 60 次刷新尝试（refresh_token 是
     // 可猜测凭据，先于任何 JWT 验签/DB 工作拒绝滥用）。
-    super::rate_limit::enforce_ip_rate_limit("oauth_refresh", ip, 60, 60).await?;
+    super::rate_limit::enforce_ip_rate_limit(db, "oauth_refresh", ip, 60, 60).await?;
     // 验证传入的 refresh token 并获取 claims
     let claims = verify_token(&refresh_token).await?;
 
@@ -706,7 +727,7 @@ pub async fn oauth_refresh(
     }
 
     let user = models::system::sys_user::Entity::find_safety_by_id(claims.sub)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await
         .map_err(internal_error)?
         .ok_or_else(|| DomainError::Business("User not found".into()))?;
@@ -717,7 +738,7 @@ pub async fn oauth_refresh(
     // 只影响审计日志与提示信息，登录/刷新仍然成功（「警告放行」）。
     // 无策略用户（空 policy）天然放行；SKIP_ACCESS_POLICY=true 时跳过。
     let policy: Vec<_> = user.access_policy.clone().map(|a| a.0).unwrap_or_default();
-    if let Err(e) = check_access_policy(user.id, &policy, ip, &user_agent).await {
+    if let Err(e) = check_access_policy(db, user.id, &policy, ip, &user_agent).await {
         tracing::warn!(user_id = user.id, error = %e, "access policy violation (allowed through, Java-compatible)");
     }
 
@@ -729,7 +750,7 @@ pub async fn oauth_refresh(
     //   token_type + 用户存在」，**不轮换**（旧 refresh token 仍有效），
     //   直接签发新 token 对（issue_token 内部同样静默跳过 Redis 存储）。
     let redis_required = std::env::var("REDIS_REQUIRED").as_deref() == Ok("true");
-    let redis_conn = match &DB_CONN.wait().redis_conn {
+    let redis_conn = match &db.redis_conn {
         Some(client) => match client.get_multiplexed_async_connection().await {
             Ok(conn) => Some(conn),
             Err(_) if redis_required => {
@@ -743,7 +764,7 @@ pub async fn oauth_refresh(
         None => None,
     };
     let Some(mut redis_conn) = redis_conn else {
-        return issue_token(&user).await;
+        return issue_token(db, &user).await;
     };
 
     // 原子 claim 旧 refresh key（GETDEL）：返回 None 说明 key 已不存在

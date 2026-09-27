@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractPunctuate;
+use _database::DB_CONN;
 use _utils::models::marker::MarkerTweakRequest;
 
 /// 点位调整
@@ -23,7 +24,7 @@ pub async fn tweak(
     ExtractPunctuate(auth): ExtractPunctuate,
     Json(payload): Json<Vec<MarkerTweakRequest>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match crate::functions::api::marker::do_tweak(auth, payload).await {
+    match crate::functions::api::marker::do_tweak(DB_CONN.wait().as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

@@ -5,11 +5,11 @@
 
 pub mod models;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use log::{info, warn};
 use std::{sync::Arc, time::Duration};
 
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
 #[derive(Debug, Clone)]
 pub struct DatabaseConnectionMap {
@@ -23,7 +23,7 @@ use once_cell::sync::OnceCell;
 pub static DB_CONN: OnceCell<Arc<DatabaseConnectionMap>> = OnceCell::new();
 
 pub async fn init_db_conn() -> anyhow::Result<()> {
-    let conn_map = Arc::new(build_db_map().await?);
+    let conn_map = Arc::new(connect_db_map().await?);
     DB_CONN
         .set(conn_map)
         .map_err(|_| anyhow!("DB_CONN already initialized"))
@@ -77,7 +77,52 @@ pub fn encode_url_component(input: &str) -> String {
     out
 }
 
-async fn build_db_map() -> Result<DatabaseConnectionMap> {
+/// 面向 CLI 工具（init_db / _migration CLI）的单用途 Postgres 连接。
+///
+/// 与 [`connect_db_map`] 的差异：不做连接池调优、不碰 Redis/MinIO——初始化
+/// 与迁移工具只需要一条能执行 DDL 的连接。URL 组装（`DB_*` env、凭据
+/// percent-encode）与 `search_path` 绑定（schema 名经 [`default_schema`]
+/// 校验回退）和主服务/init_db 完全同源，此前 init_db 自建连接的那份逻辑
+/// 收拢到这里，不再两处抄写。连接成功后立即 `CREATE SCHEMA IF NOT
+/// EXISTS`——两个调用方都需要 schema 先于建表存在，全新实例可一次跑到
+/// 底。
+pub async fn connect_standalone_pg() -> Result<DatabaseConnection> {
+    let db_port = std::env::var("DB_PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(5432);
+    let url = format!(
+        "postgres://{}:{}@{}:{}/{}",
+        encode_url_component(&std::env::var("DB_USERNAME").unwrap_or("genshin_map".into())),
+        encode_url_component(&std::env::var("DB_PASSWORD").unwrap_or_default()),
+        std::env::var("DB_HOST").unwrap_or_else(|_| "localhost".into()),
+        db_port,
+        encode_url_component(
+            &std::env::var("DB_DATABASE").unwrap_or_else(|_| "genshin_map".into())
+        ),
+    );
+    // 实体不带 schema 限定；未限定的 DDL/查询经连接 `search_path` 落进
+    // 配置的 schema（与主服务一致）。
+    let mut opt = ConnectOptions::new(url.clone());
+    opt.set_schema_search_path(default_schema());
+    let db = Database::connect(opt)
+        .await
+        .with_context(|| format!("connect to {url}"))?;
+
+    let schema = default_schema();
+    db.execute_unprepared(&format!(r#"CREATE SCHEMA IF NOT EXISTS "{schema}""#))
+        .await
+        .context("create schema")?;
+    Ok(db)
+}
+
+/// 构建一份自持的连接映射（Postgres 必需，Redis / MinIO 可选降级）。
+///
+/// 纯构造器：只读环境变量并建立连接，**不写入全局 `DB_CONN`**——供测试与
+/// 工具自持实例（测试隔离 / 故障注入不依赖全局单例）。需要全局单例语义的
+/// 启动路径走 [`init_db_conn`]（连接 + 写入全局），二者共用本实现。
+/// 返回裸 [`DatabaseConnectionMap`]，是否包 `Arc` 由调用方决定。
+pub async fn connect_db_map() -> Result<DatabaseConnectionMap> {
     // ── Postgres (required — startup fails if unreachable) ─────────────────
     let pg_conn = {
         let db_port = match std::env::var("DB_PORT") {

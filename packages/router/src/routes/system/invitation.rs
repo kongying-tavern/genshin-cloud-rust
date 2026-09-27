@@ -8,6 +8,7 @@ use axum::{
 };
 
 use crate::middlewares::{ExtractAdmin, ExtractIP};
+use _database::DB_CONN;
 use _utils::{
     models::wrapper::Pagination,
     types::{AccessPolicyItemEnum, InvitationSort},
@@ -85,6 +86,7 @@ pub async fn list(
         .unwrap_or(1);
 
     match _functions::functions::system::invitation::do_list(
+        DB_CONN.wait().as_ref(),
         auth,
         payload.code,
         payload.username,
@@ -107,6 +109,7 @@ pub async fn update(
     Json(payload): Json<InvitationUpdateRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::system::invitation::do_update(
+        DB_CONN.wait().as_ref(),
         auth,
         payload.code,
         payload.username,
@@ -132,7 +135,13 @@ pub async fn info(
     // 代理头可信时优先用代理解析的客户端 IP，否则回退到连接对端地址
     //（与 oauth handler 一致；供公开端点限流使用）
     let ip = proxy_ip.unwrap_or(native_ip);
-    match _functions::functions::system::invitation::do_info_public(ip, payload.code).await {
+    match _functions::functions::system::invitation::do_info_public(
+        DB_CONN.wait().as_ref(),
+        ip,
+        payload.code,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -150,6 +159,7 @@ pub async fn consume(
     //（与 oauth handler 一致；供公开端点限流使用）
     let ip = proxy_ip.unwrap_or(native_ip);
     match _functions::functions::system::invitation::do_consume(
+        DB_CONN.wait().as_ref(),
         ip,
         payload.code,
         payload.username,
@@ -170,7 +180,13 @@ pub async fn delete(
     ExtractAdmin(auth): ExtractAdmin,
     Path(invitation_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::system::invitation::do_delete(auth, invitation_id).await {
+    match _functions::functions::system::invitation::do_delete(
+        DB_CONN.wait().as_ref(),
+        auth,
+        invitation_id,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

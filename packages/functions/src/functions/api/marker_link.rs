@@ -7,7 +7,7 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::marker::{marker as marker_model, marker_linkage as linkage_model},
 };
 use _utils::types::MarkerLinkageLinkAction;
@@ -249,11 +249,12 @@ struct PendingLink {
 ///   行被软删（缺席清理），再次提交的行复用/复活并划入新组；
 /// - 同一无序对天然去重（同对只保留一行）。
 pub async fn do_link(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: Vec<MarkerLinkage>,
 ) -> Result<CommonResponse<String>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     // 校验（Java checkLinkList 同文案）：非空、端点合法、禁止自关联。
     if payload.is_empty() {
@@ -289,7 +290,7 @@ pub async fn do_link(
                         .add(linkage_model::Column::FromId.is_in(chunk))
                         .add(linkage_model::Column::ToId.is_in(chunk)),
                 )
-                .all(db)
+                .all(pg)
                 .await?,
         );
     }
@@ -303,7 +304,7 @@ pub async fn do_link(
     // 写路径可见性对称（#134 同款）：提交端点与既有关联行并入的端点两层
     // 全部覆盖——related 行可能引用调用者不可见的 marker，对它建组/激活
     // 同样越权。此时 affected_markers 已定型，且尚未发生任何写库动作。
-    assert_markers_visible(db, &auth, &affected_markers).await?;
+    assert_markers_visible(pg, &auth, &affected_markers).await?;
 
     // Java getLinkSearchMap + patchLinkSearchMap：无序对 → 行；
     // 先全部标记删除，再激活提交的无序对（复用既有行或新建）。
@@ -366,7 +367,7 @@ pub async fn do_link(
                 am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                linkage_model::Entity::update_safety(am)?.exec(db).await?;
+                linkage_model::Entity::update_safety(am)?.exec(pg).await?;
             }
             continue;
         }
@@ -382,7 +383,7 @@ pub async fn do_link(
             am.link_reverse = Set(pl.link_reverse);
             am.path = Set(pl.path);
             am.del_flag = Set(false);
-            linkage_model::Entity::update_safety(am)?.exec(db).await?;
+            linkage_model::Entity::update_safety(am)?.exec(pg).await?;
         } else {
             let now = chrono::Utc::now().naive_utc();
             let active = linkage_model::ActiveModel {
@@ -403,7 +404,7 @@ pub async fn do_link(
                 // 业务默认值：extra = {}
                 extra: Set(Some(serde_json::json!({}))),
             };
-            active.insert(db).await?;
+            active.insert(pg).await?;
         }
     }
 
@@ -412,7 +413,7 @@ pub async fn do_link(
     }
     let mut markers: Vec<i64> = affected_markers.into_iter().collect();
     markers.sort_unstable();
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast(
         "MarkerLinked",
         serde_json::json!({
@@ -434,10 +435,11 @@ pub async fn do_link(
 }
 
 pub async fn do_get_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: MarkerLinkListRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     // 与 Java 实现一致：isTraverse 全量优先，否则按组，皆未指定时返回空 map
     let Some(vos) = load_vos(
         db,
@@ -760,10 +762,11 @@ fn patch_edge_coords(edge: &mut serde_json::Value, coords: &HashMap<i64, (f64, f
 }
 
 pub async fn do_get_graph(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: MarkerLinkGraphRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     // 与 Java 实现一致：isTraverse 全量优先，否则按组，皆未指定时返回空 map
     let Some(vos) = load_vos(
         db,
@@ -792,11 +795,12 @@ pub async fn do_get_graph(
 }
 
 pub async fn do_delete(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: MarkerLinkDeleteRequest,
 ) -> Result<CommonResponse<serde_json::Value>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     // 收集被删除关联涉及的组 ID 与点位 ID，返回给前端刷新本地数据
     let mut groups: Vec<String> = Vec::new();
     let mut markers: Vec<i64> = Vec::new();
@@ -816,7 +820,7 @@ pub async fn do_delete(
     let mut rows: Vec<linkage_model::Model> = Vec::new();
     if let Some(ids) = payload.ids {
         for id in ids {
-            if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(db).await? {
+            if let Some(item) = linkage_model::Entity::find_safety_by_id(id).one(pg).await? {
                 collect_affected(&item);
                 rows.push(item);
             }
@@ -827,7 +831,7 @@ pub async fn do_delete(
         for gid in group_ids {
             let items = linkage_model::Entity::find_safety()
                 .filter(linkage_model::Column::GroupId.eq(gid))
-                .all(db)
+                .all(pg)
                 .await?;
             for it in items {
                 collect_affected(&it);
@@ -840,16 +844,16 @@ pub async fn do_delete(
     // 删除动作开始前统一校验——不可见点位的关联对调用者如同不存在，删除
     // 同样越权，任何一个不可见即拒绝整个操作
     let affected: HashSet<i64> = markers.iter().copied().collect();
-    assert_markers_visible(db, &auth, &affected).await?;
+    assert_markers_visible(pg, &auth, &affected).await?;
 
     for item in rows {
         let mut am: linkage_model::ActiveModel = item.into();
         am.del_flag = Set(true);
         // 审计字段：软删也是修改，设置 update 组
         am.updater_id = Set(Some(auth.info.id));
-        linkage_model::Entity::delete_safety(am)?.exec(db).await?;
+        linkage_model::Entity::delete_safety(am)?.exec(pg).await?;
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast(
         "MarkerLinkageDeleted",
         serde_json::json!({

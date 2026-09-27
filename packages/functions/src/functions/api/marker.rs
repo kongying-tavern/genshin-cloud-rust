@@ -10,9 +10,9 @@ use sea_orm::{
 use std::collections::HashSet;
 
 use _database::{
-    DB_CONN, models::item::item as item_model, models::item::item_type_link as itl_model,
-    models::marker::marker as marker_model, models::marker::marker_item_link as mil_model,
-    models::marker::marker_linkage as linkage_model,
+    DatabaseConnectionMap, models::item::item as item_model,
+    models::item::item_type_link as itl_model, models::marker::marker as marker_model,
+    models::marker::marker_item_link as mil_model, models::marker::marker_linkage as linkage_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -282,6 +282,7 @@ fn apply_text_tweak(
 }
 
 pub async fn do_tweak(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payloads: Vec<MarkerTweakRequest>,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
@@ -289,13 +290,13 @@ pub async fn do_tweak(
     // 写路径与读路径的 hidden_flag 可见性对称：可见集合之外的点位不可
     // 改写/删除/创建（如 MapPunctate 可见 0/1/3，不得改写 flag=2 的 Beta 点位）
     let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let mut touched_ids: Vec<i64> = Vec::new();
     for payload in payloads {
         for marker_id in payload.marker_ids.iter() {
             let m = marker_model::Entity::find_safety_by_id(*marker_id)
-                .one(db)
+                .one(pg)
                 .await?;
             if m.is_none() {
                 // 跳过缺失的标记
@@ -412,7 +413,7 @@ pub async fn do_tweak(
                     },
                     MarkerTweakConfigPropEnum::ItemList => {
                         for tweak in tweaks {
-                            tweak_item_list(db, auth.info.id, *marker_id, tweak).await?;
+                            tweak_item_list(pg, auth.info.id, *marker_id, tweak).await?;
                         }
                     },
                 }
@@ -420,7 +421,7 @@ pub async fn do_tweak(
 
             // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
             am.updater_id = Set(Some(auth.info.id));
-            marker_model::Entity::update_safety(am)?.exec(db).await?;
+            marker_model::Entity::update_safety(am)?.exec(pg).await?;
             touched_ids.push(*marker_id);
         }
     }
@@ -428,7 +429,7 @@ pub async fn do_tweak(
     if touched_ids.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast("MarkerTweaked", serde_json::json!(touched_ids));
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
@@ -445,12 +446,12 @@ pub async fn do_tweak(
         serde_json::Value::Null,
         super::super::ws::PURGE_DEBOUNCE_WINDOW,
     );
-    let item_map = marker_item_map(db, &touched_ids).await?;
+    let item_map = marker_item_map(pg, &touched_ids).await?;
     let mut arr = Vec::new();
     for chunk in touched_ids.chunks(1000) {
         let items = marker_model::Entity::find_safety()
             .filter(marker_model::Column::Id.is_in(chunk))
-            .all(db)
+            .all(pg)
             .await?;
         for it in items {
             arr.push(model_to_vo(it, &item_map, None));
@@ -661,6 +662,7 @@ fn merge_extra(
 }
 
 pub async fn do_add_single(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: MarkerAddRequest,
 ) -> Result<CommonResponse<i64>> {
@@ -672,7 +674,7 @@ pub async fn do_add_single(
         return Err(DomainError::Business("无权创建该内容等级的点位".into()).into());
     }
     let now = Utc::now().naive_utc();
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let active = marker_model::ActiveModel {
         version: Set(1),
@@ -701,13 +703,13 @@ pub async fn do_add_single(
             .map(|m| serde_json::to_value(m).unwrap_or(serde_json::json!({})))),
     };
 
-    let res = active.insert(db).await?;
+    let res = active.insert(pg).await?;
     // item_list 落库（parse_item_entries 支持裸数字 / {id|itemId, count}）；
     // Java createMarker 按 itemId 去重（重复提交取最后一次）
     for (item_id, count) in dedup_item_entries(parse_item_entries(&payload.item_list)) {
-        insert_item_link(db, auth.info.id, res.id, item_id, count).await?;
+        insert_item_link(pg, auth.info.id, res.id, item_id, count).await?;
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     // 直接返回裸 id，前端期望 data 为 number
     super::super::ws::ws_broadcast("MarkerAdded", serde_json::json!(res.id));
     super::super::ws::ws_broadcast_debounced(
@@ -729,14 +731,15 @@ pub async fn do_add_single(
 }
 
 pub async fn do_update_single(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: MarkerUpdateData,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     let m = marker_model::Entity::find_safety_by_id(payload.id)
-        .one(db)
+        .one(pg)
         .await?;
     let Some(m) = m else {
         // Java：实体不存在时 updateById 影响行数为 0，经乐观锁分支同文案报错
@@ -781,12 +784,12 @@ pub async fn do_update_single(
 
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
-    marker_model::Entity::update_safety(am)?.exec(db).await?;
+    marker_model::Entity::update_safety(am)?.exec(pg).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
     // 空列表视为清空全部关联。删除+插入包事务，失败整体回滚，
     // 避免留下半更新状态（点位已改、关联已丢）。
-    let txn = db.begin().await?;
+    let txn = pg.begin().await?;
     let existing = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(payload.id))
         .all(&txn)
@@ -803,7 +806,7 @@ pub async fn do_update_single(
     }
     txn.commit().await?;
 
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast("MarkerUpdated", serde_json::json!(payload.id));
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
@@ -929,10 +932,11 @@ async fn search_marker_ids(
 }
 
 pub async fn do_get_id(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<i64>>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     // Java searchMarkerId：条件互斥 + 物品侧可见性过滤 + 空条件返回空列表。
     // 此处不过滤点位可见性（与 Java 一致）；list_byinfo 载入阶段会再过滤。
     let ids = search_marker_ids(db, &auth, &payload).await?;
@@ -940,10 +944,11 @@ pub async fn do_get_id(
 }
 
 pub async fn do_get_list_by_info(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: MarkerFilterRequest,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
     // Java searchMarker = searchMarkerId + listMarkerById：
@@ -976,6 +981,7 @@ pub async fn do_get_list_by_info(
 }
 
 pub async fn do_get_list_by_id(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: Vec<i64>,
 ) -> Result<CommonResponse<Vec<MarkerVO>>> {
@@ -991,7 +997,7 @@ pub async fn do_get_list_by_id(
         }
     }
 
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     if payload.is_empty() {
         return Ok(CommonResponse::new(Ok(vec![])));
     }
@@ -1017,10 +1023,11 @@ pub async fn do_get_list_by_id(
 }
 
 pub async fn do_get_page(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: Pagination,
 ) -> Result<CommonResponse<MarkerListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
 
     let size = payload.size.unwrap_or(10).min(200) as u64;
@@ -1051,13 +1058,17 @@ pub async fn do_get_page(
     .with_users(users))
 }
 
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     // 写路径可见性对称：可见集合之外的点位不可删除（整个操作失败，不静默跳过）
     let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
     // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）
-    if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(db).await? {
+    if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(pg).await? {
         if !allowed_flags.contains(&(m.hidden_flag as i32)) {
             return Err(DomainError::Business("无权操作该点位".into()).into());
         }
@@ -1065,18 +1076,18 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
         am.del_flag = Set(true);
         // 审计字段：软删也是修改，设置 update 组
         am.updater_id = Set(Some(auth.info.id));
-        marker_model::Entity::delete_safety(am)?.exec(db).await?;
+        marker_model::Entity::delete_safety(am)?.exec(pg).await?;
     }
     // 级联软删该 marker 的 item 关联
     let item_links = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(id))
-        .all(db)
+        .all(pg)
         .await?;
     for mut link in item_links {
         // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
         link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
-            .exec(db)
+            .exec(pg)
             .await?;
     }
 
@@ -1087,17 +1098,17 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
                 .add(linkage_model::Column::FromId.eq(id))
                 .add(linkage_model::Column::ToId.eq(id)),
         )
-        .all(db)
+        .all(pg)
         .await?;
     for mut linkage in linkages {
         // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
         linkage.updater_id = Some(auth.info.id);
         linkage_model::Entity::delete_safety(linkage.into())?
-            .exec(db)
+            .exec(pg)
             .await?;
     }
 
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast("MarkerDeleted", serde_json::json!(id));
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",

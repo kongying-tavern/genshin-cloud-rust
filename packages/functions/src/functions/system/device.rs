@@ -3,7 +3,7 @@
 use anyhow::Result;
 use sea_orm::{ActiveValue::Set, QueryFilter, QuerySelect, prelude::*};
 
-use _database::{DB_CONN, models::system::sys_user_device as device_model};
+use _database::{DatabaseConnectionMap, models::system::sys_user_device as device_model};
 use _utils::{
     db_operations::SafeEntityTrait,
     errors::DomainError,
@@ -13,7 +13,9 @@ use _utils::{
 };
 
 /// List user devices with optional filtering.
+#[allow(clippy::too_many_arguments)]
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     user_id: Option<i64>,
     device_id: Option<String>,
@@ -22,7 +24,7 @@ pub async fn do_list(
     size: u64,
     current: u64,
 ) -> Result<CommonResponse<serde_json::Value>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let mut query = device_model::Entity::find_safety();
 
     if let Some(uid) = user_id {
@@ -87,11 +89,14 @@ pub async fn do_list(
 }
 
 /// Update device status (e.g. block/unblock a device).
-pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonResponse<bool>> {
-    let db = &DB_CONN.wait().pg_conn;
-
+pub async fn do_update(
+    db: &DatabaseConnectionMap,
+    _auth: AuthInfo,
+    id: i64,
+    status: i32,
+) -> Result<CommonResponse<bool>> {
     let d = device_model::Entity::find_safety_by_id(id)
-        .one(db)
+        .one(&db.pg_conn)
         .await?
         .ok_or_else(|| DomainError::Business("Device not found".into()))?;
     let user_id = d.user_id;
@@ -100,7 +105,9 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
     am.status = Set(status);
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(_auth.info.id));
-    device_model::Entity::update_safety(am)?.exec(db).await?;
+    device_model::Entity::update_safety(am)?
+        .exec(&db.pg_conn)
+        .await?;
 
     // 封禁/解封状态变化后吊销该用户**全部** Redis 会话（粗粒度：踢全端，不
     // 区分设备——会话 key 是 `jwt:access/refresh:{uid}:{jti}`，没有设备→jti
@@ -112,7 +119,7 @@ pub async fn do_update(_auth: AuthInfo, id: i64, status: i32) -> Result<CommonRe
     if old_status != status
         && let Some(uid) = user_id
     {
-        let _ = crate::functions::system::user::revoke_user_sessions(uid).await;
+        let _ = crate::functions::system::user::revoke_user_sessions(db, uid).await;
     }
 
     Ok(CommonResponse::new(Ok(true)))

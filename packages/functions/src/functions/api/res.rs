@@ -13,7 +13,7 @@
 
 use anyhow::{Context, Result, anyhow};
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _utils::{errors::DomainError, jwt::AuthInfo, models::wrapper::CommonResponse};
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +81,7 @@ fn magic_matches_content_type(content_type: &str, bytes: &[u8]) -> bool {
 /// Fails explicitly when MinIO is not configured — a silent success would
 /// drop the upload on the floor and return a URL that doesn't exist.
 pub async fn do_upload_image(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: Vec<UploadedFile>,
     file_path: Option<String>,
@@ -90,7 +91,7 @@ pub async fn do_upload_image(
     // 配置缺失属内部故障而非业务文案，保持 anyhow（router 层兜底原文返回）。
     // 注：旧关键字方案会把本文案（含 "minio"）收敛为「请求失败」；现仅含
     // 环境变量名、无密钥值，原文返回可接受且更利于运维定位。
-    let client = DB_CONN.wait().minio_conn.clone().ok_or_else(|| {
+    let client = db.minio_conn.clone().ok_or_else(|| {
         anyhow!("MinIO is not configured (set MINIO_BASE_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)")
     })?;
     // Public base for the URLs returned to clients. Distinct from the

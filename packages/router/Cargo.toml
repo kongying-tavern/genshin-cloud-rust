@@ -26,6 +26,7 @@ bench = false
 [dependencies]
 _database = { path = "../database", version = "*" }
 _functions = { path = "../functions", version = "*" }
+_migration = { path = "../migration", version = "*" }
 _utils = { path = "../utils", version = "*" }
 
 anyhow = { workspace = true }

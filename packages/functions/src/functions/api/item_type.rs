@@ -7,7 +7,8 @@ use sea_orm::{
 };
 
 use _database::{
-    DB_CONN, models::item::item_type as item_type_model, models::item::item_type_link as link_model,
+    DatabaseConnectionMap, models::item::item_type as item_type_model,
+    models::item::item_type_link as link_model,
 };
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -50,6 +51,7 @@ async fn refresh_is_final(db: &sea_orm::DatabaseConnection, type_id: i64) -> Res
 
 // 更新类型
 pub async fn do_update(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: ItemTypeUpdateData,
 ) -> Result<CommonResponse<bool>> {
@@ -61,7 +63,7 @@ pub async fn do_update(
         );
     }
     let item = item_type_model::Entity::find_safety_by_id(payload.id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await?;
     let Some(item) = item else {
         return Ok(CommonResponse::new(Ok(false)));
@@ -69,8 +71,8 @@ pub async fn do_update(
 
     // 父级变化时联动新旧父级的末端标志（Java updateItemTypeIsFinal 语义）
     if item.parent_id != payload.parent_id {
-        set_parent_is_final(&DB_CONN.wait().pg_conn, payload.parent_id, false).await;
-        recalc_parent_is_final(&DB_CONN.wait().pg_conn, item.parent_id, true).await;
+        set_parent_is_final(&db.pg_conn, payload.parent_id, false).await;
+        recalc_parent_is_final(&db.pg_conn, item.parent_id, true).await;
     }
 
     let mut am: item_type_model::ActiveModel = item.into();
@@ -78,7 +80,8 @@ pub async fn do_update(
     am.updater_id = Set(Some(auth.info.id));
 
     // icon_tag -> icon_id
-    am.icon_id = Set(resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?);
+    am.icon_id =
+        Set(resolve_icon_id(&db.pg_conn, payload.icon_id, payload.icon_tag.as_deref()).await?);
 
     if let Some(name) = payload.name {
         am.name = Set(name);
@@ -88,7 +91,7 @@ pub async fn do_update(
     // Java updateItemTypeIsFinal(entity)：无子级才是末端（请求值被重算覆盖）
     let children = item_type_model::Entity::find_safety()
         .filter(item_type_model::Column::ParentId.eq(payload.id))
-        .count(&DB_CONN.wait().pg_conn)
+        .count(&db.pg_conn)
         .await?;
     am.is_final = Set(children == 0);
     am.hidden_flag = Set(payload.hidden_flag);
@@ -97,9 +100,9 @@ pub async fn do_update(
     }
 
     item_type_model::Entity::update_safety(am)?
-        .exec(&DB_CONN.wait().pg_conn)
+        .exec(&db.pg_conn)
         .await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -110,6 +113,7 @@ pub async fn do_update(
 
 // 将一组类型（typeId 列表）移动到目标类型下（更新 item_type.parent_id）
 pub async fn do_move_to_target(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     target_type_id: i64,
     payload: Vec<i64>,
@@ -124,7 +128,7 @@ pub async fn do_move_to_target(
         ))
         .into());
     }
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     // Java moveItemType：目标类型不得在移动集合内（防自身父子，同文案）
     if payload.contains(&target_type_id) {
         return Err(
@@ -133,7 +137,7 @@ pub async fn do_move_to_target(
     }
     // 校验目标类型存在
     if item_type_model::Entity::find_safety_by_id(target_type_id)
-        .one(db)
+        .one(pg)
         .await?
         .is_none()
     {
@@ -144,7 +148,7 @@ pub async fn do_move_to_target(
     let mut old_parents: Vec<i64> = Vec::new();
     for type_id in payload {
         let Some(item) = item_type_model::Entity::find_safety_by_id(type_id)
-            .one(db)
+            .one(pg)
             .await?
         else {
             continue;
@@ -155,14 +159,14 @@ pub async fn do_move_to_target(
             am.parent_id = Set(target_type_id);
             // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
             am.updater_id = Set(Some(auth.info.id));
-            item_type_model::Entity::update_safety(am)?.exec(db).await?;
+            item_type_model::Entity::update_safety(am)?.exec(pg).await?;
         }
     }
-    refresh_is_final(db, target_type_id).await?;
+    refresh_is_final(pg, target_type_id).await?;
     for p in old_parents {
-        refresh_is_final(db, p).await?;
+        refresh_is_final(pg, p).await?;
     }
-    super::binary_doc::invalidate_item_doc_cache().await;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -211,11 +215,12 @@ async fn recalc_parent_is_final(
 }
 
 pub async fn do_get_list(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     self_flag: bool,
     payload: ItemTypeListRequest,
 ) -> Result<CommonResponse<ItemTypeListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     // 可见性（Java listItemType 的 hiddenFlagList）：按调用者角色过滤。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let mut query = item_type_model::Entity::find_safety()
@@ -298,13 +303,16 @@ pub async fn do_get_list(
     Ok(CommonResponse::new(Ok(body)))
 }
 
-pub async fn do_get_list_all(auth: AuthInfo) -> Result<CommonResponse<ItemTypeAllResponse>> {
-    let icon_tag_map = super::icon::icon_tag_map(&DB_CONN.wait().pg_conn).await?;
+pub async fn do_get_list_all(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+) -> Result<CommonResponse<ItemTypeAllResponse>> {
+    let icon_tag_map = super::icon::icon_tag_map(&db.pg_conn).await?;
     // 可见性：list_all 与 list 同口径过滤。
     let allowed = _utils::types::allowed_hidden_flags(auth.info.role_id);
     let items = item_type_model::Entity::find_safety()
         .filter(item_type_model::Column::HiddenFlag.is_in(allowed))
-        .all(&DB_CONN.wait().pg_conn)
+        .all(&db.pg_conn)
         .await?;
     let vec = items
         .into_iter()
@@ -331,12 +339,16 @@ pub async fn do_get_list_all(auth: AuthInfo) -> Result<CommonResponse<ItemTypeAl
 }
 
 // 逻辑删除类型
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
 
     // 一次性加载全部未删除类型，BFS 收集自身及全部后代
-    let all = item_type_model::Entity::find_safety().all(db).await?;
+    let all = item_type_model::Entity::find_safety().all(pg).await?;
     let root = all
         .iter()
         .find(|t| t.id == id)
@@ -370,7 +382,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             am.del_flag = Set(true);
             // 审计字段：软删也是修改，设置 update 组
             am.updater_id = Set(Some(auth.info.id));
-            item_type_model::Entity::delete_safety(am)?.exec(db).await?;
+            item_type_model::Entity::delete_safety(am)?.exec(pg).await?;
         }
     }
 
@@ -381,12 +393,12 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(link_model::Column::TypeId.is_in(to_delete.iter().copied()))
-        .exec(db)
+        .exec(pg)
         .await?;
 
     // is_final 重算：被删类型的父级若再无子级，恢复为末端类型
-    refresh_is_final(db, root_parent_id).await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+    refresh_is_final(pg, root_parent_id).await?;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -396,7 +408,11 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
 }
 
 // 新增类型
-pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<CommonResponse<i64>> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: ItemTypeAddRequest,
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = chrono::Utc::now().naive_utc();
     // name 在逻辑上为必填
@@ -409,7 +425,8 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
         .unwrap_or(0)
         .clamp(i32::MIN as i64, i32::MAX as i64) as i32;
 
-    let icon_id = resolve_icon_id(payload.icon_id, payload.icon_tag.as_deref()).await?;
+    let icon_id =
+        resolve_icon_id(&db.pg_conn, payload.icon_id, payload.icon_tag.as_deref()).await?;
 
     // 前端不传 isFinal（serde(default) 为 false）时：
     // 有父级（parent_id > 0）→ 叶子类型 is_final=true；无父级 → false
@@ -434,10 +451,10 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
         sort_index: Set(sort_index),
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(&db.pg_conn).await?;
     // 父级新增子级后不再是末端类型
-    refresh_is_final(&DB_CONN.wait().pg_conn, payload.parent_id).await?;
-    super::binary_doc::invalidate_item_doc_cache().await;
+    refresh_is_final(&db.pg_conn, payload.parent_id).await?;
+    super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
         serde_json::Value::Null,
@@ -449,14 +466,16 @@ pub async fn do_add(auth: AuthInfo, payload: ItemTypeAddRequest) -> Result<Commo
 /// 前端以 `iconTag`（tag 表标签名）而非 `iconId` 提交图标：
 /// iconId 为 0 且提供了 iconTag 时，按 tag 名查 tag 表得到 icon_id；
 /// 查不到则回退 0（不强制失败，保持与旧行为一致）。
-async fn resolve_icon_id(icon_id: i64, icon_tag: Option<&str>) -> Result<i64> {
+async fn resolve_icon_id(
+    db: &sea_orm::DatabaseConnection,
+    icon_id: i64,
+    icon_tag: Option<&str>,
+) -> Result<i64> {
     if icon_id != 0 {
         return Ok(icon_id);
     }
     let Some(tag) = icon_tag.filter(|t| !t.is_empty()) else {
         return Ok(0);
     };
-    Ok(super::icon::icon_id_by_tag(&DB_CONN.wait().pg_conn, tag)
-        .await?
-        .unwrap_or(0))
+    Ok(super::icon::icon_id_by_tag(db, tag).await?.unwrap_or(0))
 }

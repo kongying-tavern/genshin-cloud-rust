@@ -10,7 +10,7 @@ use sea_orm::{
 use std::collections::HashSet;
 
 use _database::{
-    DB_CONN,
+    DatabaseConnectionMap,
     models::common::notice::{self as notice_model, ChannelWrapper},
 };
 use _utils::{
@@ -52,11 +52,12 @@ fn parse_valid_time(
 }
 
 pub async fn do_update_notice(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: NoticeUpdateRequest,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let n = notice_model::Entity::find_safety_by_id(payload.id)
         .one(db)
@@ -90,10 +91,11 @@ pub async fn do_update_notice(
 }
 
 pub async fn do_get_notice_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: NoticeListRequest,
 ) -> Result<CommonResponse<NoticeListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
 
     let mut query = notice_model::Entity::find_safety();
     if let Some(title) = payload.title {
@@ -190,9 +192,13 @@ pub async fn do_get_notice_list(
     Ok(CommonResponse::new(Ok(payload)).with_users(users))
 }
 
-pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete_notice(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let n = notice_model::Entity::find_safety_by_id(id).one(db).await?;
     let n = n.ok_or_else(|| DomainError::Business("Notice not found".into()))?;
     let mut am: notice_model::ActiveModel = n.into();
@@ -203,6 +209,7 @@ pub async fn do_delete_notice(auth: AuthInfo, id: i64) -> Result<CommonResponse<
 }
 
 pub async fn do_add_notice(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: NoticeAddRequest,
 ) -> Result<CommonResponse<i64>> {
@@ -237,7 +244,7 @@ pub async fn do_add_notice(
         valid_time_end: Set(parse_valid_time(payload.valid_time_end.as_ref(), now)),
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(&db.pg_conn).await?;
     super::super::ws::ws_broadcast("NoticeAdded", serde_json::json!(res.id));
     Ok(CommonResponse::new(Ok(res.id)))
 }

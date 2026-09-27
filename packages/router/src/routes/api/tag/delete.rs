@@ -7,6 +7,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractManager;
+use _database::DB_CONN;
 
 /// 软删除标签
 /// DELETE /tag/delete/{tagId}
@@ -15,7 +16,7 @@ pub async fn delete(
     ExtractManager(auth): ExtractManager,
     Path(tag_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::tag::do_delete(auth, tag_id).await {
+    match _functions::functions::api::tag::do_delete(DB_CONN.wait().as_ref(), auth, tag_id).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractManager;
+use _database::DB_CONN;
 use _utils::models::item_type::ItemTypeAddRequest;
 
 /// 添加物品类型
@@ -13,7 +14,9 @@ pub async fn add(
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<ItemTypeAddRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::item_type::do_add(auth, payload).await {
+    match _functions::functions::api::item_type::do_add(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

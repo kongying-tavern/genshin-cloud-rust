@@ -6,6 +6,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 
 /// 槽位范围校验（route 层收口）：前端契约固定 5 个存档槽位（0..=4），
 /// 超限直接返回 400。校验通过后 i64 原值透传 do_*，不做 `as i32` 截断。
@@ -27,7 +28,14 @@ pub async fn get_last(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_last(auth, user_id, slot_index).await {
+    match _functions::functions::system::archive::do_get_last(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -42,7 +50,14 @@ pub async fn get_history(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_history(auth, user_id, slot_index).await {
+    match _functions::functions::system::archive::do_get_history(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -55,7 +70,13 @@ pub async fn get_all_history(
     ExtractAuthInfo(auth): ExtractAuthInfo,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_get_all_history(auth, user_id).await {
+    match _functions::functions::system::archive::do_get_all_history(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -73,6 +94,7 @@ pub async fn put(
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_save(
+        DB_CONN.wait().as_ref(),
         auth,
         user_id,
         slot_index,
@@ -96,8 +118,15 @@ pub async fn save(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_save(auth, user_id, slot_index, None, payload)
-        .await
+    match _functions::functions::system::archive::do_save(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+        None,
+        payload,
+    )
+    .await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -114,7 +143,11 @@ pub async fn rename(
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
     match _functions::functions::system::archive::do_rename_by_slot(
-        auth, user_id, slot_index, new_name,
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+        new_name,
     )
     .await
     {
@@ -132,7 +165,14 @@ pub async fn restore(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_restore_slot(auth, user_id, slot_index).await {
+    match _functions::functions::system::archive::do_restore_slot(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -147,7 +187,14 @@ pub async fn delete_slot(
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     check_slot_index(slot_index)?;
     let user_id = auth.info.id;
-    match _functions::functions::system::archive::do_delete_slot(auth, user_id, slot_index).await {
+    match _functions::functions::system::archive::do_delete_slot(
+        DB_CONN.wait().as_ref(),
+        auth,
+        user_id,
+        slot_index,
+    )
+    .await
+    {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

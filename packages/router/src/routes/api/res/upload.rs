@@ -4,6 +4,7 @@ use axum::extract::Json;
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractPunctuate;
+use _database::DB_CONN;
 use _functions::functions::api::res::UploadedFile;
 
 /// 允许上传的内容类型白名单。
@@ -79,7 +80,14 @@ pub async fn upload_image(
     }
 
     // 交给 functions 层（MinIO 未配置时明确报错，而非静默丢弃）。
-    match _functions::functions::api::res::do_upload_image(auth, files, file_path).await {
+    match _functions::functions::api::res::do_upload_image(
+        DB_CONN.wait().as_ref(),
+        auth,
+        files,
+        file_path,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

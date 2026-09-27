@@ -10,7 +10,11 @@
 //! returns a public URL, then round-trips the object back out of MinIO and
 //! cleans up after itself.
 
-use _database::DB_CONN;
+use std::sync::Arc;
+
+use tokio::sync::OnceCell;
+
+use _database::DatabaseConnectionMap;
 use _functions::functions::api::res::{UploadedFile, do_upload_image};
 use _utils::{
     jwt::AuthInfo,
@@ -20,7 +24,10 @@ use _utils::{
 use minio::s3::types::S3Api;
 
 /// Skip when Postgres+MinIO are not configured (mirrors `api_db_test::db`).
-async fn minio() -> Option<&'static minio::s3::MinioClient> {
+/// 自持连接映射：不写 `DB_CONN` 全局（连接注入重构的可测性验收点）。
+static MAP: OnceCell<Option<Arc<DatabaseConnectionMap>>> = OnceCell::const_new();
+
+async fn map() -> Option<&'static DatabaseConnectionMap> {
     if std::env::var("GCS_TEST_DB").is_err() {
         eprintln!(
             "skipped: set GCS_TEST_DB=1 with Postgres+MinIO running \
@@ -28,18 +35,36 @@ async fn minio() -> Option<&'static minio::s3::MinioClient> {
         );
         return None;
     }
-    if DB_CONN.get().is_none() {
-        let _ = _database::init_db_conn().await;
-    }
-    let conn = DB_CONN.get()?;
-    if conn.minio_conn.is_none() {
+    let arc = MAP
+        .get_or_init(|| async {
+            match _database::connect_db_map().await {
+                Ok(m) => Some(Arc::new(m)),
+                Err(e) => {
+                    eprintln!("skipped: connect_db_map failed: {e}");
+                    None
+                },
+            }
+        })
+        .await
+        .as_ref()?;
+    Some(arc)
+}
+
+/// Skip when Postgres+MinIO are not configured (mirrors `api_db_test::map`).
+/// 返回自持映射与其中的 MinIO 客户端（配置缺失时打印跳过说明）。
+async fn minio() -> Option<(
+    &'static DatabaseConnectionMap,
+    &'static minio::s3::MinioClient,
+)> {
+    let map = map().await?;
+    let Some(client) = map.minio_conn.as_ref() else {
         eprintln!(
             "skipped: MinIO is not configured (set MINIO_ACCESS_KEY / MINIO_SECRET_KEY / \
              MINIO_BASE_URL and start the service)"
         );
         return None;
-    }
-    conn.minio_conn.as_ref()
+    };
+    Some((map, client))
 }
 
 fn stub_auth() -> AuthInfo {
@@ -63,7 +88,9 @@ fn stub_auth() -> AuthInfo {
 
 #[tokio::test]
 async fn res_upload_stores_image_in_minio() {
-    let Some(client) = minio().await else { return };
+    let Some((map, client)) = minio().await else {
+        return;
+    };
 
     let bytes = b"\x89PNG\r\n\x1a\n fake png body".to_vec();
     let md5_hex = format!("{:x}", md5::compute(&bytes));
@@ -76,7 +103,7 @@ async fn res_upload_stores_image_in_minio() {
         bytes: bytes.clone(),
     }];
 
-    let resp = do_upload_image(stub_auth(), payload, None)
+    let resp = do_upload_image(map, stub_auth(), payload, None)
         .await
         .expect("upload should succeed");
     assert!(!resp.error, "response flagged an error: {}", resp.message);

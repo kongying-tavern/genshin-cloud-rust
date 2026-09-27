@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAuthInfo;
+use _database::DB_CONN;
 use _utils::models::item::ItemFilterRequest;
 
 /// 根据筛选条件列出物品信息
@@ -13,7 +14,9 @@ pub async fn get_list(
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<ItemFilterRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::item::do_get_list(auth, payload).await {
+    match _functions::functions::api::item::do_get_list(DB_CONN.wait().as_ref(), auth, payload)
+        .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

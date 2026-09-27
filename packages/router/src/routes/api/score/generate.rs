@@ -3,6 +3,7 @@ use anyhow::Result;
 use axum::{extract::Json, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractAdmin;
+use _database::DB_CONN;
 use _utils::models::score::ScoreGenerateRequest;
 
 /// 生成评分数据（管理员专用：全表扫描 + 写 score_stat，任意登录用户可触发
@@ -12,7 +13,13 @@ pub async fn generate_score(
     ExtractAdmin(auth): ExtractAdmin,
     Json(request): Json<ScoreGenerateRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::score::do_generate_score(auth, request).await {
+    match _functions::functions::api::score::do_generate_score(
+        DB_CONN.wait().as_ref(),
+        auth,
+        request,
+    )
+    .await
+    {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

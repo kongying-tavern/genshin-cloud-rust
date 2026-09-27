@@ -8,7 +8,7 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _database::models::icon::icon as icon_model;
 use _database::models::icon::icon_type_link as icon_type_link_model;
 use _utils::{
@@ -24,7 +24,11 @@ use _utils::{
 };
 
 // 新增图标
-pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonResponse<i64>> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: IconAddRequest,
+) -> Result<CommonResponse<i64>> {
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
@@ -44,21 +48,25 @@ pub async fn do_add(auth: AuthInfo, payload: IconAddRequest) -> Result<CommonRes
         url_variants: Set(None),
     };
 
-    let res = active.insert(&DB_CONN.wait().pg_conn).await?;
+    let res = active.insert(&db.pg_conn).await?;
     // 类型关联（Java createIcon）：typeIdList 非空时校验类型存在并写入
     // icon_type_link；类型 ID 不存在报「类型ID错误」。
     if let Some(type_ids) = payload.type_id_list.filter(|l| !l.is_empty()) {
-        write_icon_type_links(auth.info.id, res.id, &type_ids).await?;
+        write_icon_type_links(&db.pg_conn, auth.info.id, res.id, &type_ids).await?;
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(res.id)))
 }
 
 /// 校验类型 ID 全部存在（对齐 Java「类型ID错误」文案）并重建该图标的
 /// icon_type_link（Java updateIcon 的 diff-then-replace 语义：变更时全删重建）。
-async fn write_icon_type_links(operator_id: i64, icon_id: i64, type_ids: &[i64]) -> Result<()> {
+async fn write_icon_type_links(
+    db: &sea_orm::DatabaseConnection,
+    operator_id: i64,
+    icon_id: i64,
+    type_ids: &[i64],
+) -> Result<()> {
     use _database::models::icon::icon_type as icon_type_model;
-    let db = &DB_CONN.wait().pg_conn;
     let existing: Vec<i64> = icon_type_model::Entity::find_safety()
         .filter(icon_type_model::Column::Id.is_in(type_ids.to_vec()))
         .select_only()
@@ -96,6 +104,7 @@ async fn write_icon_type_links(operator_id: i64, icon_id: i64, type_ids: &[i64])
 
 // 列表查询（支持分页）
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: IconListRequest,
 ) -> Result<CommonResponse<IconListResponse>> {
@@ -119,7 +128,7 @@ pub async fn do_list(
     if let Some(type_ids) = payload.type_id_list {
         let icon_ids: Vec<i64> = icon_type_link_model::Entity::find_safety()
             .filter(icon_type_link_model::Column::TypeId.is_in(type_ids))
-            .all(&DB_CONN.wait().pg_conn)
+            .all(&db.pg_conn)
             .await?
             .into_iter()
             .map(|l| l.icon_id)
@@ -127,7 +136,7 @@ pub async fn do_list(
         query = query.filter(icon_model::Column::Id.is_in(icon_ids));
     }
 
-    let total = query.clone().count(&DB_CONN.wait().pg_conn).await?;
+    let total = query.clone().count(&db.pg_conn).await?;
 
     let mut select = query;
     if let Some(current) = payload.page.current
@@ -138,7 +147,7 @@ pub async fn do_list(
         select = select.limit(size as u64).offset(offset);
     }
 
-    let items = select.all(&DB_CONN.wait().pg_conn).await?;
+    let items = select.all(&db.pg_conn).await?;
     let mut arr = Vec::with_capacity(items.len());
     for it in items {
         arr.push(IconVO {
@@ -156,9 +165,13 @@ pub async fn do_list(
 }
 
 // 获取单个图标（前端契约 RIconVo：data 直接是 IconVO）
-pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<IconVO>> {
+pub async fn do_get_single(
+    db: &DatabaseConnectionMap,
+    _auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<IconVO>> {
     let item = icon_model::Entity::find_safety_by_id(id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
     Ok(CommonResponse::new(Ok(IconVO {
@@ -170,10 +183,14 @@ pub async fn do_get_single(_auth: AuthInfo, id: i64) -> Result<CommonResponse<Ic
 }
 
 // 删除（软删除）
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let Some(item) = icon_model::Entity::find_safety_by_id(id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await?
     else {
         return Ok(CommonResponse::new(Ok(false)));
@@ -183,7 +200,7 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
     // 审计字段：软删也是修改，设置 update 组
     am.updater_id = Set(Some(auth.info.id));
     icon_model::Entity::delete_safety(am)?
-        .exec(&DB_CONN.wait().pg_conn)
+        .exec(&db.pg_conn)
         .await?;
     // Java deleteIcon：同步删除 icon_type_link，避免悬空关联
     _database::models::icon::icon_type_link::Entity::update_many()
@@ -192,17 +209,21 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             sea_orm::sea_query::Expr::value(true),
         )
         .filter(_database::models::icon::icon_type_link::Column::IconId.eq(id))
-        .exec(&DB_CONN.wait().pg_conn)
+        .exec(&db.pg_conn)
         .await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
 // 更新图标
-pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<CommonResponse<bool>> {
+pub async fn do_update(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: IconUpdateRequest,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
     let item = icon_model::Entity::find_safety_by_id(payload.id)
-        .one(&DB_CONN.wait().pg_conn)
+        .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
     let mut am: icon_model::ActiveModel = item.into();
@@ -211,14 +232,14 @@ pub async fn do_update(auth: AuthInfo, payload: IconUpdateRequest) -> Result<Com
     am.tag = Set(payload.base.name.clone());
     am.url = Set(payload.base.url.clone());
     icon_model::Entity::update_safety(am)?
-        .exec(&DB_CONN.wait().pg_conn)
+        .exec(&db.pg_conn)
         .await?;
     // 类型关联（Java updateIcon）：typeIdList 缺省不改动（避免误清空），
     // 提供时按 replace 语义重建。
     if let Some(type_ids) = payload.base.type_id_list.clone() {
-        write_icon_type_links(auth.info.id, payload.id, &type_ids).await?;
+        write_icon_type_links(&db.pg_conn, auth.info.id, payload.id, &type_ids).await?;
     }
-    super::binary_doc::invalidate_doc_cache().await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 

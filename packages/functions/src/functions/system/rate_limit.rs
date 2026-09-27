@@ -8,7 +8,7 @@ use std::net::SocketAddr;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _utils::errors::DomainError;
 
 /// Redis 不可用/命令失败时的进程内兜底计数表（单实例语义）。
@@ -26,8 +26,8 @@ fn sweep_stale_entries(map: &mut std::collections::HashMap<String, (u32, i64)>, 
 /// Redis 计数路径：首击 `SET NX EX` 原子建键（并发首击不会重复建键），
 /// 已有键 INCR 累加。返回 `None` 表示 Redis 不可用/命令失败，由调用方
 /// 降级到进程内兜底。
-async fn count_redis(key: &str, window_secs: u64) -> Option<u32> {
-    let client = DB_CONN.wait().redis_conn.as_ref()?;
+async fn count_redis(db: &DatabaseConnectionMap, key: &str, window_secs: u64) -> Option<u32> {
+    let client = db.redis_conn.as_ref()?;
     let mut conn = client.get_multiplexed_async_connection().await.ok()?;
     let created: bool = redis::cmd("SET")
         .arg(key)
@@ -86,6 +86,7 @@ fn count_local(key: &str, window_secs: u64) -> u32 {
 /// 攻击者无法靠打 N 个副本把额度放大 N 倍。Redis 不可用/命令失败时降级
 /// 为进程内 HashMap（保留单实例行为，避免 Redis 抖动导致全站拒绝服务）。
 pub async fn enforce_ip_rate_limit(
+    db: &DatabaseConnectionMap,
     bucket: &str,
     ip: SocketAddr,
     limit: u32,
@@ -94,7 +95,7 @@ pub async fn enforce_ip_rate_limit(
     // key 只取 IP（不含端口）：同一客户端的临时端口随连接变化，按完整
     // SocketAddr 分桶等于不限流。
     let key = format!("rl:{}:{}", bucket, ip.ip());
-    let count = match count_redis(&key, window_secs).await {
+    let count = match count_redis(db, &key, window_secs).await {
         Some(count) => count,
         None => count_local(&key, window_secs),
     };

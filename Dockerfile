@@ -17,6 +17,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY packages/utils/Cargo.toml      packages/utils/Cargo.toml
 COPY packages/database/Cargo.toml   packages/database/Cargo.toml
 COPY packages/functions/Cargo.toml  packages/functions/Cargo.toml
+COPY packages/migration/Cargo.toml  packages/migration/Cargo.toml
 COPY packages/router/Cargo.toml     packages/router/Cargo.toml
 COPY tests/rust/Cargo.toml          tests/rust/Cargo.toml
 
@@ -25,13 +26,20 @@ COPY tests/rust/Cargo.toml          tests/rust/Cargo.toml
 # The bench stub is required too: cargo validates [[bench]] target paths when
 # parsing the manifest, so `cargo fetch` fails without a file there. The router
 # lib stub follows the same rule — the crate is lib+bin, so its [lib] target
-# path must exist before the real sources are copied in.
+# path must exist before the real sources are copied in. The migration stubs
+# (lib + baseline module + bin) follow it as well — same manifest-path
+# validation, and the stub lib must not declare the real `mod`s so no
+# include_str!/dependency resolution happens in the fetch layer.
 RUN mkdir -p packages/utils/src packages/database/src packages/functions/src \
-        packages/functions/benches packages/router/src tests/rust/src \
+        packages/functions/benches packages/migration/src packages/router/src \
+        tests/rust/src \
  && printf 'pub fn _stub() {}\n' > packages/utils/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/database/src/lib.rs \
  && printf 'pub fn _stub() {}\n' > packages/functions/src/lib.rs \
  && printf 'fn main() {}\n' > packages/functions/benches/diff_snapshot.rs \
+ && printf 'pub fn _stub() {}\n' > packages/migration/src/lib.rs \
+ && printf 'pub fn _stub() {}\n' > packages/migration/src/m20260927_000001_baseline.rs \
+ && printf 'fn main() {}\n'        > packages/migration/src/main.rs \
  && printf 'fn main() {}\n'        > packages/router/src/main.rs \
  && printf 'pub fn _stub() {}\n' > packages/router/src/lib.rs \
  && printf ''                       > tests/rust/src/lib.rs \
@@ -40,7 +48,8 @@ RUN mkdir -p packages/utils/src packages/database/src packages/functions/src \
 # Real sources + release build. The cache mounts keep cargo registry and the
 # target dir out of the image layers; the binary is copied to a stable path so
 # it survives the cache mount being unmounted.
-# indexes_dev.sql is embedded by the init_db bin via include_str!.
+# indexes_dev.sql is embedded by the migration crate's baseline via
+# include_str! (and from there into the init_db binary).
 COPY packages/                     packages/
 COPY tests/                        tests/
 COPY scripts/indexes_dev.sql       scripts/indexes_dev.sql

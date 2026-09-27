@@ -6,7 +6,7 @@ use sea_orm::{
     prelude::*,
 };
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use _database::models::icon::{icon_type as icon_type_model, icon_type_link as itl_model};
 use _utils::{
     db_operations::SafeEntityTrait,
@@ -71,15 +71,16 @@ async fn recalc_parent_is_final(
 
 // 更新图标类型（Java updateIconType：自环校验 + 父级 isFinal 联动 + 自身重算）
 pub async fn do_update(
+    db: &DatabaseConnectionMap,
     auth: AuthInfo,
     payload: IconTypeUpdateRequest,
 ) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     check_id_parent(payload.id, payload.base.parent_id)?;
 
     let Some(item) = icon_type_model::Entity::find_safety_by_id(payload.id)
-        .one(db)
+        .one(pg)
         .await?
     else {
         // Java：实体不存在返回 false（HTTP 200 + R{data:false}）
@@ -88,8 +89,8 @@ pub async fn do_update(
 
     // 父级变化时联动新旧父级的末端标志
     if item.parent_id != payload.base.parent_id {
-        set_parent_is_final(db, payload.base.parent_id, false).await;
-        recalc_parent_is_final(db, item.parent_id, true).await;
+        set_parent_is_final(pg, payload.base.parent_id, false).await;
+        recalc_parent_is_final(pg, item.parent_id, true).await;
     }
 
     let mut am: icon_type_model::ActiveModel = item.into();
@@ -99,20 +100,21 @@ pub async fn do_update(
     // 无子级才是末端
     let children = icon_type_model::Entity::find_safety()
         .filter(icon_type_model::Column::ParentId.eq(payload.id))
-        .count(db)
+        .count(pg)
         .await?;
     am.is_final = Set(children == 0);
-    icon_type_model::Entity::update_safety(am)?.exec(db).await?;
-    super::binary_doc::invalidate_doc_cache().await;
+    icon_type_model::Entity::update_safety(am)?.exec(pg).await?;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
 // 列表（Java listIconType：typeIdList 为 null 时默认查根分类 parent IN (-1)）
 pub async fn do_list(
+    db: &DatabaseConnectionMap,
     _auth: AuthInfo,
     payload: IconTypeListRequest,
 ) -> Result<CommonResponse<IconTypeListResponse>> {
-    let db = &DB_CONN.wait().pg_conn;
+    let db = &db.pg_conn;
     let mut query = icon_type_model::Entity::find_safety();
     match payload.type_id_list {
         // Java：null → Collections.singletonList(-1L)（根分类）；不回退全量
@@ -161,11 +163,15 @@ pub async fn do_list(
 }
 
 // 删除（Java deleteIconType：递归删除整棵子树 + 图标类型关联 + 父级 isFinal 重算）
-pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> {
+pub async fn do_delete(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    id: i64,
+) -> Result<CommonResponse<bool>> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     let Some(item) = icon_type_model::Entity::find_safety_by_id(id)
-        .one(db)
+        .one(pg)
         .await?
     else {
         return Ok(CommonResponse::new(Ok(false)));
@@ -179,26 +185,26 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
             // 类型关联（icon → type）
             for l in itl_model::Entity::find()
                 .filter(itl_model::Column::TypeId.is_in(chunk))
-                .all(db)
+                .all(pg)
                 .await?
             {
                 let mut am: itl_model::ActiveModel = l.into();
                 am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                itl_model::Entity::update_safety(am)?.exec(db).await?;
+                itl_model::Entity::update_safety(am)?.exec(pg).await?;
             }
             // 类型本体
             for t in icon_type_model::Entity::find_safety()
                 .filter(icon_type_model::Column::Id.is_in(chunk))
-                .all(db)
+                .all(pg)
                 .await?
             {
                 let mut am: icon_type_model::ActiveModel = t.into();
                 am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                icon_type_model::Entity::delete_safety(am)?.exec(db).await?;
+                icon_type_model::Entity::delete_safety(am)?.exec(pg).await?;
             }
         }
         let mut children: Vec<i64> = Vec::new();
@@ -209,21 +215,25 @@ pub async fn do_delete(auth: AuthInfo, id: i64) -> Result<CommonResponse<bool>> 
                     .select_only()
                     .column(icon_type_model::Column::Id)
                     .into_tuple::<i64>()
-                    .all(db)
+                    .all(pg)
                     .await?,
             );
         }
         now = children;
     }
-    recalc_parent_is_final(db, parent_id, false).await;
-    super::binary_doc::invalidate_doc_cache().await;
+    recalc_parent_is_final(pg, parent_id, false).await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
 
 // 新增图标类型（Java addIconType：isFinal 恒 true + 父级置非末端）
-pub async fn do_add(auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64> {
+pub async fn do_add(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    payload: IconTypeAddRequest,
+) -> Result<i64> {
     auth.require_non_anonymous()?;
-    let db = &DB_CONN.wait().pg_conn;
+    let pg = &db.pg_conn;
     let now = chrono::Utc::now().naive_utc();
 
     let active = icon_type_model::ActiveModel {
@@ -242,9 +252,9 @@ pub async fn do_add(auth: AuthInfo, payload: IconTypeAddRequest) -> Result<i64> 
         is_final: Set(true),
     };
 
-    let res = active.insert(db).await?;
+    let res = active.insert(pg).await?;
     // 父级不再是末端
-    set_parent_is_final(db, payload.parent_id, false).await;
-    super::binary_doc::invalidate_doc_cache().await;
+    set_parent_is_final(pg, payload.parent_id, false).await;
+    super::binary_doc::invalidate_doc_cache(db).await;
     Ok(res.id)
 }
