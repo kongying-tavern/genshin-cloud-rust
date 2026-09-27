@@ -17,10 +17,10 @@
 //! - 服务端业务事件（公告/点位/缓存刷新等）经 `_functions::functions::ws`
 //!   注册表转发到对应连接。
 
-use _database::DB_CONN;
+use _database::DatabaseConnectionMap;
 use axum::{
     extract::{
-        Path, Query,
+        Path, Query, State,
         ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, StatusCode},
@@ -39,12 +39,13 @@ pub struct WsHandshakeQuery {
 /// `GET /ws/{userId}` 升级握手（鉴权逻辑见 `ws_handshake_key`；Err 即握手
 /// 失败，axum 将 StatusCode 转为无 body 的状态码响应）。
 pub async fn ws_handler(
+    State(db): State<crate::routes::SharedDb>,
     headers: HeaderMap,
     Query(query): Query<WsHandshakeQuery>,
     ws: WebSocketUpgrade,
     Path(user_id): Path<String>,
 ) -> Result<Response, StatusCode> {
-    let key = ws_handshake_key(&headers, query.token, &user_id).await?;
+    let key = ws_handshake_key(db.as_ref(), &headers, query.token, &user_id).await?;
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, key)))
 }
 
@@ -60,7 +61,11 @@ pub async fn ws_handler(
 /// 连接升级（`hyper::upgrade::OnUpgrade` 无公开构造器），axum 的
 /// `WebSocketUpgrade` 提取器会在进入 handler 前拒绝无升级头的请求，
 /// 401/403 的判定因此只能在函数层直测。
+///
+/// 连接经参数注入（`ws_handler` 的 State）：WS 握手在路由内，State 天然
+/// 可得，无需像鉴权中间件那样回退全局非阻塞读取；测试侧喂 mock 连接。
 pub async fn ws_handshake_key(
+    db: &DatabaseConnectionMap,
     headers: &HeaderMap,
     query_token: Option<String>,
     user_id: &str,
@@ -92,13 +97,6 @@ pub async fn ws_handshake_key(
     let Some(token) = header_token.or(query_token) else {
         return Err(StatusCode::UNAUTHORIZED);
     };
-    // 同 auth_extrator：get() 而非 wait()——参数求值先于函数体，wait() 在
-    // 全局未初始化时会把无 DB 场景（HTTP 层测试的握手）永久阻塞；未初始
-    // 化按「无法认证」401（生产环境启动即 init_db_conn，不触达此分支）。
-    let db = DB_CONN
-        .get()
-        .map(|m| m.as_ref())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
     let (vo, _claims) =
         _functions::functions::system::oauth::oauth_parse_token(db, token.to_string())
             .await

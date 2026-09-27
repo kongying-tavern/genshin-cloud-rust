@@ -5,7 +5,7 @@ use axum::{Router, routing::get};
 mod all_bin;
 mod all_bin_md5;
 
-pub async fn router() -> Result<Router> {
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         .route("/all_bin_md5", get(all_bin_md5::all_bin_md5))
         .route("/all_bin", get(all_bin::all_bin));

@@ -14,7 +14,9 @@ use axum::{
     routing::{delete, get, post, put},
 };
 
-pub async fn router() -> Result<Router> {
+/// 以 `Router<SharedDb>` 返回（泛型贯穿说明见 [`crate::routes::router`]）：
+/// 本层不做 `with_state`，连接值由组合根统一注入。
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     // /invitation/info、/invitation/consume 与 /user/register/qq 是公开接口
     // （注册流程未登录调用，对齐 Java 网关 pass-filter），不挂 auth layer；
     // 其余路由合并到一个挂 ExtractAuthInfo layer 的 router 中。

@@ -20,6 +20,7 @@
 | --- | --- | --- |
 | [BinaryMD5 归档导出](./binarymd5-archive-export.md) | `*_doc` GZIP 压缩批量导出管线 | 客户端冷启动如何快速拉取数千个 POI，且只同步变更页 |
 | [隐藏标记与特殊标记](./hidden-and-special-flags.md) | `hidden_flag` / `special_flag` / `del_flag` 三套正交标记 | 防剧透、测试服隔离、UI 过滤、软删除如何互不干扰 |
+| [WebSocket 前端契约](./ws-frontend-contract.md) | 已鉴权 `/ws/{userId}` 推送通道契约 | 前端实际消费情况与协议收敛选项 |
 
 ## 为什么单独成文
 

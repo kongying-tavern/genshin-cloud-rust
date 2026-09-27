@@ -54,10 +54,22 @@ fn setup() {
     unsafe { std::env::set_var("JWT_SECRET", TEST_JWT_SECRET) };
 }
 
+/// mock 连接：HTTP 层测试只验证中间件短路与路由挂载，业务路径永不触达；
+/// 无 mock 时构建 router 需要活库，会把这类测试打死在 CI 无 DB job 上。
+/// Redis / MinIO 留 `None`（可选降级路径），401 短路仍由全局非阻塞读取
+/// （未初始化即拒）产生，不经这份 mock。
+fn mock_db() -> _router::routes::SharedDb {
+    std::sync::Arc::new(_database::DatabaseConnectionMap {
+        pg_conn: sea_orm::MockDatabase::new(sea_orm::DbBackend::Postgres).into_connection(),
+        redis_conn: None,
+        minio_conn: None,
+    })
+}
+
 /// Build a fresh Router. Route assembly is pure table building (no DB, no
 /// network); each test builds its own because `oneshot` consumes the service.
 async fn router() -> Router {
-    _router::routes::router()
+    _router::routes::router(mock_db())
         .await
         .expect("failed to assemble router")
 }
@@ -258,16 +270,23 @@ async fn ws_handshake_auth_rejects_missing_and_garbage_tokens() {
     setup();
 
     // Missing token (neither Authorization header nor ?token=).
-    let err = _router::routes::ws::ws_handshake_key(&HeaderMap::new(), None, "123")
+    let db = mock_db();
+    let err = _router::routes::ws::ws_handshake_key(db.as_ref(), &HeaderMap::new(), None, "123")
         .await
         .expect_err("handshake without a token must be rejected");
     assert_eq!(err, StatusCode::UNAUTHORIZED);
 
-    // Garbage query token (?token=garbage — the browser-side channel).
-    let err =
-        _router::routes::ws::ws_handshake_key(&HeaderMap::new(), Some("garbage".into()), "123")
-            .await
-            .expect_err("handshake with a garbage token must be rejected");
+    // Garbage query token (?token=garbage — the browser-side channel). The
+    // mock connection stays untouched here: JWT decode fails before any DB
+    // lookup in oauth_parse_token.
+    let err = _router::routes::ws::ws_handshake_key(
+        db.as_ref(),
+        &HeaderMap::new(),
+        Some("garbage".into()),
+        "123",
+    )
+    .await
+    .expect_err("handshake with a garbage token must be rejected");
     assert_eq!(err, StatusCode::UNAUTHORIZED);
 
     // Mounting smoke check: the route exists (not 404); the 400 is axum's

@@ -1,22 +1,24 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAuthInfo;
-use _database::DB_CONN;
 use _utils::models::{marker::MarkerFilterRequest, wrapper::Pagination};
 
 /// 根据各种条件筛选查询点位ID
 /// 支持根据末端地区、末端类型、物品来进行查询，三种查询不能同时生效，同时存在时报错
 /// POST /marker/get/id
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_id(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_id(DB_CONN.wait().as_ref(), auth, payload)
-        .await
-    {
+    match _functions::functions::api::marker::do_get_id(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -25,17 +27,13 @@ pub async fn get_id(
 /// 根据各种条件筛选查询点位信息
 /// 支持根据末端地区、末端类型、物品来进行查询，三种查询不能同时生效，同时存在时报错
 /// POST /marker/get/list_by_info
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_list_by_info(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<MarkerFilterRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_list_by_info(
-        DB_CONN.wait().as_ref(),
-        auth,
-        payload,
-    )
-    .await
+    match _functions::functions::api::marker::do_get_list_by_info(db.as_ref(), auth, payload).await
     {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -45,18 +43,13 @@ pub async fn get_list_by_info(
 /// 通过ID列表查询点位信息
 /// 通过ID列表来进行查询点位信息
 /// POST /marker/get/list_by_id
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_list_by_id(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Vec<i64>>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_list_by_id(
-        DB_CONN.wait().as_ref(),
-        auth,
-        payload,
-    )
-    .await
-    {
+    match _functions::functions::api::marker::do_get_list_by_id(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }
@@ -64,15 +57,14 @@ pub async fn get_list_by_id(
 
 /// 分页查询所有点位信息
 /// POST /marker/get/page
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn get_page(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
     Json(payload): Json<Pagination>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     // use axum::Json as AxumJson; (removed duplicate alias)
-    match _functions::functions::api::marker::do_get_page(DB_CONN.wait().as_ref(), auth, payload)
-        .await
-    {
+    match _functions::functions::api::marker::do_get_page(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

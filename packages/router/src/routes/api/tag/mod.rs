@@ -15,7 +15,7 @@ use axum::{
     routing::{delete as route_delete, post, put},
 };
 
-pub async fn router() -> Result<Router> {
+pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
     let ret = Router::new()
         .route("/get/list", post(list::list))
         .route("/get/single/{name}", post(get_single::get_single))

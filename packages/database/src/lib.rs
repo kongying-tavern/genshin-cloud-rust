@@ -22,11 +22,18 @@ use once_cell::sync::OnceCell;
 
 pub static DB_CONN: OnceCell<Arc<DatabaseConnectionMap>> = OnceCell::new();
 
-pub async fn init_db_conn() -> anyhow::Result<()> {
+/// 连接 + 写入全局单例，并返回**同一** Arc 供组合根注入 axum State。
+///
+/// 返回值与 `DB_CONN` 里的实例共享同一连接池（clone 只涨引用计数）：main
+/// 把返回的 Arc 喂给 `routes::router(db)`（handler 业务调用经 State 注入），
+/// 全局那份供鉴权中间件的非阻塞读取——两条路径不会各建一套连接。纯构造
+/// （不写全局）走 [`connect_db_map`]。
+pub async fn init_db_conn() -> anyhow::Result<Arc<DatabaseConnectionMap>> {
     let conn_map = Arc::new(connect_db_map().await?);
     DB_CONN
-        .set(conn_map)
-        .map_err(|_| anyhow!("DB_CONN already initialized"))
+        .set(conn_map.clone())
+        .map_err(|_| anyhow!("DB_CONN already initialized"))?;
+    Ok(conn_map)
 }
 
 /// Resolve the PostgreSQL schema name from the `DB_SCHEMA` env var

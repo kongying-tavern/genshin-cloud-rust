@@ -23,6 +23,23 @@ use tower_http::timeout::TimeoutLayer;
 use _utils::errors::DomainError;
 use _utils::models::CommonResponse;
 
+/// 请求路径共享的连接句柄：main 把 init_db_conn 返回的同一 Arc 同时
+/// 放进全局（供鉴权中间件的非阻塞读取）与 axum State（供 handler 业务
+/// 调用注入）——两个入口拿到的是同一个实例。
+///
+/// 为什么鉴权中间件不走 State 而继续读全局（`DB_CONN.get()`）：
+/// - `from_extractor::<ExtractAuthInfo>()` 层在创建时烘焙 `()` 状态（实现
+///   即 `from_extractor_with_state(())`），提取器必须保持 `FromRequestParts<S>`
+///   的状态无关实现；若改成内部抓 `State<SharedDb>`，该类型就只满足
+///   `FromRequestParts<SharedDb>`，中间件层的 `()` 状态用法随即失配——
+///   同一提取器无法对两个状态并存（role/admin 家族内部复用 auth 提取，
+///   连带同样受限）；
+/// - 中间件层改为消费注入连接后，「全局未初始化 ⇒ 无法认证」的立即 401
+///   短路语义消失，无 DB 的 401 测试路径会被迫依赖 mock 连接的行为；
+/// - `ExtractIP` / `ExtractUserAgent` 不碰连接，但同住中间件层，一并维持
+///   状态无关实现。
+pub type SharedDb = std::sync::Arc<_database::DatabaseConnectionMap>;
+
 /// Handler 统一错误响应类型：HTTP 200 + R 包装（Java `RestException` 契约）。
 ///
 /// Java 侧 `@RestControllerAdvice` 对 `GenshinApiException` 与兜底 `Throwable`
@@ -118,7 +135,14 @@ fn chain_contains_internal(err: &anyhow::Error) -> bool {
 /// 上游超时，不会先撞到这里。
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
-pub async fn router() -> Result<Router> {
+/// 组装整棵路由树。
+///
+/// 泛型走向：所有子路由（`api::router` / `system::router` 及其下各域）都
+/// 以 `Router<SharedDb>` 组装（`nest`/`merge` 要求子路由与外层同状态型），
+/// 连接**值**不逐层传递——它只在链尾由本函数一次性 `with_state(db)` 收敛
+/// 为 `Router<()>` 注入。因此各子路由函数只改返回类型、不增参数；中间层
+/// 若强行传 db 只会得到未使用变量（值在组合根才被消费）。
+pub async fn router(db: SharedDb) -> Result<Router> {
     let ret = Router::new()
         .route("/oauth/token", post(system::oauth::oauth))
         .route("/.well-known/jwks.json", get(jwks))
@@ -160,7 +184,11 @@ pub async fn router() -> Result<Router> {
         .layer(SetResponseHeaderLayer::overriding(
             REFERRER_POLICY,
             HeaderValue::from_static("no-referrer"),
-        ));
+        ))
+        // 组合根收敛（见 router 文档注释）：layer 均为状态无关层（CORS /
+        // 提取器中间件 / 限额 / 超时 / 响应头），挂完后再 with_state，
+        // 中间件包裹关系与收敛前完全一致。
+        .with_state(db);
 
     Ok(ret)
 }

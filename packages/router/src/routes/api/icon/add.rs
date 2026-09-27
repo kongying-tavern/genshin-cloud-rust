@@ -1,21 +1,25 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractManager;
-use _database::DB_CONN;
 use _utils::models::icon::IconAddRequest;
 
 /// 新增图标
 /// 无需指定icon的id，id由系统自动生成并在响应中返回
 /// 一组name和creator需要唯一（允许单一重复）
 /// PUT /icon/add
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn add(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<IconAddRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::icon::do_add(DB_CONN.wait().as_ref(), auth, payload).await {
+    match _functions::functions::api::icon::do_add(db.as_ref(), auth, payload).await {
         Ok(resp) => Ok((StatusCode::OK, Json(resp))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

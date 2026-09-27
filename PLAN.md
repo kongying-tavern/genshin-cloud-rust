@@ -252,15 +252,16 @@ git checkout master && git pull own master && git branch -d fix/<topic>
 > wire 契约（前端在用）继续保持，内部实现可自由演进；有意偏离 Java 的加固（如 WS
 > 握手鉴权）不必再对照 Java 行为。
 
-### 待办 backlog（按优先级）
+- #146 router 层 State 接线：整棵路由树 Router<SharedDb> 组装、组合根 with_state
+  收敛，107 个 handler 经 State 注入（router crate 内 DB_CONN.wait 归零）；HTTP
+  层测试以 sea-orm mock 连接构建 router（mock feature 为空，依赖图零变化）
+- #147 迁移体系实战首演：marker 可见性复合索引作为首个 post-baseline 迁移落地，
+  存量库增量升级 / 单步回滚路径端到端验证
+- #148 WS 前端契约设计文档（三语）+ 本 backlog 收官
 
-1. router 层连接 State 接线：业务函数已可注入（#144），但 handler 仍经组合根传
-   DB_CONN 全局——接线需先解决「无 DB 的 HTTP 层测试」约束（测试专用 state 构造
-   或 trait 化连接），价值与成本需再评估
-2. schema 迁移的实战首演：下一次实体加列走新迁移文件（packages/migration 加
-   mYYYYMMDD_NNNNNN_*.rs 并注册），验证演进纪律顺路成立；存量生产库升级前先跑
-   init_db -- --check
-3. 前端联动：WS 鉴权上线需前端在握手时带 token（Authorization 头或 ?token=）。
-   已核实 map_register_v3 用 socket.io-client、map_front_v3 无 WS 使用——现存前端
-   均不消费裸 /ws/{userId} 端点，协议适配（socket.io → 裸 WS 或后端补 socket.io
-   端点）属前端仓/跨仓架构决策，待与前端侧协调
+### 后续演进建议（审计 backlog 已全部消化，以下是常态维护项）
+
+1. schema 变更一律走新迁移文件（packages/migration，baseline 冻结）；存量库升级
+   前可先跑 `cargo run --bin init_db -- --check`
+2. WS 前端契约收敛：决策文档见 docs/{en,zh-Hans,zh-Hant}/designs/
+   ws-frontend-contract.md——现存前端均不消费裸 /ws 端点，协议选择权在前端维护者

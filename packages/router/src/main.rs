@@ -171,9 +171,11 @@ async fn main() -> Result<()> {
         .unwrap_or(80);
 
     log::info!("Site will run on port {}", port);
-    init_db_conn().await?;
+    // 同一 Arc 两路分发：State 供 handler 业务调用注入，全局供鉴权中间件
+    // 的非阻塞读取（取舍说明见 routes::SharedDb 文档注释）。
+    let db = init_db_conn().await?;
 
-    let router = router()
+    let router = router(db)
         .await?
         .into_make_service_with_connect_info::<SocketAddr>();
 

@@ -1,21 +1,23 @@
 use anyhow::Result;
 
-use axum::{extract::Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractManager;
-use _database::DB_CONN;
 use _utils::models::tag::TagUpdateTypeRequest;
 
 /// 修改标签的分类信息（后台接口）
 /// POST /tag/updateType
-#[tracing::instrument(skip(auth, payload))]
+#[tracing::instrument(skip(db, auth, payload))]
 pub async fn update_type(
+    State(db): State<crate::routes::SharedDb>,
     ExtractManager(auth): ExtractManager,
     Json(payload): Json<TagUpdateTypeRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::tag::do_update_type(DB_CONN.wait().as_ref(), auth, payload)
-        .await
-    {
+    match _functions::functions::api::tag::do_update_type(db.as_ref(), auth, payload).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

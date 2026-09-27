@@ -1,10 +1,9 @@
 use anyhow::Result;
 
-use axum::extract::Json;
+use axum::extract::{Json, State};
 use axum::{extract::Multipart, http::StatusCode, response::IntoResponse};
 
 use crate::middlewares::ExtractPunctuate;
-use _database::DB_CONN;
 use _functions::functions::api::res::UploadedFile;
 
 /// 允许上传的内容类型白名单。
@@ -13,8 +12,9 @@ const ALLOWED_IMAGE_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "
 const MAX_FIELD_BYTES: usize = 16 * 1024 * 1024;
 
 /// 上传图片
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn upload_image(
+    State(db): State<crate::routes::SharedDb>,
     ExtractPunctuate(auth): ExtractPunctuate,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -80,13 +80,8 @@ pub async fn upload_image(
     }
 
     // 交给 functions 层（MinIO 未配置时明确报错，而非静默丢弃）。
-    match _functions::functions::api::res::do_upload_image(
-        DB_CONN.wait().as_ref(),
-        auth,
-        files,
-        file_path,
-    )
-    .await
+    match _functions::functions::api::res::do_upload_image(db.as_ref(), auth, files, file_path)
+        .await
     {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),

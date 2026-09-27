@@ -1,10 +1,12 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{extract::Json, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAdmin;
-use _database::DB_CONN;
 use _utils::{models::Pagination, types::ActionLogAction};
 
 /// 格式：字段+ 字段-
@@ -57,8 +59,9 @@ pub struct ActionLogParams {
 
 /// 获取操作日志
 /// POST /action_log/list
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn list(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(query): Json<ActionLogParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -80,7 +83,7 @@ pub async fn list(
     });
 
     match _functions::functions::system::action_log::do_list(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         query.user_id,
         query.action.map(|a| a as i64),

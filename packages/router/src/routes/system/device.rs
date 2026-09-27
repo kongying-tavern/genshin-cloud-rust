@@ -1,10 +1,12 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use axum::{extract::Json, response::IntoResponse};
+use axum::{
+    extract::{Json, State},
+    response::IntoResponse,
+};
 
 use crate::middlewares::ExtractAdmin;
-use _database::DB_CONN;
 use _utils::models::wrapper::Pagination;
 use _utils::types::DeviceSort;
 
@@ -27,8 +29,9 @@ pub struct DeviceListParams {
 
 /// 获取用户设备
 /// POST /device/list
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn list(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceListParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -45,7 +48,7 @@ pub async fn list(
         .unwrap_or(1);
 
     match _functions::functions::system::device::do_list(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         payload.user_id,
         payload.device_id,
@@ -71,8 +74,9 @@ pub struct DeviceUpdateParams {
 
 /// 更新用户设备信息
 /// POST /device/update
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn update(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<DeviceUpdateParams>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -80,7 +84,7 @@ pub async fn update(
         .status
         .ok_or_else(|| crate::routes::route_error("status required"))?;
     match _functions::functions::system::device::do_update(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         payload.id,
         status as i32,

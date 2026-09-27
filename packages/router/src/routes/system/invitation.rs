@@ -3,12 +3,11 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
 use axum::{
-    extract::{ConnectInfo, Json, Path},
+    extract::{ConnectInfo, Json, Path, State},
     response::IntoResponse,
 };
 
 use crate::middlewares::{ExtractAdmin, ExtractIP};
-use _database::DB_CONN;
 use _utils::{
     models::wrapper::Pagination,
     types::{AccessPolicyItemEnum, InvitationSort},
@@ -68,8 +67,9 @@ pub struct InvitationInfoRequest {
 
 /// 获取用户邀请列表
 /// POST /invitation/list
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn list(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationListRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
@@ -86,7 +86,7 @@ pub async fn list(
         .unwrap_or(1);
 
     match _functions::functions::system::invitation::do_list(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         payload.code,
         payload.username,
@@ -103,13 +103,14 @@ pub async fn list(
 
 /// 新增/更新用户邀请
 /// POST /invitation/update
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn update(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Json(payload): Json<InvitationUpdateRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
     match _functions::functions::system::invitation::do_update(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         auth,
         payload.code,
         payload.username,
@@ -128,6 +129,7 @@ pub async fn update(
 /// POST /invitation/info（公开接口：注册流程未登录调用，对齐 Java pass-filter）
 #[tracing::instrument(skip_all)]
 pub async fn info(
+    State(db): State<crate::routes::SharedDb>,
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<InvitationInfoRequest>,
@@ -135,12 +137,8 @@ pub async fn info(
     // 代理头可信时优先用代理解析的客户端 IP，否则回退到连接对端地址
     //（与 oauth handler 一致；供公开端点限流使用）
     let ip = proxy_ip.unwrap_or(native_ip);
-    match _functions::functions::system::invitation::do_info_public(
-        DB_CONN.wait().as_ref(),
-        ip,
-        payload.code,
-    )
-    .await
+    match _functions::functions::system::invitation::do_info_public(db.as_ref(), ip, payload.code)
+        .await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
@@ -149,8 +147,9 @@ pub async fn info(
 
 /// 使用用户邀请（公开接口：注册流程未登录调用）
 /// POST /invitation/consume
-#[tracing::instrument(skip(payload))]
+#[tracing::instrument(skip(db, payload))]
 pub async fn consume(
+    State(db): State<crate::routes::SharedDb>,
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(proxy_ip): ExtractIP,
     Json(payload): Json<InvitationConsumeRequest>,
@@ -159,7 +158,7 @@ pub async fn consume(
     //（与 oauth handler 一致；供公开端点限流使用）
     let ip = proxy_ip.unwrap_or(native_ip);
     match _functions::functions::system::invitation::do_consume(
-        DB_CONN.wait().as_ref(),
+        db.as_ref(),
         ip,
         payload.code,
         payload.username,
@@ -175,17 +174,14 @@ pub async fn consume(
 
 /// 删除用户邀请
 /// DELETE /invitation/{invitation_id}
-#[tracing::instrument(skip(auth))]
+#[tracing::instrument(skip(db, auth))]
 pub async fn delete(
+    State(db): State<crate::routes::SharedDb>,
     ExtractAdmin(auth): ExtractAdmin,
     Path(invitation_id): Path<i64>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::system::invitation::do_delete(
-        DB_CONN.wait().as_ref(),
-        auth,
-        invitation_id,
-    )
-    .await
+    match _functions::functions::system::invitation::do_delete(db.as_ref(), auth, invitation_id)
+        .await
     {
         Ok(v) => Ok(Json(v).into_response()),
         Err(e) => Err(crate::routes::internal_error(e)),
