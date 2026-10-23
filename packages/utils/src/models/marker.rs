@@ -128,6 +128,37 @@ pub struct MarkerFilterRequest {
     pub item_id_list: Option<Vec<i64>>,
     /// 类型 ID 列表
     pub type_id_list: Option<Vec<i64>>,
+    /// 点位 ID 列表（Java `MarkerSearchVo.markerIdList`；list_byid 载入用，
+    /// searchMarkerId 忽略该条件 —— 与 Java 行为一致）
+    pub marker_id_list: Option<Vec<i64>>,
+}
+
+/// `POST /marker/get/list_byid` 的双形态请求体：
+/// - 旧前端 / 直接调用方：裸 ID 数组 `[1,2,3]`；
+/// - 新前端（openapi 生成，对齐 Java `@RequestBody MarkerSearchVo`）：
+///   `{"markerIdList":[1,2,3]}` 对象。
+///
+/// 两种形态都归一为 ID 列表（对象形态取 `markerIdList`，缺省为空）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MarkerByIdRequest {
+    Ids(Vec<i64>),
+    Search(MarkerFilterRequest),
+}
+
+impl MarkerByIdRequest {
+    /// 归一为点位 ID 列表。
+    pub fn into_ids(self) -> Vec<i64> {
+        match self {
+            MarkerByIdRequest::Ids(ids) => ids,
+            MarkerByIdRequest::Search(req) => req.marker_id_list.unwrap_or_default(),
+        }
+    }
+}
+
+/// `MarkerAddRequest.position` 的缺省坐标（Java `blankToDefault(position, "0,0")`）。
+fn default_position() -> String {
+    "0,0".into()
 }
 
 /// 点位添加请求模型
@@ -138,19 +169,25 @@ pub struct MarkerAddRequest {
     pub content: Option<String>,
     /// 额外字段
     pub extra: Option<HashMap<String, Option<serde_json::Value>>>,
-    /// 权限屏蔽标记
+    /// 权限屏蔽标记（Java 缺省 null → 落库默认 0；serde 缺省同语义）
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
-    /// 点位物品 ID 列表
+    /// 点位物品 ID 列表（Java 缺省 null → 空列表）
+    #[serde(default)]
     pub item_list: Vec<Option<serde_json::Value>>,
     /// 点位初始标记者，仅创建时写入，后续不可更改，创建时会校验
+    /// （Java 缺省 null → 0）
+    #[serde(default)]
     pub marker_creator_id: i64,
-    /// 点位标题
+    /// 点位标题（Java 缺省 null；Rust 落空串占位，避免 422）
+    #[serde(default)]
     pub marker_title: String,
     /// 点位图片
     pub picture: Option<String>,
     /// 点位图片上传者
     pub picture_creator_id: Option<i64>,
-    /// 点位坐标
+    /// 点位坐标（Java blankToDefault(position, "0,0")；缺省同语义）
+    #[serde(default = "default_position")]
     pub position: String,
     /// 刷新时间，+ 正数是毫秒
     /// + 0是不刷新

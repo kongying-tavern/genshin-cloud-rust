@@ -5,15 +5,17 @@
 ## 前置条件
 
 - **Rust 工具链**：由仓库根 `rust-toolchain.toml` 锁定为 `stable`，并自带
-  `rustfmt`、`clippy` 组件。首次进入仓库时 `rustup` 会自动安装。
+
+`rustfmt`、`clippy` 组件。首次进入仓库时 `rustup` 会自动安装。
 
 - **[`just`](https://github.com/casey/just)**：所有构建/测试/钩子命令的统一入口。
 - **Docker**（仅本地调试需要）：用于一键拉起 Postgres、Redis、MinIO。
 - **`celestia-devtools`**：提交规范与缓存守护工具，来自
-  [celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools)，
-  安装：`pip install git+https://github.com/celestia-island/celestia-devtools.git`
-  （也可 clone 后 `pip install -e .`）。仓库根的 `celestia-devtools.just` 是
-  vendored 裁剪版，用 `celestia-devtools init --force` 刷新。
+
+[celestia-island/celestia-devtools](https://github.com/celestia-island/celestia-devtools)，
+安装：`pip install git+https://github.com/celestia-island/celestia-devtools.git`
+（也可 clone 后 `pip install -e .`）。仓库根的 `celestia-devtools.just` 是
+vendored 裁剪版，用 `celestia-devtools init --force` 刷新。
 
 ## 常用命令
 
@@ -65,9 +67,13 @@ JWT_SECRET=<openssl rand -base64 48>
 `.github/workflows/` 下有八个工作流：
 
 - **`rust.yml`**：`cargo fmt --check` / `check` / `clippy -D warnings` /
-  `build --release`，外加按根 `Cargo.toml` 声明的 `rust-version = "1.94"` 做 MSRV 检查（下限来自 sqlx 0.9）。
+
+`build --release`，外加按根 `Cargo.toml` 声明的 `rust-version = "1.94"` 做 MSRV 检查（下限来自 sqlx 0.9）。
+
 - **`test.yml`**：`cargo test` 全工作区测试（ubuntu/windows 矩阵）、Postgres
-  DB 集成测试、`trufflehog` 密钥扫描。
+
+DB 集成测试、`trufflehog` 密钥扫描。
+
 - **`commit-msg.yml`**：PR 标题与每个提交主题的 gitmoji 规范 lint。
 - **`deny.yml`**：cargo-deny 依赖安全/许可证/来源检查，另每周定时扫新公告。
 - **`hygiene.yml`**：actionlint（workflow 语法）+ shellcheck（shell 脚本）。

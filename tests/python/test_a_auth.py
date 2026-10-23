@@ -76,6 +76,35 @@ check("refresh token rejected as access token", st4 == 401, f"st={st4}")
 st5, pr5 = call("POST", f"/oauth/token?grant_type=refresh_token&refresh_token={refresh}")
 print(f"  info: reused refresh token -> {st5} (rotation policy recorded)")
 
+# ── 参数通道 parity（Java Spring OAuth2 全兼容）──
+# 1) application/x-www-form-urlencoded body 的 refresh（标准 OAuth2 客户端形态）
+r2 = pr.get("refresh_token") if isinstance(pr, dict) else None
+check("refresh response carries refresh_token", bool(r2), str(pr)[:150])
+if r2:
+    form_body = f"grant_type=refresh_token&refresh_token={r2}".encode()
+    req = urllib.request.Request(BASE + "/oauth/token", data=form_body, method="POST",
+                                 headers={"Content-Type": "application/x-www-form-urlencoded",
+                                          "User-Agent": "regression/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            code, payload = r.status, json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        code, payload = e.code, e.read().decode()[:200]
+    check("urlencoded refresh accepted", code == 200 and isinstance(payload, dict) and payload.get("access_token"),
+          f"code={code} body={str(payload)[:150]}")
+    r3 = payload.get("refresh_token") if isinstance(payload, dict) else None
+    # 2) GET /oauth/token（Java 同步开放 GET + POST）
+    if r3:
+        try:
+            with urllib.request.urlopen(urllib.request.Request(
+                    BASE + f"/oauth/token?grant_type=refresh_token&refresh_token={r3}",
+                    method="GET", headers={"User-Agent": "regression/1.0"}), timeout=20) as r:
+                code, payload = r.status, json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            code, payload = e.code, e.read().decode()[:200]
+        check("GET /oauth/token refresh parity", code == 200 and isinstance(payload, dict) and payload.get("access_token"),
+              f"code={code} body={str(payload)[:150]}")
+
 section("A-1 client_credentials -> VISITOR")
 st, pr = call("POST", "/oauth/token?grant_type=client_credentials&scope=all")
 check("client_credentials issues token", st == 200 and pr.get("access_token"), f"st={st}")

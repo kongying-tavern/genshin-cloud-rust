@@ -11,7 +11,14 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-suites = sorted(p.name for p in HERE.glob("test_*.py"))
+# REGRESSION_SUITES：逗号分隔的白名单（缺省全跑）。CI 用它跳过依赖
+# dev 量级数据的套件（如 test_e_docs 的多分页断言）。
+_only = os.environ.get("REGRESSION_SUITES", "").strip()
+suites = sorted(
+    p.name
+    for p in HERE.glob("test_*.py")
+    if not _only or p.name in {s.strip() for s in _only.split(",") if s.strip()}
+)
 
 if not suites:
     print("no test_*.py suites found")

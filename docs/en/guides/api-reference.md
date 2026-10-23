@@ -43,7 +43,7 @@ across replicas.
 | --- | --- | --- |
 | Icon doc | `/api/icon_doc` | Single-blob GZIP-compressed icon-archive download (`all_bin`). |
 | Item doc | `/api/item_doc` | Paginated GZIP-compressed item-archive download (`list_page_bin`). |
-| Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download plus the protobuf diff snapshot. |
+| Marker doc | `/api/marker_doc` | Paginated GZIP-compressed marker-archive download, the protobuf diff snapshot, and the full `list_markers` export (protobuf+gzip). |
 | Marker link doc | `/api/marker_link_doc` | Single-blob marker-link archives: flat list and adjacency graph (`all_list_bin` / `all_graph_bin`). |
 | Tag doc | `/api/tag_doc` | Single-blob GZIP-compressed tag-archive download (`all_bin`). |
 
@@ -68,7 +68,7 @@ flushes every BinaryMD5 cache in one shot.
 | Score | `/api/score` | Per-user contribution scoring (score_stat aggregate). |
 | Notice | `/api/notice` | In-app announcements and broadcast messages. |
 | History | `/api/history` | Audit history of edits to content entities. |
-| Resources | `/api/res` | Static resource references (versioned asset pointers). |
+| Resources | `/api/res` | Resource upload (MinIO, object key = client filePath) and the dedup-existence probe `get`. |
 
 ## System — accounts, devices, invitations, OAuth
 

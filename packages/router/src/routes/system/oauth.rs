@@ -36,103 +36,133 @@ fn oauth_error(code: StatusCode, error: &str, description: &str) -> OAuthError {
     )
 }
 
-#[tracing::instrument(skip(db, form))]
+#[tracing::instrument(skip(db, req))]
 pub async fn oauth(
     State(db): State<crate::routes::SharedDb>,
     ConnectInfo(native_ip): ConnectInfo<SocketAddr>,
     ExtractIP(ip): ExtractIP,
     ExtractUserAgent(user_agent): ExtractUserAgent,
     Query(query): Query<LoginQuery>,
-    form: Option<Multipart>,
+    req: axum::extract::Request,
 ) -> Result<impl IntoResponse, OAuthError> {
+    use axum::extract::FromRequest;
+    use axum::http::header::CONTENT_TYPE;
+
     let ip = ip.unwrap_or(native_ip);
 
-    // 刷新 token 分支由前端以 `application/json` + query 参数请求（无 body），
-    // 此时 Multipart extractor 会因 Content-Type 不匹配而 415 —— 用 Option 兜底，
-    // 仅 password 模式（multipart/form-data）才消费 form 字段。
-    let mut form_fields = if let Some(mut form) = form {
-        let mut ret = HashMap::new();
-        while let Some(field) = form.next_field().await.map_err(|err| {
+    // 表单字段的三种到达通道（Java Spring OAuth2 全兼容：GET/POST ×
+    // query/form，form 同时接受 multipart 与 x-www-form-urlencoded）：
+    // - multipart/form-data（前端 FormData 登录）；
+    // - application/x-www-form-urlencoded（标准 OAuth2 客户端与旧前端的
+    //   refresh 请求）；
+    // - 其余（JSON / 空 body）：字段只可能在 query 里。
+    let (parts, body) = req.into_parts();
+    let content_type = parts
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let bytes = axum::body::to_bytes(body, 1024 * 1024)
+        .await
+        .map_err(|err| {
             oauth_error(
                 StatusCode::BAD_REQUEST,
                 "invalid_request",
-                &format!("Failed to read form field: {err}"),
+                &format!("Failed to read body: {err}"),
             )
-        })? {
-            let name = field
-                .name()
-                .ok_or_else(|| {
-                    oauth_error(
-                        StatusCode::BAD_REQUEST,
-                        "invalid_request",
-                        "Field name is required",
-                    )
-                })?
-                .to_string();
-            let value = field.text().await.map_err(|err| {
+        })?;
+    let req = axum::extract::Request::from_parts(parts, axum::body::Body::from(bytes));
+
+    let form_fields: HashMap<String, String> = if content_type.starts_with("multipart/form-data") {
+        let mut ret = HashMap::new();
+        if let Ok(mut form) = Multipart::from_request(req, &()).await {
+            while let Some(field) = form.next_field().await.map_err(|err| {
                 oauth_error(
                     StatusCode::BAD_REQUEST,
                     "invalid_request",
-                    &format!("Failed to read form field {name}: {err}"),
+                    &format!("Failed to read form field: {err}"),
                 )
-            })?;
-            ret.insert(name, value);
+            })? {
+                let name = field
+                    .name()
+                    .ok_or_else(|| {
+                        oauth_error(
+                            StatusCode::BAD_REQUEST,
+                            "invalid_request",
+                            "Field name is required",
+                        )
+                    })?
+                    .to_string();
+                let value = field.text().await.map_err(|err| {
+                    oauth_error(
+                        StatusCode::BAD_REQUEST,
+                        "invalid_request",
+                        &format!("Failed to read form field {name}: {err}"),
+                    )
+                })?;
+                ret.insert(name, value);
+            }
         }
         ret
+    } else if content_type.starts_with("application/x-www-form-urlencoded") {
+        axum::extract::Form::from_request(req, &())
+            .await
+            .map(|axum::extract::Form(map)| map)
+            .unwrap_or_default()
     } else {
         HashMap::new()
     };
-    if !form_fields.is_empty() {
-        let grant_type = form_fields.remove("grant_type").ok_or_else(|| {
+    // 统一参数视图：form 字段优先、query 兜底 —— Java Spring OAuth2 的
+    // GET/POST × query/form 四种组合全兼容。password 的 username/password
+    // 只可能来自 form（query 里没有这两个字段，避免把口令塞进 URL）。
+    let param = |name: &str| -> Option<String> {
+        form_fields.get(name).cloned().or_else(|| match name {
+            "grant_type" => query.grant_type.clone(),
+            "scope" => query.scope.clone(),
+            "refresh_token" => query.refresh_token.clone(),
+            _ => None,
+        })
+    };
+    let grant_type = param("grant_type")
+        .map(|g| g.trim().to_string())
+        .ok_or_else(|| {
             oauth_error(
                 StatusCode::BAD_REQUEST,
                 "invalid_request",
                 "Grant type is required",
             )
         })?;
-        if grant_type != "password" {
-            return Err(oauth_error(
-                StatusCode::BAD_REQUEST,
-                "unsupported_grant_type",
-                "Invalid grant type",
-            ));
-        }
-
-        let username = form_fields.remove("username").ok_or_else(|| {
-            oauth_error(
-                StatusCode::BAD_REQUEST,
-                "invalid_request",
-                "Username is required",
+    match grant_type.as_str() {
+        "password" => {
+            let username = param("username").ok_or_else(|| {
+                oauth_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "Username is required",
+                )
+            })?;
+            let password = param("password").ok_or_else(|| {
+                oauth_error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "Password is required",
+                )
+            })?;
+            return Ok(Json(
+                oauth_password_login(db.as_ref(), username, password, ip, user_agent)
+                    .await
+                    .map_err(|e| {
+                        // Java/Spring OAuth2 契约：账密失败 -> 400 invalid_grant
+                        // "Bad credentials"（前端据此映射「账号或密码错误」）。
+                        tracing::warn!("password grant failed: {e}");
+                        oauth_error(StatusCode::BAD_REQUEST, "invalid_grant", "Bad credentials")
+                    })?,
             )
-        })?;
-        let password = form_fields.remove("password").ok_or_else(|| {
-            oauth_error(
-                StatusCode::BAD_REQUEST,
-                "invalid_request",
-                "Password is required",
-            )
-        })?;
-        return Ok(Json(
-            oauth_password_login(db.as_ref(), username, password, ip, user_agent)
-                .await
-                .map_err(|e| {
-                    // Java/Spring OAuth2 契约：账密失败 -> 400 invalid_grant
-                    // "Bad credentials"（前端据此映射「账号或密码错误」）。
-                    tracing::warn!("password grant failed: {e}");
-                    oauth_error(StatusCode::BAD_REQUEST, "invalid_grant", "Bad credentials")
-                })?,
-        )
-        .into_response());
-    }
-
-    // grant_type 手动按字符串分派（password 走上面的 multipart 表单；client_credentials
-    // / refresh_token 走 query）：serde_urlencoded 对 query 里的单元枚举
-    // （untagged enum）无法反序列化——此前用类型化枚举导致所有 query 型
-    // grant_type 一律在 Query 提取器阶段 400，refresh_token / client_credentials
-    // 两个 HTTP 分支完全不可用。
-    match query.grant_type.as_deref().map(str::trim) {
-        Some("client_credentials") => {
-            let scope = query.scope.ok_or_else(|| {
+            .into_response());
+        },
+        "client_credentials" => {
+            let scope = param("scope").ok_or_else(|| {
                 oauth_error(
                     StatusCode::BAD_REQUEST,
                     "invalid_request",
@@ -149,8 +179,8 @@ pub async fn oauth(
             )
             .into_response());
         },
-        Some("refresh_token") => {
-            let refresh_token = query.refresh_token.ok_or_else(|| {
+        "refresh_token" => {
+            let refresh_token = param("refresh_token").ok_or_else(|| {
                 oauth_error(
                     StatusCode::BAD_REQUEST,
                     "invalid_request",

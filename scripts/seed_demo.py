@@ -105,8 +105,8 @@ def main() -> int:
         cur.execute(
             f'INSERT INTO "{schema}"."area" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
-            f"name, code, content, icon_tag, parent_id, is_final, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, '0', {parent}, {str(final).lower()}, 0, {aid}, 0)",
+            f"name, code, content, icon_id, parent_id, is_final, hidden_flag, sort_index, special_flag) "
+            f"VALUES (0, {aid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, 0, {parent}, {str(final).lower()}, 0, {aid}, 0)",
             (name, code),
         )
 
@@ -124,8 +124,9 @@ def main() -> int:
     for iid, name, url in icons:
         cur.execute(
             f'INSERT INTO "{schema}"."icon" '
-            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, name, url) "
-            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, %s)",
+            f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
+            f"tag, description, url, url_variants) "
+            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, '', %s, NULL)",
             (name, url),
         )
 
@@ -141,9 +142,9 @@ def main() -> int:
         cur.execute(
             f'INSERT INTO "{schema}"."item_type" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
-            f"icon_tag, name, content, parent_id, is_final, hidden_flag, sort_index) "
-            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, %s, %s, NULL, {tid}, true, 0, {sort})",
-            (icon_tag, name),
+            f"icon_id, name, content, parent_id, is_final, hidden_flag, sort_index) "
+            f"VALUES (0, {tid}, {now}, NULL, NULL, NULL, false, 0, %s, NULL, {tid}, true, 0, {sort})",
+            (name,),
         )
 
     # ── Items (area_id points at a child area, e.g. 蒙德城) ────────────────
@@ -161,9 +162,9 @@ def main() -> int:
             f'INSERT INTO "{schema}"."item" '
             f"(version, id, create_time, update_time, creator_id, updater_id, del_flag, "
             f"name, area_id, default_refresh_time, default_content, default_count, "
-            f"icon_tag, icon_style_type, hidden_flag, sort_index, special_flag) "
-            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, {area_id}, 0, NULL, 1, %s, 0, 0, {sort}, NULL)",
-            (name, icon_tag),
+            f"icon_id, icon_style_type, hidden_flag, sort_index, special_flag) "
+            f"VALUES (0, {iid}, {now}, NULL, NULL, NULL, false, %s, {area_id}, 0, NULL, 1, 0, 0, 0, {sort}, NULL)",
+            (name,),
         )
         cur.execute(
             f'INSERT INTO "{schema}"."item_type_link" '
@@ -260,13 +261,27 @@ def main() -> int:
         )
         marker_id += 1
 
-    cur.execute('SELECT count(*) FROM "{schema}"."marker"')
+    # ── 显式 id 插入后推进各表序列 ──────────────────────────────────────
+    # 演示数据用固定 id（1..N）以便前端稳定引用；若不 setval，后续 API
+    # 自增插入会从 1 重新开始，撞 area_pkey / item_type_pkey 等唯一约束。
+    for table in (
+        "area", "icon", "item_type", "item", "item_type_link",
+        "notice", "tag_type", "tag", "tag_type_link",
+        "marker", "marker_item_link",
+    ):
+        cur.execute(
+            f'SELECT setval(pg_get_serial_sequence(%s, \'id\'), '
+            f'COALESCE((SELECT MAX(id) FROM "{schema}"."{table}"), 1))',
+            (f'"{schema}"."{table}"',),
+        )
+
+    cur.execute(f'SELECT count(*) FROM "{schema}"."marker"')
     marker_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."item"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."item"')
     item_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."area"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."area"')
     area_count = cur.fetchone()[0]
-    cur.execute('SELECT count(*) FROM "{schema}"."item_type"')
+    cur.execute(f'SELECT count(*) FROM "{schema}"."item_type"')
     type_count = cur.fetchone()[0]
 
     conn.close()

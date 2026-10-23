@@ -11,27 +11,22 @@ version.workspace = true
 bench = false
 
 [dependencies]
-_utils = { path = "../utils", version = "*" }
 
+_utils = { path = "../utils", version = "*" }
 
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-once_cell = { workspace = true }
-
 base64 = { workspace = true }
 chrono = { workspace = true }
-
-tokio = { workspace = true }
-
+env_logger = { workspace = true }
+log = { workspace = true }
+minio = { workspace = true }
+once_cell = { workspace = true }
+redis = { workspace = true }
+sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-uuid = { workspace = true }
-
-env_logger = { workspace = true }
-log = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
-
-sea-orm = { workspace = true }
-redis = { workspace = true }
-minio = { workspace = true }
+uuid = { workspace = true }

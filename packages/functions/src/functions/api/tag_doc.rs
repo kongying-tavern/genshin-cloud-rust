@@ -78,12 +78,7 @@ async fn tag_result(db: &DatabaseConnectionMap) -> Result<ResultEntry> {
                 .all(db)
                 .await?
             {
-                let base = std::env::var("ICON_PROXY_BASE").unwrap_or_default();
-                let url = if icon.url.contains("ddns.minemc.top") && !base.is_empty() {
-                    format!("{base}/cdn/img-proxy?u={}", urlencoding::encode(&icon.url))
-                } else {
-                    icon.url
-                };
+                let url = super::rewrite_image_url(&icon.url);
                 url_map.insert(icon.id, url);
             }
         }

@@ -32,6 +32,19 @@ use sea_orm::prelude::*;
 use _database::models::system::sys_user as sys_user_model;
 use _utils::db_operations::SafeEntityTrait;
 
+/// 图片直链代理改写（`ICON_PROXY_BASE` 设置时生效）：
+/// 指向 ddns.minemc.top 的图片 URL 改写为经本后端 `/cdn/img-proxy`
+/// 转发的地址——该 MinIO 无 CORS 头，浏览器端 fetch 会被拦截（此前仅
+/// tag_doc 二进制导出改写，icon/tag 响应与上传返回的 fileUrl 直链）。
+pub(crate) fn rewrite_image_url(url: &str) -> String {
+    let base = std::env::var("ICON_PROXY_BASE").unwrap_or_default();
+    if url.contains("ddns.minemc.top") && !base.is_empty() {
+        format!("{base}/cdn/img-proxy?u={}", urlencoding::encode(url))
+    } else {
+        url.to_string()
+    }
+}
+
 /// 按用户 id 批量查询，构建前端 `Record<string, SysUserSmallVo>` 契约的
 /// `{id: {id, username, nickname}}` map，用于 `CommonResponse.users`。
 pub(crate) async fn sys_user_map(
@@ -54,12 +67,18 @@ pub(crate) async fn sys_user_map(
         );
     }
     for u in rows {
+        // Java SysUserSmallVo 契约：username/nickname/qq 恒在（null 序列化为
+        // null），phone/logo/remark 可选；**无 id 字段**（key 即用户 id，
+        // 前端按 key 关联）。
         users.insert(
             u.id.to_string(),
             serde_json::json!({
-                "id": u.id,
                 "username": u.username,
                 "nickname": u.nickname,
+                "qq": u.qq,
+                "phone": u.phone,
+                "logo": u.logo,
+                "remark": u.remark,
             }),
         );
     }

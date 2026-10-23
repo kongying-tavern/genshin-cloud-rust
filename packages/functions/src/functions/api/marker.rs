@@ -309,6 +309,22 @@ pub async fn do_tweak(
             if !allowed_flags.contains(&(m.hidden_flag as i32)) {
                 return Err(DomainError::Business("无权操作该点位".into()).into());
             }
+            // 历史（Java tweakMarkers.saveHistory(TWEAK)）：记录**改写前**原值。
+            {
+                let ids = [*marker_id];
+                let items_before = marker_item_map(pg, &ids).await?;
+                let linkage_before = marker_linkage_map(pg, &ids).await?;
+                let content = marker_history_content(&m, &items_before, Some(&linkage_before));
+                super::history::record(
+                    pg,
+                    _utils::types::HistoryOperationType::Position,
+                    _utils::types::HistoryEditType::Tweak,
+                    *marker_id,
+                    content,
+                    Some(auth.info.id),
+                )
+                .await?;
+            }
             let content = m.content.clone();
             let marker_title = m.marker_title.clone();
             let mut am: marker_model::ActiveModel = m.into();
@@ -661,6 +677,42 @@ fn merge_extra(
     Some(serde_json::Value::Object(obj))
 }
 
+/// 点位实体的历史内容序列化（Java `MarkerDto` 的 camelCase JSON 形态）。
+///
+/// 字段集对齐 Java `MarkerDto`（version/id/审计组/markerStamp/markerTitle/
+/// position/itemList/content/picture/markerCreatorId/pictureCreatorId/
+/// videoPath/refreshTime/hiddenFlag/extra/linkageId），score 生成端的
+/// 字段级 diff 按这些键比较（忽略 version/id/markerCreatorId/
+/// pictureCreatorId/itemList/log）。
+fn marker_history_content(
+    m: &marker_model::Model,
+    item_map: &std::collections::HashMap<i64, Vec<MarkerItemLinkVo>>,
+    linkage_map: Option<&std::collections::HashMap<i64, String>>,
+) -> String {
+    serde_json::to_string(&serde_json::json!({
+        "version": m.version,
+        "id": m.id,
+        "creatorId": m.creator_id,
+        "createTime": m.create_time.and_utc().timestamp_millis(),
+        "updaterId": m.updater_id,
+        "updateTime": m.update_time.map(|dt| dt.and_utc().timestamp_millis()),
+        "markerStamp": m.marker_stamp,
+        "markerTitle": m.marker_title,
+        "position": m.position,
+        "itemList": item_map.get(&m.id).cloned().unwrap_or_default(),
+        "content": m.content,
+        "picture": m.picture,
+        "markerCreatorId": m.marker_creator_id,
+        "pictureCreatorId": m.picture_creator_id,
+        "videoPath": m.video_path,
+        "refreshTime": m.refresh_time,
+        "hiddenFlag": m.hidden_flag as i32,
+        "extra": m.extra,
+        "linkageId": linkage_map.and_then(|l| l.get(&m.id).cloned()),
+    }))
+    .unwrap_or_default()
+}
+
 pub async fn do_add_single(
     db: &DatabaseConnectionMap,
     auth: AuthInfo,
@@ -755,6 +807,21 @@ pub async fn do_update_single(
     }
     let old_extra = m.extra.clone();
     let old_version = m.version;
+    // 历史（Java updateMarker.saveHistory）：记录**变更前**状态。
+    {
+        let items_before = marker_item_map(pg, std::slice::from_ref(&payload.id)).await?;
+        let linkage_before = marker_linkage_map(pg, std::slice::from_ref(&payload.id)).await?;
+        let content = marker_history_content(&m, &items_before, Some(&linkage_before));
+        super::history::record(
+            pg,
+            _utils::types::HistoryOperationType::Position,
+            _utils::types::HistoryEditType::Modified,
+            payload.id,
+            content,
+            Some(auth.info.id),
+        )
+        .await?;
+    }
     let mut am: marker_model::ActiveModel = m.into();
 
     if let Some(content) = payload.content {
@@ -1071,6 +1138,21 @@ pub async fn do_delete(
     if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(pg).await? {
         if !allowed_flags.contains(&(m.hidden_flag as i32)) {
             return Err(DomainError::Business("无权操作该点位".into()).into());
+        }
+        // 历史（Java deleteMarker.saveHistory）：记录**删除前**状态。
+        {
+            let items_before = marker_item_map(pg, std::slice::from_ref(&id)).await?;
+            let linkage_before = marker_linkage_map(pg, std::slice::from_ref(&id)).await?;
+            let content = marker_history_content(&m, &items_before, Some(&linkage_before));
+            super::history::record(
+                pg,
+                _utils::types::HistoryOperationType::Position,
+                _utils::types::HistoryEditType::Deleted,
+                id,
+                content,
+                Some(auth.info.id),
+            )
+            .await?;
         }
         let mut am: marker_model::ActiveModel = m.into();
         am.del_flag = Set(true);

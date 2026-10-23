@@ -595,7 +595,7 @@ fn history_edit_type_string() {
         ("1", HistoryEditType::Added),
         ("2", HistoryEditType::Modified),
         ("3", HistoryEditType::Deleted),
-        ("10", HistoryEditType::Initialized),
+        ("10", HistoryEditType::Tweak),
     ] {
         let parsed: HistoryEditType =
             serde_json::from_str(&format!("\"{wire}\"")).expect("numeric string deserializes");
@@ -626,7 +626,7 @@ fn history_edit_type_string() {
         "content": "{}"
     }))
     .expect("HistoryItemVO with string editType deserializes");
-    assert_eq!(vo.edit_type, HistoryEditType::Initialized);
+    assert_eq!(vo.edit_type, HistoryEditType::Tweak);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

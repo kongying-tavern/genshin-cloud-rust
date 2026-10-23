@@ -91,6 +91,8 @@ pub struct ItemTypeUpdateData {
     /// 类型补充说明
     pub content: Option<String>,
     /// 权限屏蔽标记
+    /// 缺省为可见（Java null → 0；前端 VO 可选，避免 422）
+    #[serde(default)]
     pub hidden_flag: HiddenFlag,
     /// 图标标签
     #[serde(default)]

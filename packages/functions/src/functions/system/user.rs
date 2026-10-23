@@ -59,12 +59,12 @@ pub async fn do_register(
     let am = sys_user_model::ActiveModel {
         version: Set(1),
         id: NotSet,
-        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
-        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
+        // 审计字段：新增时 create/update 两组全部设置；自助注册/邀请码消费时尚无
+        // 操作者行（新用户 ID 插入前不存在，FK 不接受 0）——记 NULL 表示系统/匿名
         create_time: Set(now),
         update_time: Set(Some(now)),
-        creator_id: Set(Some(0)),
-        updater_id: Set(Some(0)),
+        creator_id: Set(None),
+        updater_id: Set(None),
         del_flag: Set(false),
 
         username: Set(username),
@@ -130,12 +130,12 @@ pub async fn do_register_qq(
     let am = sys_user_model::ActiveModel {
         version: Set(1),
         id: NotSet,
-        // 审计字段：新增时 create/update 两组全部设置；自助注册无既有
-        // 操作者（新用户 ID 插入前未知），操作者记 0（系统/匿名）
+        // 审计字段：新增时 create/update 两组全部设置；自助注册/邀请码消费时尚无
+        // 操作者行（新用户 ID 插入前不存在，FK 不接受 0）——记 NULL 表示系统/匿名
         create_time: Set(now),
         update_time: Set(Some(now)),
-        creator_id: Set(Some(0)),
-        updater_id: Set(Some(0)),
+        creator_id: Set(None),
+        updater_id: Set(None),
         del_flag: Set(false),
 
         username: Set(username),
@@ -414,7 +414,7 @@ pub async fn do_list(
 
     let vos: Vec<SysUserVO> = items.into_iter().map(Into::into).collect();
     Ok(CommonResponse::new(Ok(
-        serde_json::json!({"total": total, "record": vos}),
+        serde_json::json!({"total": total, "size": size as i64, "record": vos}),
     )))
 }
 

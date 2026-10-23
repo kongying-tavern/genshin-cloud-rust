@@ -6,14 +6,23 @@ use crate::models::Pagination;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconBaseRequest {
-    /// 图标名称
-    pub name: String,
-    /// 图标 URL
+    /// 图标标签（Java `IconVo.tag` / 最新前端契约；旧前端用 `name`，
+    /// serde alias 兼容历史调用方）。
+    #[serde(alias = "name")]
+    pub tag: String,
+    /// 图标 URL（Java `IconVo.url` 可缺省；缺省落空串，避免 422）
+    #[serde(default)]
     pub url: String,
     /// 图标分类 ID 列表（Java IconDto.typeIdList / 前端契约）：写入
     /// icon_type_link；此前 Rust 侧缺失该字段，前端归类被静默丢弃。
     #[serde(default)]
     pub type_id_list: Option<Vec<i64>>,
+    /// 多分辨率 URL 变体（透传存储 `url_variants` jsonb 列）
+    #[serde(default)]
+    pub url_variants: Option<serde_json::Value>,
+    /// 图标描述（透传存储 `description` 列）
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 /// 新增图标请求
@@ -44,8 +53,9 @@ pub struct IconListRequest {
     pub icon_id_list: Option<Vec<i64>>,
     /// 图标分类 ID 列表（前端契约 typeIdList，按 icon_type_link 过滤）
     pub type_id_list: Option<Vec<i64>>,
-    /// 图标名
-    pub name: Option<String>,
+    /// 图标标签（最新前端 `tag`；旧前端 `name`，alias 兼容）
+    #[serde(alias = "name")]
+    pub tag: Option<String>,
 
     #[serde(flatten)]
     pub page: Pagination,
@@ -58,14 +68,29 @@ pub struct IconVO {
     pub id: i64,
     /// 乐观锁版本号（前端编辑时随行提交，用于乐观锁校验）
     pub version: i64,
-    pub name: String,
+    pub creator_id: Option<i64>,
+    pub create_time: f64,
+    pub updater_id: Option<i64>,
+    pub update_time: Option<f64>,
+    /// 图标标签（Java `IconVo.tag`；旧 Rust 实现误用 `name`，最新前端
+    /// 与 Java 均为 `tag`）
+    pub tag: String,
+    /// 图标分类 ID 列表（icon_type_link 反查）
+    #[serde(default)]
+    pub type_id_list: Vec<i64>,
     pub url: String,
+    /// 多分辨率 URL 变体（jsonb 列透传；缺省为 null）
+    pub url_variants: Option<serde_json::Value>,
+    /// 图标描述（无描述为空串）
+    pub description: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IconListResponse {
     pub total: i64,
+    /// 每页大小（Java `PageListVo.size` 契约，默认 10）
+    pub size: i64,
     #[serde(rename = "record")]
     pub items: Vec<IconVO>,
 }

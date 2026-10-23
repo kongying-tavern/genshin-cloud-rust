@@ -18,6 +18,46 @@ use _utils::{
     },
 };
 
+/// 写入一条历史记录（Java `MarkerService.saveHistory` /
+/// `ItemService.saveHistoryItem` 的等价物）。
+///
+/// 此前 Rust 侧只读不写：history 表空转导致 `/api/history/get/list` 恒空、
+/// score 生成无数据源。content 为实体**变更前**状态的 camelCase DTO JSON
+/// （Java 语义：更新/删除记录的是旧值，tweak 记录被批量改写的原值集）。
+pub(crate) async fn record(
+    db: &sea_orm::DatabaseConnection,
+    ty: _utils::types::HistoryOperationType,
+    edit: _utils::types::HistoryEditType,
+    t_id: i64,
+    content: String,
+    creator_id: Option<i64>,
+) -> Result<()> {
+    use sea_orm::ActiveValue::{NotSet, Set};
+
+    let now = Utc::now().naive_utc();
+    let md5_hex = format!("{:x}", md5::compute(content.as_bytes()));
+    history_model::Entity::insert(history_model::ActiveModel {
+        version: Set(1),
+        id: NotSet,
+        // 审计字段：历史行由操作触发，create/update 同刻
+        create_time: Set(now),
+        update_time: Set(Some(now)),
+        creator_id: Set(creator_id),
+        updater_id: Set(creator_id),
+        del_flag: Set(false),
+
+        content: Set(content),
+        md5: Set(Some(md5_hex)),
+        t_id: Set(t_id),
+        history_type: Set(Some(ty)),
+        ipv4: Set(None),
+        edit_type: Set(edit),
+    })
+    .exec(db)
+    .await?;
+    Ok(())
+}
+
 pub async fn do_get_list(
     db: &DatabaseConnectionMap,
     auth: AuthInfo,
@@ -118,6 +158,7 @@ pub async fn do_get_list(
     let users = super::sys_user_map(&db.pg_conn, &creator_ids).await?;
     Ok(CommonResponse::new(Ok(HistoryListResponse {
         total: total as usize,
+        size: size as usize,
         items: arr,
     }))
     .with_users(users))

@@ -330,6 +330,7 @@ async fn area_and_item_doc_business_assertions() {
         ddl_without_foreign_keys(itl_model::Entity),
         ddl_without_foreign_keys(marker_model::Entity),
         ddl_without_foreign_keys(mil_model::Entity),
+        ddl_without_foreign_keys(linkage_model::Entity),
         ddl_without_foreign_keys(tag_model::Entity),
         ddl_without_foreign_keys(tag_type_model::Entity),
     ];
@@ -349,6 +350,7 @@ async fn area_and_item_doc_business_assertions() {
             "icon_type_link",
             "marker",
             "marker_item_link",
+            "marker_linkage",
             "marker_punctuate",
             "tag",
             "tag_type",
@@ -951,25 +953,30 @@ async fn area_and_item_doc_business_assertions() {
         .is_err(),
         "duplicate qq register must fail"
     );
-    // ── Assertion 9: score generation weights by field count ────────────────
-    // Seed three history rows: two Position (打点) rows with 3-field and
-    // 1-field content, and one Area row that must be filtered out.
+    // ── Assertion 9: score generation uses the Java pair-diff algorithm ────
     let now_naive = now;
-    for (i, (content, history_type, edit_type)) in [
+    // 同一点位（t_id=5001）的两条连续历史：字段差异计入 fields，
+    // markerTitle/content 的 Levenshtein 距离计入 chars；Area 类型的历史
+    // 被过滤。贡献归属「前一条记录的创建者 × 日桶」（Java ScoreKey）。
+    let score_uid: i64 = 990077;
+    for (i, (content, history_type, edit_type, t_id)) in [
         (
-            r#"{"title":"a","position":"1,2","content":"c"}"#,
+            r#"{"markerTitle":"abc","content":"xyz","hiddenFlag":0,"refreshTime":100}"#,
             HistoryOperationType::Position,
             HistoryEditType::Added,
+            5001_i64,
         ),
         (
-            r#"{"title":"b"}"#,
+            r#"{"markerTitle":"abd","content":"xy","hiddenFlag":1,"refreshTime":100}"#,
             HistoryOperationType::Position,
             HistoryEditType::Modified,
+            5001_i64,
         ),
         (
             r#"{"name":"area-x"}"#,
             HistoryOperationType::Area,
             HistoryEditType::Added,
+            5002_i64,
         ),
     ]
     .into_iter()
@@ -980,12 +987,12 @@ async fn area_and_item_doc_business_assertions() {
             version: Set(1),
             create_time: Set(now_naive + chrono::Duration::seconds(i as i64)),
             update_time: Set(None),
-            creator_id: Set(Some(77)),
+            creator_id: Set(Some(score_uid)),
             updater_id: Set(None),
             del_flag: Set(false),
             content: Set(content.to_string()),
             md5: Set(None),
-            t_id: Set(i as i64),
+            t_id: Set(t_id),
             history_type: Set(Some(history_type)),
             ipv4: Set(None),
             edit_type: Set(edit_type),
@@ -1019,22 +1026,35 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("generate score ok");
 
-    // Only the Position rows count; the 3-field row weights 3, the 1-field
-    // row weights 1 → total 4 for creator 77.
+    // 仅相邻对 (h1 → h2) 计分：markerTitle/content/hiddenFlag 三个字段变化；
+    // refreshTime 未变不计。chars = Levenshtein("abc","abd") + ("xyz","xy")。
     let stats = score_stat_model::Entity::find_safety()
-        .filter(score_stat_model::Column::UserId.eq(Some(77)))
+        .filter(score_stat_model::Column::UserId.eq(Some(score_uid)))
         .all(db)
         .await
         .expect("fetch score stats");
     assert_eq!(stats.len(), 1, "one score_stat row for the contributor");
     let content = stats[0].content.as_ref().expect("score content set");
-    assert_eq!(content["count"], 2, "two Position edits counted");
     assert_eq!(
-        content["fieldWeight"], 4.0,
-        "field-weighted score = 3 (3 fields) + 1 (1 field)"
+        content["fields"]["markerTitle"], 1,
+        "markerTitle field diff counted"
     );
+    assert_eq!(
+        content["fields"]["content"], 1,
+        "content field diff counted"
+    );
+    assert_eq!(
+        content["fields"]["hiddenFlag"], 1,
+        "hiddenFlag diff counted"
+    );
+    assert!(
+        content["fields"].get("refreshTime").is_none(),
+        "unchanged refreshTime not counted"
+    );
+    assert_eq!(content["chars"]["markerTitle"], 1, "title levenshtein = 1");
+    assert_eq!(content["chars"]["content"], 1, "content levenshtein = 1");
 
-    // do_get_score_data reads the real score (not a fixed 1.0).
+    // do_get_score_data merges the generated rows per user.
     let data = score_fns::do_get_score_data(
         map,
         auth.clone(),
@@ -1050,11 +1070,13 @@ async fn area_and_item_doc_business_assertions() {
     .data
     .expect("get score data ok");
     let samples = data.as_array().expect("samples array");
-    assert_eq!(samples.len(), 1, "one sample returned");
-    let chars = samples[0]["data"]["chars"].as_object().expect("chars map");
+    let mine = samples
+        .iter()
+        .find(|s| s["userId"].as_i64() == Some(score_uid))
+        .expect("contributor sample returned");
     assert_eq!(
-        chars.get("content").and_then(|v| v.as_f64()).unwrap_or(0.0),
-        4.0,
+        mine["data"]["chars"]["content"].as_i64(),
+        Some(1),
         "score read back from content"
     );
 

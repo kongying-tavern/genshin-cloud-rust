@@ -22,51 +22,9 @@ edition = "2024"
 rust-version = "1.94"
 
 [workspace.dependencies]
+
 anyhow = { version = "^1", features = ["backtrace"] }
 async-trait = "^0.1"
-once_cell = "^1"
-thiserror = "^2"
-
-base64 = "^0.22"
-# bytes: cheap-clone byte buffers for cached doc pages. The diff-snapshot
-# payload is served at high frequency; Bytes makes every cache hit a
-# refcount bump instead of a full-payload memcpy.
-bytes = "^1"
-chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
-
-tokio = { version = "^1", features = ["full"] }
-
-serde = { version = "^1", features = ["derive"] }
-serde_json = "^1"
-# sea-orm 2.0-rc is now the baseline; strum is bumped to 0.28 to match.
-# Drop the -rc suffix once sea-orm 2.0 goes stable.
-strum = { version = "^0.28", features = ["derive"] }
-uuid = { version = "^1", features = [
-  'v4',
-  "v7",
-  'fast-rng',
-  'macro-diagnostics',
-  'serde',
-] }
-
-# flate2 for the BinaryMD5 gzip-compressed archive export (Java uses GZIP, not bzip2).
-flate2 = "^1"
-bzip2 = "^0.6"
-
-bcrypt = "^0.19"
-# jsonwebtoken 10 requires an explicit crypto provider. Use rust_crypto (ring)
-# to stay consistent with the workspace's aws-lc-free rustls+ring policy.
-# use_pem enables RSA key loading from PEM (RS256 signing, JWKS).
-jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto", "use_pem"] }
-
-md5 = "^0.8"
-# moka: in-process cache for the BinaryMD5 archive export (Java uses Caffeine).
-moka = { version = "^0.12", features = ["future"] }
-
-env_logger = "^0.11"
-log = "^0.4"
-tracing = "^0.1"
-
 axum = { version = "^0.8", features = [
   "macros",
   "json",
@@ -86,6 +44,33 @@ axum-extra = { version = "^0.12", features = [
 # unification. `rustls-no-provider` gives us the rustls transport without
 # committing to a provider; the ring provider is activated by the explicit
 # `rustls` workspace dep below, which uses `default-features = false`.
+base64 = "^0.22"
+bcrypt = "^0.19"
+# bytes: cheap-clone byte buffers for cached doc pages. The diff-snapshot
+# payload is served at high frequency; Bytes makes every cache hit a
+# refcount bump instead of a full-payload memcpy.
+bytes = "^1"
+bzip2 = "^0.6"
+chrono = { version = "^0.4", features = ["serde", "unstable-locales"] }
+env_logger = "^0.11"
+flate2 = "^1"
+# jsonwebtoken 10 requires an explicit crypto provider. Use rust_crypto (ring)
+# to stay consistent with the workspace's aws-lc-free rustls+ring policy.
+# use_pem enables RSA key loading from PEM (RS256 signing, JWKS).
+jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto", "use_pem"] }
+log = "^0.4"
+md5 = "^0.8"
+minio = "^0.4"
+# moka: in-process cache for the BinaryMD5 archive export (Java uses Caffeine).
+moka = { version = "^0.12", features = ["future"] }
+once_cell = "^1"
+redis = { version = "^1", features = [
+  "tokio-comp",
+  "ahash",
+  "uuid",
+  "json",
+  "aio",
+] }
 reqwest = { version = "^0.13", default-features = false, features = [
   "charset",
   "http2",
@@ -111,8 +96,6 @@ rustls = { version = "^0.23", default-features = false, features = [
 # timeout: request-wide 60s TimeoutLayer; set-header: nosniff /
 # Referrer-Policy security response headers. Both wired up in
 # packages/router/src/routes/mod.rs.
-tower-http = { version = "^0.7", features = ["fs", "trace", "cors", "timeout", "set-header"] }
-
 # sea-orm 2.0 release candidate. The SafeEntityTrait macro and all call sites
 # have been ported to the new UpdateOne/ValidatedUpdateOne API. Switch to "^2"
 # once 2.0 stable ships.
@@ -123,11 +106,21 @@ sea-orm = { version = "^2.0.0-rc", features = [
   "runtime-tokio-rustls",
 ] }
 # redis 1.x graduated to stable (the 0.x line is the legacy async API).
-redis = { version = "^1", features = [
-  "tokio-comp",
-  "ahash",
-  "uuid",
-  "json",
-  "aio",
+serde = { version = "^1", features = ["derive"] }
+serde_json = "^1"
+# sea-orm 2.0-rc is now the baseline; strum is bumped to 0.28 to match.
+# Drop the -rc suffix once sea-orm 2.0 goes stable.
+strum = { version = "^0.28", features = ["derive"] }
+thiserror = "^2"
+tokio = { version = "^1", features = ["full"] }
+tower-http = { version = "^0.7", features = ["fs", "trace", "cors", "timeout", "set-header"] }
+tracing = "^0.1"
+uuid = { version = "^1", features = [
+  'v4',
+  "v7",
+  'fast-rng',
+  'macro-diagnostics',
+  'serde',
 ] }
-minio = "^0.4"
+
+# flate2 for the BinaryMD5 gzip-compressed archive export (Java uses GZIP, not bzip2).

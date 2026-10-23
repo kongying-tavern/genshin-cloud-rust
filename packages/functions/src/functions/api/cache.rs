@@ -48,6 +48,24 @@ pub async fn do_delete_icon_tag_cache(
     Ok(CommonResponse::new(Ok(true)))
 }
 
+/// 清除图标缓存（Java `CacheController` `DELETE /api/cache/icon`，
+/// body `List<Long>` 图标 ID 列表，空列表 = 全量清除）。
+///
+/// Java 侧按 ID 精确驱逐 Caffeine 图标缓存；Rust 的 icon 缓存是整块
+/// blob（icon_doc / 二进制导出），无法按单 ID 部分失效——空列表与非空
+/// 列表都整体失效（blob 中含所请求的 ID，粗粒度失效保持一致性）。
+/// 依赖方拉取新 blob 后自然拿到最新图标集。
+pub async fn do_delete_icon_cache(
+    db: &DatabaseConnectionMap,
+    auth: AuthInfo,
+    _icon_ids: Vec<i64>,
+) -> Result<CommonResponse<bool>> {
+    auth.require_non_anonymous()?;
+    binary_doc::invalidate_all(db).await;
+    super::super::ws::ws_broadcast("IconBinaryPurged", serde_json::Value::Null);
+    Ok(CommonResponse::new(Ok(true)))
+}
+
 /// 清除点位缓存（BinaryMD5 marker 页）。
 pub async fn do_delete_marker_cache(
     db: &DatabaseConnectionMap,

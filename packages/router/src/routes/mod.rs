@@ -144,7 +144,7 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 /// 若强行传 db 只会得到未使用变量（值在组合根才被消费）。
 pub async fn router(db: SharedDb) -> Result<Router> {
     let ret = Router::new()
-        .route("/oauth/token", post(system::oauth::oauth))
+        .route("/oauth/token", post(system::oauth::oauth).get(system::oauth::oauth))
         .route("/.well-known/jwks.json", get(jwks))
         .nest("/system", system::router().await?)
         .route("/ws/{user_id}", get(ws::ws_handler))

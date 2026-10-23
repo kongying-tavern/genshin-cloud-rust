@@ -13,3 +13,10 @@
 *.pyc
 __pycache__/
 .mimosa/
+
+# Staged celestia-devtools recipes (just fetch)
+/.just/
+
+# `celestia-devtools init --check` (hygiene gate) requires this rule even
+# though the root copy is never created in the staged model.
+/celestia-devtools.just

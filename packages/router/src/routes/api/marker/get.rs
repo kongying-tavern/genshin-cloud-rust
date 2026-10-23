@@ -7,7 +7,7 @@ use axum::{
 };
 
 use crate::middlewares::ExtractAuthInfo;
-use _utils::models::{marker::MarkerFilterRequest, wrapper::Pagination};
+use _utils::models::{marker::MarkerByIdRequest, marker::MarkerFilterRequest, wrapper::Pagination};
 
 /// 根据各种条件筛选查询点位ID
 /// 支持根据末端地区、末端类型、物品来进行查询，三种查询不能同时生效，同时存在时报错
@@ -47,9 +47,11 @@ pub async fn get_list_by_info(
 pub async fn get_list_by_id(
     State(db): State<crate::routes::SharedDb>,
     ExtractAuthInfo(auth): ExtractAuthInfo,
-    Json(payload): Json<Vec<i64>>,
+    Json(payload): Json<MarkerByIdRequest>,
 ) -> Result<impl IntoResponse, crate::routes::RouteError> {
-    match _functions::functions::api::marker::do_get_list_by_id(db.as_ref(), auth, payload).await {
+    // 双形态请求体（裸数组 / MarkerSearchVo 对象）归一为 ID 列表。
+    let ids = payload.into_ids();
+    match _functions::functions::api::marker::do_get_list_by_id(db.as_ref(), auth, ids).await {
         Ok(v) => Ok((StatusCode::OK, Json(v))),
         Err(e) => Err(crate::routes::internal_error(e)),
     }

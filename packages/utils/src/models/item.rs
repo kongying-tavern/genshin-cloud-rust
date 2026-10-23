@@ -219,6 +219,8 @@ pub struct ItemVO {
 #[serde(rename_all = "camelCase")]
 pub struct ItemListResponse {
     pub total: i64,
+    /// 每页大小（Java `PageListVo.size` 契约，默认 10）
+    pub size: i64,
     #[serde(rename = "record")]
     pub items: Vec<ItemVO>,
 }
@@ -239,6 +241,8 @@ pub struct ItemAreaPublicVo {
 #[serde(rename_all = "camelCase")]
 pub struct ItemAreaPublicListResponse {
     pub total: i64,
+    /// 每页大小（Java `PageListVo.size` 契约，默认 10）
+    pub size: i64,
     #[serde(rename = "record")]
     pub items: Vec<ItemAreaPublicVo>,
 }

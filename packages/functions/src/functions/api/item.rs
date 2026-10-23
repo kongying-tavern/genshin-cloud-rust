@@ -137,6 +137,33 @@ pub async fn do_update(
     Ok(CommonResponse::new(Ok(true)))
 }
 
+/// 物品实体的历史内容序列化（Java `ItemDto` 的 camelCase JSON 形态）。
+fn item_history_content(
+    it: &item_model::Model,
+    type_map: &std::collections::HashMap<i64, Vec<i64>>,
+) -> String {
+    serde_json::to_string(&serde_json::json!({
+        "version": it.version,
+        "id": it.id,
+        "creatorId": it.creator_id,
+        "createTime": it.create_time.and_utc().timestamp_millis(),
+        "updaterId": it.updater_id,
+        "updateTime": it.update_time.map(|dt| dt.and_utc().timestamp_millis()),
+        "name": it.name,
+        "areaId": it.area_id,
+        "defaultRefreshTime": it.default_refresh_time,
+        "defaultContent": it.default_content,
+        "defaultCount": it.default_count,
+        "iconId": it.icon_id,
+        "iconStyleType": it.icon_style_type,
+        "hiddenFlag": it.hidden_flag as i32,
+        "sortIndex": it.sort_index,
+        "specialFlag": it.special_flag,
+        "typeIdList": type_map.get(&it.id).cloned().unwrap_or_default(),
+    }))
+    .unwrap_or_default()
+}
+
 /// 更新单个物品及其类型关联（`typeIdList` 全量替换）。
 async fn update_one(
     db: &sea_orm::DatabaseConnection,
@@ -146,6 +173,20 @@ async fn update_one(
 ) -> Result<()> {
     let item = item_model::Entity::find_safety_by_id(id).one(db).await?;
     let item = item.ok_or_else(|| DomainError::Business("Item not found".into()))?;
+    // 历史（Java updateItem.saveHistoryItem(UPDATE)）：记录**变更前**状态。
+    {
+        let type_map = type_id_map(db).await?;
+        let content = item_history_content(&item, &type_map);
+        super::history::record(
+            db,
+            _utils::types::HistoryOperationType::Item,
+            _utils::types::HistoryEditType::Modified,
+            id,
+            content,
+            Some(operator_id),
+        )
+        .await?;
+    }
     let mut am: item_model::ActiveModel = item.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(operator_id));
@@ -275,14 +316,19 @@ pub async fn do_get_list(
     let type_map = type_id_map(db).await?;
     let count_map = marker_count_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(item_to_vo(&it, &type_map, &icon_tag_map, &count_map));
+    for it in &items {
+        arr.push(item_to_vo(it, &type_map, &icon_tag_map, &count_map));
     }
-    let payload = ItemListResponse {
+    let resp = ItemListResponse {
         total: total as i64,
+        size: size as i64,
         items: arr,
     };
-    Ok(CommonResponse::new(Ok(payload)))
+    // 前端物品管理页读取信封 users 显示创建者昵称（与 marker/history 一致）。
+    let creator_ids: std::collections::HashSet<i64> =
+        items.iter().filter_map(|it| it.creator_id).collect();
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(resp)).with_users(users))
 }
 
 // 将多个物品加入到某个类型（在 link 表中插入或更新）
@@ -390,10 +436,13 @@ pub async fn do_get_list_by_id(
     let type_map = type_id_map(db).await?;
     let count_map = marker_count_map(db).await?;
     let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(item_to_vo(&it, &type_map, &icon_tag_map, &count_map));
+    let creator_ids: std::collections::HashSet<i64> =
+        items.iter().filter_map(|it| it.creator_id).collect();
+    for it in &items {
+        arr.push(item_to_vo(it, &type_map, &icon_tag_map, &count_map));
     }
-    Ok(CommonResponse::new(Ok(arr)))
+    let users = super::sys_user_map(db, &creator_ids).await?;
+    Ok(CommonResponse::new(Ok(arr)).with_users(users))
 }
 
 pub async fn do_delete(
@@ -418,6 +467,20 @@ pub async fn do_delete(
         return Err(DomainError::Business("不允许删除公共物品".into()).into());
     }
 
+    // 历史（Java deleteItem.saveHistoryItem(DELETE)）：记录**删除前**状态。
+    {
+        let type_map = type_id_map(pg).await?;
+        let content = item_history_content(&item, &type_map);
+        super::history::record(
+            pg,
+            _utils::types::HistoryOperationType::Item,
+            _utils::types::HistoryEditType::Deleted,
+            id,
+            content,
+            Some(auth.info.id),
+        )
+        .await?;
+    }
     let mut am: item_model::ActiveModel = item.into();
     am.del_flag = Set(true);
     // 审计字段：软删也是修改，设置 update 组

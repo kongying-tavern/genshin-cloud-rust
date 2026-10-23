@@ -116,6 +116,7 @@ pub async fn do_list(
 
     Ok(CommonResponse::new(Ok(serde_json::json!({
         "total": total,
+        "size": size as i64,
         "record": record,
     }))))
 }
