@@ -111,12 +111,22 @@ cargo patch，跑 cargo 会把 `[[patch.unused]]` 版本噪音写进 lock——�
 注册进 `Migrator`）。存量库升级前可先跑
 `cargo run --bin init_db -- --check` 做漂移检测。
 
-1. **WS 前端契约收敛**：决策文档见
+1. **WS 前端契约收敛**：已于 2026-10-23 定案——采用 socket.io 兼容模式
 
-`docs/{en,zh-Hans,zh-Hant}/designs/ws-frontend-contract.md`——现存前端
-均不消费裸 `/ws` 端点（管理端 socket.io、地图端无 WS），协议选择权在
-前端维护者。
+（路径 2：后端补 socket.io 端点、前端保持 socket.io-client），决策记录见
+`docs/{en,zh-Hans,zh-Hant}/designs/ws-frontend-contract.md` 文末
+「2026-10-23 决策」节。现存前端均不消费裸 `/ws` 端点，该端点与
+`WS_AUTH_REQUIRED` 逃生阀暂保留，待 socket.io 通道落地后再议去留。
 
 1. **本文件的维护纪律**：完成的事项随下次例行清理 PR 移出本文件，只增
 
 不删会让这里重新变成历史堆积场；前瞻事项保持「仍然有效」这一个判据。
+
+## 7. 前瞻事项（未排期）
+
+1. **契约权威**：前端 `openapi2ts` 仍从 Java `/v3/api-docs` 生成客户端，而 Rust
+   侧没有 OpenAPI 产物——每次契约变更都存在前端生成物与 Rust 实现漂移的风险。
+   需二选一并配契约测试：Rust 侧生成 OpenAPI，或前端冻结生成物并加契约测试
+   （未排期）。
+1. **发布/生产状态记录义务**：`deploy/README.md` 的「当前线上归属」小节须在
+   每次正式部署或环境交接后由维护者登记；未登记视为发布/生产状态未定。

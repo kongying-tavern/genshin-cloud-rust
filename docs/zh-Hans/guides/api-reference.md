@@ -59,6 +59,17 @@ Java 侧控制器的 Rust 移植：路径、请求/响应结构与 Java 参考�
 | oauth | OAuth2 接入 |
 | archive | 归档管理 |
 
+## 可观测性
+
+根级挂载（无鉴权，供探针与 Prometheus 抓取器使用）：
+
+| 端点 | 说明 |
+| --- | --- |
+| `GET /health` | 存活/就绪探测：以 `SELECT 1` 探测 Postgres，配置 Redis 时以 `PING` 探测。DB 不可达 → 503 `{"status":"unavailable","db":false,...}`；Redis 不可达 → 200 `{"status":"degraded",...}`；未配置 Redis 视为不参与（`"redis":null`）。 |
+| `GET /metrics` | Prometheus 文本（`text/plain; version=0.0.4`）：HTTP 请求计数 `http_requests_total{method,status}` 与延迟直方图 `http_request_duration_seconds{method}`。 |
+
+HTTP 访问日志在 info 级输出 method、path、status 与耗时（target `genshin_cloud::access`）。
+
 ## 鉴权
 
 除少量公开端点外，所有路由经 `ExtractAuthInfo` 中间件提取 JWT 中的 `AuthInfo`，

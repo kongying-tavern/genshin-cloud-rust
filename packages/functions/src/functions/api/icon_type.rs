@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    ColumnTrait, QueryFilter, QuerySelect,
+    ColumnTrait, QueryFilter, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -103,7 +103,7 @@ pub async fn do_update(
         .count(pg)
         .await?;
     am.is_final = Set(children == 0);
-    icon_type_model::Entity::update_safety(am)?.exec(pg).await?;
+    icon_type_model::Entity::update_safety_strict(am, pg).await?;
     super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
 }
@@ -178,33 +178,38 @@ pub async fn do_delete(
     };
     let parent_id = item.parent_id;
 
-    // BFS 逐层：软删类型 → 删除 icon_type_link → 收集子级
+    // BFS 逐层：软删类型 → 删除 icon_type_link → 收集子级。
+    // 整棵子树的级联包单一事务：中途失败不能留下「父类已删、子类/关联还在」
+    // 的半删状态。
+    let txn = pg.begin().await?;
     let mut now: Vec<i64> = vec![id];
     while !now.is_empty() {
         for chunk in now.chunks(1000) {
             // 类型关联（icon → type）
             for l in itl_model::Entity::find()
                 .filter(itl_model::Column::TypeId.is_in(chunk))
-                .all(pg)
+                .all(&txn)
                 .await?
             {
                 let mut am: itl_model::ActiveModel = l.into();
-                am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                itl_model::Entity::update_safety(am)?.exec(pg).await?;
+                // 必须走 delete_safety（update_safety 固定 del_flag=NotSet）
+                itl_model::Entity::delete_safety(am)?.exec(&txn).await?;
             }
             // 类型本体
             for t in icon_type_model::Entity::find_safety()
                 .filter(icon_type_model::Column::Id.is_in(chunk))
-                .all(pg)
+                .all(&txn)
                 .await?
             {
                 let mut am: icon_type_model::ActiveModel = t.into();
                 am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                icon_type_model::Entity::delete_safety(am)?.exec(pg).await?;
+                icon_type_model::Entity::delete_safety(am)?
+                    .exec(&txn)
+                    .await?;
             }
         }
         let mut children: Vec<i64> = Vec::new();
@@ -215,12 +220,14 @@ pub async fn do_delete(
                     .select_only()
                     .column(icon_type_model::Column::Id)
                     .into_tuple::<i64>()
-                    .all(pg)
+                    .all(&txn)
                     .await?,
             );
         }
         now = children;
     }
+    txn.commit().await?;
+
     recalc_parent_is_final(pg, parent_id, false).await;
     super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))

@@ -84,6 +84,17 @@ Mounted under `/system/*`, these are the administration and account surface.
 | Action log | `/system/action_log` | Audit log of administrative actions. |
 | OAuth | `/oauth/token` | OAuth2 token issuance (JWT + JWKS, RS256 or HS256; grants: password, QQ, refresh_token, client_credentials). |
 
+## Observability
+
+Root-mounted, unauthenticated endpoints for probes and Prometheus scrapers:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Liveness/readiness probe: `SELECT 1` against Postgres and `PING` against Redis when configured. Unreachable DB → 503 `{"status":"unavailable","db":false,...}`; unreachable Redis → 200 `{"status":"degraded",...}`; unconfigured Redis is reported as `"redis":null` (not participating). |
+| `GET /metrics` | Prometheus text (`text/plain; version=0.0.4`): request counter `http_requests_total{method,status}` and latency histogram `http_request_duration_seconds{method}`. |
+
+HTTP access logs are emitted at info level with method, path, status and duration (target `genshin_cloud::access`).
+
 ## Notes on parity
 
 This router is the Rust port of the Java controllers, not a clean-room

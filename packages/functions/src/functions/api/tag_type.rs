@@ -3,7 +3,7 @@ use chrono::Utc;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QueryFilter, QuerySelect,
+    QueryFilter, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -99,7 +99,7 @@ pub async fn do_update(
         .await?;
     am.is_final = Set(children == 0);
 
-    tag_type_model::Entity::update_safety(am)?.exec(pg).await?;
+    tag_type_model::Entity::update_safety_strict(am, pg).await?;
     super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",
@@ -192,32 +192,36 @@ pub async fn do_delete(
     };
     let parent_id = t.parent_id;
 
+    // 整棵子树的级联包单一事务（与 icon_type 删除同构）。
+    let txn = pg.begin().await?;
     let mut now: Vec<i64> = vec![id];
     while !now.is_empty() {
         for chunk in now.chunks(1000) {
             // 标签类型关联（tag → type）
             for l in ttl_model::Entity::find()
                 .filter(ttl_model::Column::TypeId.is_in(chunk))
-                .all(pg)
+                .all(&txn)
                 .await?
             {
                 let mut am: ttl_model::ActiveModel = l.into();
-                am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                ttl_model::Entity::update_safety(am)?.exec(pg).await?;
+                // 必须走 delete_safety（update_safety 固定 del_flag=NotSet）
+                ttl_model::Entity::delete_safety(am)?.exec(&txn).await?;
             }
             // 类型本体
             for tt in tag_type_model::Entity::find_safety()
                 .filter(tag_type_model::Column::Id.is_in(chunk))
-                .all(pg)
+                .all(&txn)
                 .await?
             {
                 let mut am: tag_type_model::ActiveModel = tt.into();
                 am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                tag_type_model::Entity::delete_safety(am)?.exec(pg).await?;
+                tag_type_model::Entity::delete_safety(am)?
+                    .exec(&txn)
+                    .await?;
             }
         }
         let mut children: Vec<i64> = Vec::new();
@@ -228,12 +232,14 @@ pub async fn do_delete(
                     .select_only()
                     .column(tag_type_model::Column::Id)
                     .into_tuple::<i64>()
-                    .all(pg)
+                    .all(&txn)
                     .await?,
             );
         }
         now = children;
     }
+    txn.commit().await?;
+
     recalc_parent_is_final(pg, parent_id, false).await;
     super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(

@@ -10,7 +10,7 @@ use tokio::net::TcpListener;
 // integration tests can drive the assembled Router directly (oneshot); this
 // binary only does process-level wiring around it.
 use _database::init_db_conn;
-use _router::routes::router;
+use _router::routes::{router, socketio_layer};
 
 /// 已知占位符 JWT_SECRET（比较时去空白、转小写）：示例/文档值被原样复制
 /// 进生产配置是最常见的密钥泄漏来源（看过文档的人都能伪造 token），
@@ -142,6 +142,9 @@ async fn main() -> Result<()> {
     }
     builder.init();
 
+    // 启动即安装 Prometheus recorder（router() 内也有幂等调用，测试路径用）。
+    _router::routes::observability::init_metrics();
+
     // Fail fast on a missing JWT secret. The lazy JWT key statics would
     // otherwise panic on the first authenticated request — and with
     // `panic = "abort"` in the release profile that kills the whole process
@@ -175,8 +178,13 @@ async fn main() -> Result<()> {
     // 的非阻塞读取（取舍说明见 routes::SharedDb 文档注释）。
     let db = init_db_conn().await?;
 
+    // Socket.IO 兼容通道：挂载在独立握手路径（默认 /socket.io），与裸
+    // WS /ws/{userId} 共存；事件经共享注册表转发给两种客户端。
+    let socketio = socketio_layer(db.clone())?;
+
     let router = router(db)
         .await?
+        .layer(socketio)
         .into_make_service_with_connect_info::<SocketAddr>();
 
     let listener = TcpListener::bind(format!("0.0.0.0:{port}"))

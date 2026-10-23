@@ -58,11 +58,16 @@ flowchart TD
 ## SafeEntityTrait 模式
 
 所有內容域實體通過 `impl_safe_operation!` 宏（`packages/utils/src/db_operations.rs`）
-獲得三個安全操作：`find_safety`（過濾 `del_flag=false`）、`update_safety`（帶
-`version` 樂觀鎖，`WHERE version = last_version` 並自增）、`delete_safety`（置
-`del_flag=true` 軟刪除）。宏還把 `ActiveModelBehavior::before_delete` 改爲直接
-報錯，從而在編譯期之外、運行期禁止硬刪除。這套模式是 Rust 側對 Java 側
-`BaseEntity` + MyBatis-Plus 邏輯刪除/樂觀鎖的對齊實現。
+獲得安全操作：`find_safety`（過濾 `del_flag=false`）、`update_safety`（帶
+`version` 樂觀鎖，`WHERE version = last_version` 並自增）、
+`update_safety_strict`（同一語句直接執行，把 0 行結果轉成領域錯誤——更新型
+handler 用它把並發衝突暴露給客戶端，按 id 刪除仍保持容忍：0 行=已刪除）、
+`delete_safety`（置 `del_flag=true` 軟刪除）與 `restore_safety`（反向恢復
+`del_flag=false`，用於重新提交已刪除的關聯）。`update_safety` 生成的 UPDATE
+刻意不帶 `del_flag`（避免整行寫回誤復活已軟刪記錄），因此軟刪除必須走
+`delete_safety`，復活必須走 `restore_safety`。宏還把
+`ActiveModelBehavior::before_delete` 改爲直接報錯，從而在運行期禁止硬刪除。
+這套模式是 Rust 側對 Java 側 `BaseEntity` + MyBatis-Plus 邏輯刪除/樂觀鎖的對齊實現。
 
 ## Redis 與 MinIO 集成點
 

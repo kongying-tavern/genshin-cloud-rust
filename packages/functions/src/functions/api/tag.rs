@@ -84,7 +84,7 @@ pub async fn do_update(
     am.tag = Set(new_tag.clone());
     am.icon_id = Set(payload.base.icon_id);
 
-    tag_model::Entity::update_safety(am)?.exec(pg).await?;
+    tag_model::Entity::update_safety_strict(am, pg).await?;
 
     // 改名时同步 tag_type_link（该表以 tag_name 为键，否则旧关联悬空）
     if new_tag != old_tag {
@@ -367,7 +367,7 @@ pub async fn do_update_by_name(
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
     am.icon_id = Set(icon_id);
-    tag_model::Entity::update_safety(am)?.exec(pg).await?;
+    tag_model::Entity::update_safety_strict(am, pg).await?;
     super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "IconTagBinaryPurged",

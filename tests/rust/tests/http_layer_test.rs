@@ -326,3 +326,93 @@ async fn unknown_path_hits_501_fallback() {
         .expect("read body");
     assert_eq!(&body[..], &b"Not Implemented"[..]);
 }
+
+/// 8. `/health` never panics on a non-database environment: the mock
+/// connection answers every query with a "no canned result" error, which the
+/// probe maps to `db: false` → 503, and the documented JSON shape is still
+/// produced in oneshot mode (no live Postgres in this test binary).
+#[tokio::test]
+async fn health_reports_unavailable_database_as_503_json() {
+    setup();
+    let app = router().await;
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("call router");
+
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let body = to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .expect("read body");
+    let v: serde_json::Value = serde_json::from_slice(&body).expect("health body is JSON");
+    assert_eq!(v["status"], "unavailable");
+    assert_eq!(v["db"], false);
+    assert!(
+        v["redis"].is_null(),
+        "unset Redis must be reported as null: {v}"
+    );
+}
+
+/// 9. `/metrics` renders Prometheus text and exposes the HTTP request counter
+/// plus the latency histogram recorded by the outermost access-log middleware
+/// (the /health probe above is already counted by the time this scrape runs).
+#[tokio::test]
+async fn metrics_renders_prometheus_text() {
+    setup();
+    let app = router().await;
+
+    // Record one request first: the counter is incremented in on_response of
+    // the outermost access-log middleware, i.e. before this oneshot returns.
+    let probe = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("call router");
+    assert_eq!(probe.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .uri("/metrics")
+                .body(Body::empty())
+                .expect("build request"),
+        )
+        .await
+        .expect("call router");
+
+    assert_eq!(resp.status(), StatusCode::OK);
+    let content_type = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .expect("content-type header")
+        .to_str()
+        .expect("content-type is UTF-8");
+    assert!(
+        content_type.starts_with("text/plain"),
+        "unexpected content type: {content_type}"
+    );
+
+    let body = to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .expect("read body");
+    let text = String::from_utf8(body.to_vec()).expect("metrics body is UTF-8");
+    assert!(
+        text.contains("# TYPE http_requests_total counter"),
+        "request counter missing from scrape:\n{text}"
+    );
+    assert!(
+        text.contains("# TYPE http_request_duration_seconds histogram"),
+        "latency histogram missing from scrape:\n{text}"
+    );
+}

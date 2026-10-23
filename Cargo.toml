@@ -14,7 +14,7 @@ panic = "abort"
 authors = ["langyo <langyo.china@gmail.com>"]
 publish = false
 
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 # Declared MSRV — verified by the "MSRV check" job in rust.yml. Bump only
 # with an explicit reason (dependency floor raised), never opportunistically.
@@ -60,6 +60,12 @@ flate2 = "^1"
 jsonwebtoken = { version = "^10", default-features = false, features = ["rust_crypto", "use_pem"] }
 log = "^0.4"
 md5 = "^0.8"
+# metrics: facade for the HTTP request counter / latency histogram rendered at
+# GET /metrics. The exporter pins default-features = false because its default
+# "push-gateway" feature pulls hyper-rustls/aws-lc-rs, which would drag the
+# aws-lc crypto provider into the workspace and overrule its ring-only policy.
+metrics = "^0.24"
+metrics-exporter-prometheus = { version = "^0.18", default-features = false }
 minio = "^0.4"
 # moka: in-process cache for the BinaryMD5 archive export (Java uses Caffeine).
 moka = { version = "^0.12", features = ["future"] }
@@ -107,6 +113,8 @@ sea-orm = { version = "^2.0.0-rc", features = [
 ] }
 # redis 1.x graduated to stable (the 0.x line is the legacy async API).
 serde = { version = "^1", features = ["derive"] }
+# Socket.IO 兼容层（v0.18 = 协议 v5 / EIO=4，开箱支持 socket.io-client 4.x）
+socketioxide = { version = "^0.18", features = ["tracing"] }
 serde_json = "^1"
 # sea-orm 2.0-rc is now the baseline; strum is bumped to 0.28 to match.
 # Drop the -rc suffix once sea-orm 2.0 goes stable.

@@ -158,6 +158,10 @@ migration (see the 2026-10-22 update in ws-frontend-contract); the
 pre-migration local tree's `?token=` patch lives on the frontend repo's
 `fix/ws-token-query` branch.
 
+- **WS migration decision landed**: the backend serves a Socket.IO-compatible
+  channel via `socketioxide` (`/socket.io`); see the ws-frontend-contract
+  2026-10-23 decision for the auth rules.
+
 ## Follow-ups
 
 - Remaining gap items live in the iteration backlog (root `PLAN.md`) and
