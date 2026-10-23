@@ -1,10 +1,10 @@
 # WebSocket 前端契約
 
-狀態：**待前端側決策** · 最近核實：2026-10-22
+狀態：**已決策（2026-10-23）：socket.io 相容模式** · 最近核實：2026-10-22
 
 本文記錄 Rust 後端推送通道的契約、前端倉庫目前實際消費的情況、以及收斂
-兩者的可選路徑。目的在於把事實擺全再決策——後端側已定形並完成加固，本文
-不請求任何後端改動。
+兩者的可選路徑。目的在於把事實擺全再決策——後端側當時已定形並完成加固；
+2026-10-23 起按文末決策推進 socket.io 相容端點。
 
 ## Rust 後端提供什麼
 
@@ -77,3 +77,25 @@ socket.io-client 換成原生 `WebSocket` + 本文的 token 約定是受控改�
 - 遷移前的本地樹已按 token 約定修補（分支 `fix/ws-token-query`：`getURL`
 
 拼接 `?token=`）——僅服務仍執行裸 WS 版本前端的過渡視窗。
+
+## 2026-10-23 決策
+
+- **最終決策：socket.io 相容模式（路徑 2）**——維護者已確認：Rust 後端補
+socket.io 相容端點（含握手鑑權），前端保持 socket.io-client，不再遷移裸 WS。
+本節取代上文「建議」（推薦路徑 1）與 2026-10-22 更新中「取捨仍開放」的表述。
+
+- 已按路徑 1 準備的前端遷移（`map_register_v3` PR #168，裸 WS + `?token=` +
+Ping/Pong，含 15 個單測）已撤回關閉，程式碼保留在 fork 分支
+`feat/raw-ws-client` 備查。
+
+## 2026-10-23 實現落地（#155）
+
+- Rust 後端經 `socketioxide`（協議 v5 / EIO=4，開箱支援 `socket.io-client`
+4.x）於 `WS_SOCKETIO_PATH`（默認 `/socket.io`）提供 Socket.IO 相容通道：
+鑑權與裸 WS 同規則（`WS_AUTH_REQUIRED` / token 雙通道 / 主體一致性）；事件
+以 `message` 事件、字符串載荷（`W<T>` 信封 JSON）推送；`rttcheck` 按 Java
+語義回顯時間戳；裸 WS `/ws/{userId}` 保留作過渡。
+
+- 前端跟進（一行）：socket.io 連線 query 附帶 `token`；未附帶期間部署側可
+設 `WS_AUTH_REQUIRED=false`（Java 網關 pass-filter 等價）。裸 `/ws` 端點與
+`WS_AUTH_REQUIRED` 逃生閥在新通道穩定後再決定去留。

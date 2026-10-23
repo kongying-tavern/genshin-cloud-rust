@@ -87,6 +87,9 @@ chars 按 `markerTitle`/content 的 Levenshtein 距離）、首尾比對條目�
 
 `?token=` 補丁在前端倉 `fix/ws-token-query` 分支。
 
+- **WS 遷移決策落地**：後端經 `socketioxide` 提供 Socket.IO 兼容通道
+  （`/socket.io`），契約與鑑權規則見 ws-frontend-contract 決策。
+
 ## 跟進事項
 
 - 上述差距項排入迭代 backlog（見根目錄 `PLAN.md`），

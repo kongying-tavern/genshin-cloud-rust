@@ -85,7 +85,7 @@ pub async fn do_update_notice(
     am.valid_time_start = Set(parse_valid_time(payload.valid_time_start.as_ref(), now));
     am.valid_time_end = Set(parse_valid_time(payload.valid_time_end.as_ref(), now));
 
-    notice_model::Entity::update_safety(am)?.exec(db).await?;
+    notice_model::Entity::update_safety_strict(am, db).await?;
     super::super::ws::ws_broadcast("NoticeUpdated", serde_json::json!(payload.id));
     Ok(CommonResponse::new(Ok(true)))
 }

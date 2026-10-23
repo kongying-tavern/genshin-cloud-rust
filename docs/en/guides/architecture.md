@@ -80,16 +80,25 @@ macro raises `DbErr` on any hard delete, so "delete" always means
 
 The macro (in `packages/utils/src/db_operations.rs`) generates a
 `SafeEntityTrait` impl that exposes `find_safety()`, `find_safety_by_id(id)`,
-`update_safety(model)`, and `delete_safety(model)` / `delete_safety_by_id(id)`.
+`update_safety(model)`, `update_safety_strict(model, conn)`,
+`delete_safety(model)`, `restore_safety(model)` and `delete_safety_by_id(id)`.
 The "safety" variants:
 
 1. `find_safety*` automatically appends `WHERE del_flag = false`.
 1. `update_safety` re-reads the current `version`, increments it, and adds
 
-`WHERE version = <old>` — a lost update silently updates zero rows instead
-of clobbering data.
+`WHERE version = <old>` — the optimistic lock. It returns the update result,
+so a caller that ignores it turns a lost update into a silent no-op;
+`update_safety_strict` executes the same statement and turns a zero-row
+result into a business `DomainError`, which is what update handlers use.
+Deletes-by-id stay tolerant: zero rows just means "already gone".
 
 1. `delete_safety` flips `del_flag` to `true` (an `UPDATE`, not a `DELETE`).
+`update_safety` never writes `del_flag` (a full-row ActiveModel must not
+resurrect records as a side effect), so soft delete always goes through
+`delete_safety` and re-creating a removed association goes through
+`restore_safety` — the inverse transition (`del_flag = false`, no version
+filter, because it is a flag change rather than a business-field edit).
 
 This is the Rust equivalent of the Java `SafeSqlOperator` / mybatis-plus
 optimistic-lock interceptor; business code in `functions/` should **never**

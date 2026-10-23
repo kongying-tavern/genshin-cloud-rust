@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use sea_orm::{
     ActiveValue::{NotSet, Set},
-    QueryFilter, QuerySelect,
+    QueryFilter, QuerySelect, TransactionTrait,
     prelude::*,
 };
 
@@ -359,15 +359,18 @@ pub async fn do_link(
         }
     }
 
-    // 落库（Java saveOrUpdateBatch：复活 → 插入/更新 → 软删缺席行）
+    // 落库（Java saveOrUpdateBatch：复活 → 插入/更新 → 软删缺席行）。
+    // 整批包单一事务：任一行写入失败必须整体回滚，否则会留下「删了一半、
+    // 插了一半」的连线状态（批量接口一次可提交多条边）。
+    let txn = pg.begin().await?;
     for pl in pending {
         if pl.del {
             if let Some(m) = pl.existing {
                 let mut am: linkage_model::ActiveModel = m.into();
-                am.del_flag = Set(true);
                 // 审计字段：软删也是修改，设置 update 组
                 am.updater_id = Set(Some(auth.info.id));
-                linkage_model::Entity::update_safety(am)?.exec(pg).await?;
+                // 必须走 delete_safety（update_safety 固定 del_flag=NotSet）
+                linkage_model::Entity::delete_safety(am)?.exec(&txn).await?;
             }
             continue;
         }
@@ -382,8 +385,11 @@ pub async fn do_link(
             am.link_action = Set(action);
             am.link_reverse = Set(pl.link_reverse);
             am.path = Set(pl.path);
-            am.del_flag = Set(false);
-            linkage_model::Entity::update_safety(am)?.exec(pg).await?;
+            // 复活已软删的关联行：update_safety 固定 del_flag=NotSet（防误复活），
+            // 必须显式走 restore_safety 才能把 del_flag 置回 false。
+            linkage_model::Entity::restore_safety(am)?
+                .exec(&txn)
+                .await?;
         } else {
             let now = chrono::Utc::now().naive_utc();
             let active = linkage_model::ActiveModel {
@@ -404,9 +410,11 @@ pub async fn do_link(
                 // 业务默认值：extra = {}
                 extra: Set(Some(serde_json::json!({}))),
             };
-            active.insert(pg).await?;
+            active.insert(&txn).await?;
         }
     }
+
+    txn.commit().await?;
 
     if !affected_groups.contains(&group_id) {
         affected_groups.push(group_id.clone());

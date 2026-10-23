@@ -437,7 +437,7 @@ pub async fn do_tweak(
 
             // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
             am.updater_id = Set(Some(auth.info.id));
-            marker_model::Entity::update_safety(am)?.exec(pg).await?;
+            marker_model::Entity::update_safety_strict(am, pg).await?;
             touched_ids.push(*marker_id);
         }
     }
@@ -606,7 +606,7 @@ async fn tweak_item_list(
                     am.count = Set(count);
                     // 审计字段：修改时设置 update 组
                     am.updater_id = Set(Some(operator_id));
-                    mil_model::Entity::update_safety(am)?.exec(db).await?;
+                    mil_model::Entity::update_safety_strict(am, db).await?;
                 } else {
                     insert_item_link(db, operator_id, marker_id, item_id, count).await?;
                 }
@@ -851,7 +851,7 @@ pub async fn do_update_single(
 
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
-    marker_model::Entity::update_safety(am)?.exec(pg).await?;
+    marker_model::Entity::update_safety_strict(am, pg).await?;
 
     // item_list 全量替换（先删后插）：编辑表单始终携带完整 itemList，
     // 空列表视为清空全部关联。删除+插入包事务，失败整体回滚，
@@ -1134,7 +1134,10 @@ pub async fn do_delete(
     let pg = &db.pg_conn;
     // 写路径可见性对称：可见集合之外的点位不可删除（整个操作失败，不静默跳过）
     let allowed_flags = _utils::types::allowed_hidden_flags(auth.info.role_id);
-    // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）
+    // Java deleteMarker：不存在的 id 同样返回 true（0 行删除）。
+    // 软删本体 + item 关联 + 连线包单一事务：级联逐行写入中途失败不能留下
+    // 「点位已删、连线还在」的半删状态。
+    let txn = pg.begin().await?;
     if let Some(m) = marker_model::Entity::find_safety_by_id(id).one(pg).await? {
         if !allowed_flags.contains(&(m.hidden_flag as i32)) {
             return Err(DomainError::Business("无权操作该点位".into()).into());
@@ -1158,18 +1161,18 @@ pub async fn do_delete(
         am.del_flag = Set(true);
         // 审计字段：软删也是修改，设置 update 组
         am.updater_id = Set(Some(auth.info.id));
-        marker_model::Entity::delete_safety(am)?.exec(pg).await?;
+        marker_model::Entity::delete_safety(am)?.exec(&txn).await?;
     }
     // 级联软删该 marker 的 item 关联
     let item_links = mil_model::Entity::find_safety()
         .filter(mil_model::Column::MarkerId.eq(id))
-        .all(pg)
+        .all(&txn)
         .await?;
     for mut link in item_links {
         // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
         link.updater_id = Some(auth.info.id);
         mil_model::Entity::delete_safety(link.into())?
-            .exec(pg)
+            .exec(&txn)
             .await?;
     }
 
@@ -1180,15 +1183,17 @@ pub async fn do_delete(
                 .add(linkage_model::Column::FromId.eq(id))
                 .add(linkage_model::Column::ToId.eq(id)),
         )
-        .all(pg)
+        .all(&txn)
         .await?;
     for mut linkage in linkages {
         // 审计字段：软删也是修改，设置 update 组（Model 原值随 into() 落库）
         linkage.updater_id = Some(auth.info.id);
         linkage_model::Entity::delete_safety(linkage.into())?
-            .exec(pg)
+            .exec(&txn)
             .await?;
     }
+
+    txn.commit().await?;
 
     super::binary_doc::invalidate_doc_cache(db).await;
     super::super::ws::ws_broadcast("MarkerDeleted", serde_json::json!(id));

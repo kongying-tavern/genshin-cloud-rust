@@ -120,7 +120,7 @@ pub async fn do_update(
     am.sort_index = Set(payload.area.sort_index);
     am.special_flag = Set(payload.area.special_flag);
 
-    area_model::Entity::update_safety(am)?.exec(db).await?;
+    area_model::Entity::update_safety_strict(am, db).await?;
     Ok(CommonResponse::new(Ok(true)))
 }
 

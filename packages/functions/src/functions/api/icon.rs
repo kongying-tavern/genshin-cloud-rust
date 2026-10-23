@@ -252,9 +252,7 @@ pub async fn do_update(
         old_url_variants.as_ref(),
         payload.base.url_variants.as_ref(),
     ));
-    icon_model::Entity::update_safety(am)?
-        .exec(&db.pg_conn)
-        .await?;
+    icon_model::Entity::update_safety_strict(am, &db.pg_conn).await?;
     // 类型关联（Java updateIcon）：typeIdList 缺省不改动（避免误清空），
     // 提供时按 replace 语义重建。
     if let Some(type_ids) = payload.base.type_id_list.clone() {

@@ -261,9 +261,7 @@ pub async fn do_update(
         }
     }
 
-    sys_user_model::Entity::update_safety(am)?
-        .exec(&db.pg_conn)
-        .await?;
+    sys_user_model::Entity::update_safety_strict(am, &db.pg_conn).await?;
     // 角色变更（仅 Admin 操作生效）后吊销该用户全部会话：被降权/换角的
     // 用户不得继续持有旧角色权限（Redis VO 快照最长 15 天）。Redis 不可用
     // 时忽略错误（降级）。
@@ -312,9 +310,7 @@ pub async fn do_update_password(
     am.updater_id = Set(Some(user_id));
     am.password = Set(_utils::bcrypt::generate_storage_password(&new_password)
         .map_err(|_| anyhow!("Internal server error"))?);
-    sys_user_model::Entity::update_safety(am)?
-        .exec(&db.pg_conn)
-        .await?;
+    sys_user_model::Entity::update_safety_strict(am, &db.pg_conn).await?;
     // 改密成功后吊销该用户全部会话（含其他设备）：已签发 token 一律失效。
     // Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(db, user_id).await;
@@ -338,9 +334,7 @@ pub async fn do_update_password_by_admin(
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(_auth.info.id));
     am.password = Set(_utils::bcrypt::generate_storage_password(password)?);
-    sys_user_model::Entity::update_safety(am)?
-        .exec(&db.pg_conn)
-        .await?;
+    sys_user_model::Entity::update_safety_strict(am, &db.pg_conn).await?;
     // 管理员重置密码后吊销该用户全部会话，旧 token 一律失效（无旧密码
     // 校验的管理员通道同样生效）。Redis 不可用时忽略错误（降级）。
     let _ = revoke_user_sessions(db, user_id).await;

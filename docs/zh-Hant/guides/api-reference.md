@@ -59,6 +59,17 @@ Java 側控制器的 Rust 移植：路徑、請求/響應結構與 Java 參考�
 | oauth | OAuth2 接入 |
 | archive | 歸檔管理 |
 
+## 可觀測性
+
+根級掛載（無鑑權，供探針與 Prometheus 抓取器使用）：
+
+| 端點 | 說明 |
+| --- | --- |
+| `GET /health` | 存活／就緒探測：以 `SELECT 1` 探測 Postgres，設定 Redis 時以 `PING` 探測。DB 不可達 → 503 `{"status":"unavailable","db":false,...}`；Redis 不可達 → 200 `{"status":"degraded",...}`；未設定 Redis 視為不參與（`"redis":null`）。 |
+| `GET /metrics` | Prometheus 文字（`text/plain; version=0.0.4`）：HTTP 請求計數 `http_requests_total{method,status}` 與延遲直方圖 `http_request_duration_seconds{method}`。 |
+
+HTTP 訪問日誌在 info 級輸出 method、path、status 與耗時（target `genshin_cloud::access`）。
+
 ## 鑑權
 
 除少量公開端點外，所有路由經 `ExtractAuthInfo` 中間件提取 JWT 中的 `AuthInfo`，

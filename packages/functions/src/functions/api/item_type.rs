@@ -99,9 +99,7 @@ pub async fn do_update(
         am.sort_index = Set(si.clamp(i32::MIN as i64, i32::MAX as i64) as i32);
     }
 
-    item_type_model::Entity::update_safety(am)?
-        .exec(&db.pg_conn)
-        .await?;
+    item_type_model::Entity::update_safety_strict(am, &db.pg_conn).await?;
     super::binary_doc::invalidate_item_doc_cache(db).await;
     super::super::ws::ws_broadcast_debounced(
         "ItemBinaryPurged",
@@ -159,7 +157,7 @@ pub async fn do_move_to_target(
             am.parent_id = Set(target_type_id);
             // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
             am.updater_id = Set(Some(auth.info.id));
-            item_type_model::Entity::update_safety(am)?.exec(pg).await?;
+            item_type_model::Entity::update_safety_strict(am, pg).await?;
         }
     }
     refresh_is_final(pg, target_type_id).await?;

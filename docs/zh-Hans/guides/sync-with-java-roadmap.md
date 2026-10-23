@@ -126,6 +126,9 @@ chars 按 `markerTitle`/content 的 Levenshtein 距离）、首尾比对条目�
 的 2026-10-22 更新）；迁移前本地树的 `?token=` 补丁在前端仓
 `fix/ws-token-query` 分支。
 
+- **WS 迁移决策落地**：后端经 `socketioxide` 提供 Socket.IO 兼容通道
+  （`/socket.io`），契约与鉴权规则见 ws-frontend-contract 2026-10-23 决策。
+
 ## 跟进事项
 
 - 上述差距项排入迭代 backlog（见根目录 `PLAN.md`），

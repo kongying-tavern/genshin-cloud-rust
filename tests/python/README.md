@@ -17,6 +17,7 @@
 | `test_g_user.py` | 用户信息可见性、自助改名、越权/提权拦截、改口令、注册、角色表、档案八件套、邀请码、公告、app 触发器、res 探测、缓存清理 |
 | `test_ws_res.py` | WS 握手鉴权（无 token 401、冒用 userId 403）、MarkerAdded/NoticeAdded/BinaryPurged 广播、res 图片上传（依赖本地 MinIO） |
 
+| `test_ws_socketio.py` | Socket.IO 兼容通道（`/socket.io`，socketioxide）：握手鉴权矩阵、`message` 事件信封、`rttcheck` 回环 |
 各套件创建的数据一律以 `regress` 前缀命名，并在套件结尾清理（清理本身也
 在验证递归删除等路径）。
 
@@ -90,5 +91,5 @@ REGRESSION_PASSWORD=... python tests/python/run_all.py
 REGRESSION_PASSWORD=... python tests/python/test_a_auth.py
 ```
 
-依赖：Python 3.10+ 标准库即可；`test_ws_res.py` 额外需要
-`pip install "websockets>=14"`（未安装时该套件自跳过）。
+依赖：Python 3.10+ 标准库即可；`test_ws_res.py` 需要 `pip install "websockets>=14"`、
+`test_ws_socketio.py` 需要 `pip install "python-socketio>=5"`（未安装时各自自跳过）。
