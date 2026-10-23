@@ -78,11 +78,12 @@ pub async fn do_get_list(
         }
     }
 
-    let payload = ItemAreaPublicListResponse {
+    let resp = ItemAreaPublicListResponse {
         total: total as i64,
+        size: size as i64,
         items: arr,
     };
-    Ok(CommonResponse::new(Ok(payload)))
+    Ok(CommonResponse::new(Ok(resp)))
 }
 
 /// `PUT /item_common/add`

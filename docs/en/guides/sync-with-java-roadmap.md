@@ -53,44 +53,113 @@ current status.
 ## Current state
 
 - All seven batches are landed end-to-end (entity → DTO → business → route →
-  test). Business assertions live in `tests/rust/tests/api_db_test.rs`
-  (live DB, CI `DB integration` job): area CRUD, `item_doc` BinaryMD5, marker
-  tweak, OAuth policy/device/QQ login, JWKS, cache stability and refresh.
-  (The punctuate audit is deprecated — its routes and models were removed;
-  the `marker_punctuate` staging table remains part of the schema.)
+
+test). Business assertions live in `tests/rust/tests/api_db_test.rs`
+(live DB, CI `DB integration` job): area CRUD, `item_doc` BinaryMD5, marker
+tweak, OAuth policy/device/QQ login, JWKS, cache stability and refresh.
+(The punctuate audit is deprecated — its routes and models were removed;
+the `marker_punctuate` staging table remains part of the schema.)
+
 - The `SafeEntityTrait` + `impl_safe_operation!` macros are stable; new
-  domains reuse the template.
 
-## Known gaps (remaining parity with Java)
+domains reuse the template.
 
-- Database schema deviations from the real database await data validation
-  (`marker_linkage` nullable columns, `sys_user_archive` structure binding).
-- Translation: the docs ship in three maintained languages — English
-  (`docs/en`), Simplified Chinese (`docs/zh-Hans`), and Traditional Chinese
-  (`docs/zh-Hant`).
+## Known gaps (remaining differences vs Java)
 
-## Rotating the JWT signing key (RS256)
+- In HS256 mode JWKS serves an empty key set (the HMAC secret is never
 
-The signing key is `JWT_RSA_PRIVATE_KEY_PEM`; `JWT_RSA_VERIFY_KEYS`
-(comma-separated RSA **public** key PEMs) lists historical keys that must
-still verify tokens. The JWKS endpoint publishes the current key (`kid`
-`genshin-cloud-rsa-v1`) first, then each historical key in order (`v2`,
-`v3`, ...). Rotation is a two-step deploy that never invalidates live
-tokens:
+published); JWK rotation is RS256-only (see batch 7, covered by
+`tests/rust/tests/jwks_rotation_test.rs`).
 
-1. Generate the new keypair, add the **new** public key to
-   `JWT_RSA_VERIFY_KEYS` (keeping the old one), and deploy. Tokens are
-   still signed with the old key; both verify.
-2. Switch `JWT_RSA_PRIVATE_KEY_PEM` to the new private key and deploy.
-   Tokens are now signed with the new key (kid stays `v1`); the old key
-   remains in `JWT_RSA_VERIFY_KEYS` for verification.
-3. On the next rotation, drop the oldest public key from
-   `JWT_RSA_VERIFY_KEYS`.
+- Database schema drift against the production database still needs data
 
-HS256 (`JWT_SECRET`) has no rotation story beyond a restart — the JWKS
-never publishes the HMAC secret.
+validation (`marker_linkage` nullable columns, `sys_user_archive`
+structure binding, …).
 
-## Follow-up
+- Docs are maintained in en / zh-Hans / zh-Hant only, kept in sync.
 
-- The gaps above are tracked in the iteration backlog (`PLAN.md` at the repo
-  root) and land via the master-based PR workflow.
+## 2026-10 parity wave (frozen Java + latest map_register_v3)
+
+Endpoint-by-endpoint re-audit against Java `dev-single` (frozen 2026-09)
+and `map_register_v3` `origin/dev` (2026-09-23, alova + static protobuf
+decoders) closed these gaps:
+
+- **`GET /api/marker_doc/list_markers`** — full-marker export (GZIP'd
+
+`MarkerVoList` protobuf with a creator/updater users map that includes
+soft-deleted users, per Java `selectUserWithDelete`). Consumed by the
+4.19+ frontend via its static protobuf decoder.
+
+- **`GET /api/res/get`** — real implementation of the dedup-upload probe
+
+(`?filePath=` → MinIO stat → `{filePath, fileUrl}` or an empty object).
+
+- **`PUT /api/res/upload/image`** — the object key is now the client
+
+`filePath` (Java contract: same path reused, duplicates rejected with
+the Java error text), plus path-safety validation.
+
+- **`DELETE /api/cache/icon`** — Java `CacheController` contract
+
+(`List<Long>` body, empty list = purge all); the legacy `iconTag` /
+`icon_tag` routes remain.
+
+- **Icon VO realignment** — `name` → `tag` plus the full Java field set
+
+(`creatorId/typeIdList/urlVariants/description/…`); search accepts
+`tag` (with a `name` alias).
+
+- **`POST /api/marker/get/list_byid`** accepts both body shapes (bare ID
+
+array and the `{"markerIdList":[…]}` object).
+
+- **Envelope fixes** — `users` maps now carry the full
+
+`SysUserSmallVo` fields; item/icon lists attach `users`; every
+paginated list emits `PageListVo.size`.
+
+- **`POST|GET /oauth/token`** — GET method and
+
+`application/x-www-form-urlencoded` bodies accepted (Java Spring
+OAuth2 full compatibility); multipart login and query refresh unchanged.
+
+- **`/system/invitation/info`** returns the `{code, username}` small VO
+
+instead of leaking the raw entity.
+
+- **`HistoryOperationType`** gains `IconTag = 5`; marker-create request
+
+fields relaxed to serde defaults (Java null tolerance).
+
+## 2026-10 second wave (leftover items landed)
+
+- **History write path**: marker update/delete/tweak and item update/delete
+
+now record history rows (pre-change camelCase DTO JSON with md5); the
+Rust side previously never wrote history, leaving both the history list
+and score generation without a data source.
+
+- **Score generation aligned with the Java algorithm**: consecutive
+
+history-pair diffs (fields per changed field, chars via Levenshtein
+distance over `markerTitle`/content), synthesized boundary records
+(created markers start from their first linked item; the final value is
+the first post-span history or the marker's current state), credited to
+the before-record's creator × Asia/Shanghai day bucket.
+
+- **Image URL rewriting unified**: `ICON_PROXY_BASE` now also applies to
+
+icon responses and res `fileUrl` (ddns.minemc.top has no CORS headers).
+
+- **`item_type` update request** hiddenFlag relaxed to a serde default.
+- **WS contract update**: the latest frontend confirmed the socket.io
+
+migration (see the 2026-10-22 update in ws-frontend-contract); the
+pre-migration local tree's `?token=` patch lives on the frontend repo's
+`fix/ws-token-query` branch.
+
+## Follow-ups
+
+- Remaining gap items live in the iteration backlog (root `PLAN.md`) and
+
+land through the master-based PR flow.

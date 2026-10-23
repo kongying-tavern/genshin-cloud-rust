@@ -65,7 +65,7 @@ for the complete list.
 `celestia-devtools`（见下方[开发工具链](#开发工具链--toolchain)）。使用
 `just dev` 启动开发栈（Rust 后端 + Vue3 前端）前，需要先在 `.env` 中配置
 `E2E_VUE_FRONTEND` 指向本地 Vue3 前端项目的绝对路径（从
-[kongying-tavern/map_register_v3](https://github.com/kongying-tavern/map_register_v3)
+[kongying-tavern/`map_register_v3`](https://github.com/kongying-tavern/`map_register_v3`)
 克隆）。
 
 Before starting, make sure [`just`](https://github.com/casey/just), `cargo`,
@@ -73,7 +73,7 @@ and `celestia-devtools` are installed (see
 [Toolchain](#开发工具链--toolchain) below). To use `just dev` (Rust backend +
 Vue3 frontend dev stack), set `E2E_VUE_FRONTEND` in `.env` to the absolute path
 of your local Vue3 frontend project (cloned from
-[kongying-tavern/map_register_v3](https://github.com/kongying-tavern/map_register_v3)).
+[kongying-tavern/`map_register_v3`](https://github.com/kongying-tavern/`map_register_v3`)).
 
 ```bash
 just init          # 初始化开发环境 / initialize the dev environment
@@ -91,8 +91,9 @@ just bench         # 跑 criterion 基准（差异快照流水线）/ run criter
 本仓库的开发辅助命令（gitmoji commit-msg 钩子、Markdown 格式化、cargo 缓存
 守护、PR 合并校验等）来自
 [`celestia-island/celestia-devtools`](https://github.com/celestia-island/celestia-devtools)。
-`just init` 会引导安装；仓库根目录的 `celestia-devtools.just` 是其 vendored
-裁剪版（刷新：`celestia-devtools init --force`）。
+`just init` 会引导安装；共享配方经 `just fetch` 暂存到 `/.just/`（已
+gitignore、不入库），由 justfile 以 `import?` 可选引入——与 celestia-island
+各仓库 0.7+ 的 staged 模型一致（PowerShell 5.1 floor 的 linewise 双壳规范）。
 
 安装（每台机器一次）：
 
@@ -106,9 +107,10 @@ pip install git+https://github.com/celestia-island/celestia-devtools.git
 The dev tooling in this repo (gitmoji commit-msg hook, Markdown formatting,
 cargo cache guard, PR-merge validation, …) comes from
 [`celestia-island/celestia-devtools`](https://github.com/celestia-island/celestia-devtools).
-`just init` bootstraps it; the vendored, trimmed copy lives at
-`celestia-devtools.just` in the repo root (refresh with
-`celestia-devtools init --force`).
+`just init` bootstraps it; the shared recipes are staged into `/.just/`
+(gitignored, never committed) by `just fetch` and pulled in via an optional
+`import?` — matching the celestia-island 0.7+ staged model (PowerShell 5.1
+floor linewise shell doctrine).
 
 Install once per machine:
 

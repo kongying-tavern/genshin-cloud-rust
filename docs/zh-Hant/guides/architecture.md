@@ -67,13 +67,16 @@ flowchart TD
 ## Redis 與 MinIO 集成點
 
 - **Redis**：`packages/functions/src/functions/api/cache.rs` 暴露按域的緩存刷新端點
-  （area、item、marker、`icon_tag`、notice 等），`router/src/routes/api/cache/`
-  對應路由。`*_doc` 歸檔頁經 moka 進程內緩存 + Redis 二級緩存加速，命中時
-  零數據庫查詢（見 [BinaryMD5 歸檔導出](../designs/binarymd5-archive-export.md)）。
+
+（area、item、marker、`icon_tag`、notice 等），`router/src/routes/api/cache/`
+對應路由。`*_doc` 歸檔頁經 moka 進程內緩存 + Redis 二級緩存加速，命中時
+零數據庫查詢（見 [BinaryMD5 歸檔導出](../designs/binarymd5-archive-export.md)）。
 
 - **MinIO**：`router/src/routes/api/res/upload.rs` 處理資源上傳（圖標、圖片等）。
-  `bz2doc` 桶已預置，規劃中用於 BinaryMD5 歸檔存儲。
+
+`bz2doc` 桶已預置，規劃中用於 BinaryMD5 歸檔存儲。
 
 - **歸檔導出（`*_doc`）**：`item_doc` / `marker_doc` / `marker_link_doc` 端點從
-  PostgreSQL 實時生成 GZIP 壓縮的 JSON 數據，以壓縮字節的 MD5 爲鍵供客戶端
-  增量同步（對應 Java 側 BinaryMD5 壓縮歸檔管線）。
+
+PostgreSQL 實時生成 GZIP 壓縮的 JSON 數據，以壓縮字節的 MD5 爲鍵供客戶端
+增量同步（對應 Java 側 BinaryMD5 壓縮歸檔管線）。

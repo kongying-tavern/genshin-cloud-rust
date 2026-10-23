@@ -11,43 +11,36 @@ version.workspace = true
 bench = false
 
 [dependencies]
+
 _database = { path = "../database", version = "*" }
 _utils = { path = "../utils", version = "*" }
 
-
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-once_cell = { workspace = true }
-tokio = { workspace = true }
-
 base64 = { workspace = true }
+bcrypt = { workspace = true }
 bytes = { workspace = true }
+bzip2 = { workspace = true }
 chrono = { workspace = true }
-
-
-urlencoding = "2"
+env_logger = { workspace = true }
+flate2 = { workspace = true }
+jsonwebtoken = { workspace = true }
+log = { workspace = true }
+md5 = { workspace = true }
+minio = { workspace = true }
+moka = { workspace = true }
+once_cell = { workspace = true }
+redis = { workspace = true }
+sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-uuid = { workspace = true }
-
-bzip2 = { workspace = true }
-flate2 = { workspace = true }
-md5 = { workspace = true }
-moka = { workspace = true }
-
-bcrypt = { workspace = true }
-jsonwebtoken = { workspace = true }
-
-env_logger = { workspace = true }
-log = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
-
-sea-orm = { workspace = true }
-redis = { workspace = true }
-minio = { workspace = true }
-
+urlencoding = "2"
+uuid = { workspace = true }
 [dev-dependencies]
+
 # criterion: benchmark harness for the diff-snapshot pipeline (benches/).
 # default-features off drops rayon + plotters (HTML reports) to keep the
 # dependency tree — and thus cargo-deny / MSRV exposure — small.
@@ -57,7 +50,6 @@ criterion = { version = "^0.8", default-features = false, features = [
 # regex-lite: strip FOREIGN KEY constraints from generated DDL in the DB bench
 # seeding (same pattern as the api_db_test helper).
 regex-lite = "^0.1"
-
 [[bench]]
 name = "diff_snapshot"
 harness = false

@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -40,7 +40,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache Cargo (sources only)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -111,7 +111,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -120,7 +120,7 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Cache Cargo (sources only)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -129,6 +129,117 @@ jobs:
 
       - name: Run DB-backed tests
         run: cargo test -p genshin-cloud-tests --test user_db --test api_db --test res_db --test redis_cache_db --no-fail-fast
+
+  # Live-API python regression (tests/python): provisions Postgres + Redis +
+  # MinIO-free, runs the migrations, seeds the regress_* accounts over HTTP (the
+  # invitation flow), then drives the compiled server with the full suite.
+  # res-upload assertions self-skip without MinIO (covered by the local compose
+  # stack / tests/docker); test_e_docs is excluded because its multi-page
+  # assertions depend on dev-scale
+  # data (see REGRESSION_SUITES in tests/python/run_all.py).
+  e2e:
+    name: Python e2e
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: genshin_map
+          POSTGRES_PASSWORD: genshin_map
+          POSTGRES_DB: genshin_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U genshin_map"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DB_USERNAME: genshin_map
+      DB_PASSWORD: genshin_map
+      DB_DATABASE: genshin_map
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      JWT_SECRET: ci-e2e-throwaway-secret-not-a-real-credential-0123456789
+      PORT: "8101"
+      # CI 一次性容器内的回归口令（明显假值，敏感信息红线 §8 允许）。
+      REGRESSION_PASSWORD: regress-pw-ci-only-12345
+      REGRESSION_SUITES: test_a_auth.py,test_b_base.py,test_c_marker.py,test_d_link.py,test_g_user.py,test_ws_res.py
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Cache Cargo (sources only)
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ubuntu-cargo-sources-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install python deps
+        run: pip install "websockets>=14" psycopg2-binary
+
+      - name: Build server (debug)
+        run: cargo build -p _router --bin _router
+
+      - name: Run migrations
+        # 以回归口令播种 admin 账号（init_db 的 INIT_ADMIN_*）：
+        # 邀请码通道明确拒绝授予 admin 角色（安全加固），因此管理员账号
+        # 必须由初始化入口创建，seed_accounts.py 再补其余五角色。
+        env:
+          INIT_ADMIN_USERNAME: regress_admin
+          INIT_ADMIN_PASSWORD: ${{ env.REGRESSION_PASSWORD }}
+        run: cargo run --bin init_db
+
+      - name: Seed demo data
+        run: python scripts/seed_demo.py
+
+      - name: Start server
+        run: |
+          ./target/debug/_router > server.log 2>&1 &
+          echo $! > server.pid
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8101/.well-known/jwks.json > /dev/null; then
+              echo "server up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not come up"; cat server.log; exit 1
+
+      - name: Seed regression accounts
+        run: python tests/python/seed_accounts.py
+
+      - name: Run regression suites
+        run: python tests/python/run_all.py
+
+      - name: Dump server log
+        if: failure()
+        run: tail -n 400 server.log
 
   # Commit-message linting lives in commit-msg.yml (standalone workflow).
   # It used to be inlined here as a job with the required-check context name
@@ -141,12 +252,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Trufflehog Secrets Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.99.4
         with:
           path: .
           extra_args: --only-verified

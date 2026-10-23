@@ -21,12 +21,13 @@ PUNC_ID = resp_punc["userId"]  # markerCreatorId 用打点员真实 id（动态�
 
 # setup: own area + item + 4 markers
 st, pr = call("PUT", "/api/area/add", token=manager, body={
-    "name": "regress_link_area", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
-AREA = pr["data"]
+    "name": "regress_link_area",
+    "code": "REGRESS_LINK", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
+AREA = pr.get("data") if isinstance(pr, dict) else None
 st, pr = call("PUT", "/api/item/add", token=manager, body={
     "areaId": AREA, "name": "regress_link_item", "typeIdList": [], "iconId": 0,
     "iconStyleType": 0, "hiddenFlag": 0})
-ITEM = pr["data"]
+ITEM = pr.get("data") if isinstance(pr, dict) else None
 
 M = []
 for i in range(4):
@@ -61,8 +62,12 @@ check("marker VO exposes linkageId", all(by_id[m].get("linkageId") for m in (M[0
       str({m: by_id[m].get("linkageId") for m in M[:2]}))
 
 section("D-2 cross-group merge")
+# Java 合并语义：link 提交的是「合并后的整组边」——先取旧组边再连同新边一起提交，
+# 后端 patch 会给整组重新分配 groupId（只提交单边会按契约丢弃旧组其余边）。
 st, pr = call("POST", "/api/marker_link/link", token=punctuate, body=[
-    {"fromId": M[1], "toId": M[2]}])
+    {"fromId": M[0], "toId": M[1]},
+    {"fromId": M[1], "toId": M[2]},
+])
 check("second link 200", st == 200 and isinstance(pr, dict) and not pr.get("error"), str(pr)[:150])
 grp = pr.get("data")
 check("second link merges into new group", grp != grp1, f"grp1={grp1} grp2={grp}")

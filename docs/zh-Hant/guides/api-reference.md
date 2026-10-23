@@ -31,11 +31,11 @@ Java 側控制器的 Rust 移植：路徑、請求/響應結構與 Java 參考�
 | 域 | 路徑前綴 | 說明 |
 | --- | --- | --- |
 | item_doc | `/item_doc` | 條目分頁導出（bin 二進制 / md5 校驗） |
-| marker_doc | `/marker_doc` | 打點分頁導出（bin / md5）與差異比對快照（protobuf） |
+| marker_doc | `/marker_doc` | 打點分頁導出（bin / md5）、差異比對快照與全量導出 `list_markers`（protobuf+gzip） |
 | marker_link_doc | `/marker_link_doc` | 打點關聯導出 |
 | icon_doc | `/icon_doc` | 圖標歸檔導出（單 blob） |
 | tag_doc | `/tag_doc` | 圖標標籤歸檔導出（單 blob） |
-| res | `/res` | 資源上傳（MinIO） |
+| res | `/res` | 資源上傳（MinIO，物件鍵 = 客戶端 filePath）與去重探測 `get` |
 
 > `*_doc` 系列對應 Java 側 BinaryMD5 壓縮歸檔導出能力。
 

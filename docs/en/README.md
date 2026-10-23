@@ -52,4 +52,3 @@ The documentation tree ships in three maintained languages and is rendered
 with [`lagrange`](https://github.com/celestia-island/lagrange). English is the
 default language; Simplified and Traditional Chinese are kept in sync
 alongside it.
-

@@ -68,6 +68,8 @@ pub struct HistoryItemVO {
 #[serde(rename_all = "camelCase")]
 pub struct HistoryListResponse {
     pub total: usize,
+    /// 每页大小（Java `PageListVo.size` 契约，默认 10）
+    pub size: usize,
     #[serde(rename = "record")]
     pub items: Vec<HistoryItemVO>,
 }

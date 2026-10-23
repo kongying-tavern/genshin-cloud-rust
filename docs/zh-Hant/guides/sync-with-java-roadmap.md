@@ -25,19 +25,70 @@ Rust 後端的目標是與 Java 參考實現 `genshin-map-cloud` 功能對齊。
 ## 當前狀態
 
 - 全部七個批次主體已落地，五層貫通（實體 → DTO → 業務 → 路由 → 測試）。
-  業務斷言由 `tests/rust/tests/api_db_test.rs`（真庫，CI `integration` job）覆蓋：
-  area 增刪查、item_doc BinaryMD5、marker tweak、OAuth 策略/設備/QQ 登錄、JWKS、
-  緩存穩定與刷新。（打點審批流已棄用，`punctuate`/`punctuate_audit` 路由與模型已移除。）
+
+業務斷言由 `tests/rust/tests/api_db_test.rs`（真庫，CI `integration` job）覆蓋：
+area 增刪查、`item_doc` BinaryMD5、marker tweak、OAuth 策略/設備/QQ 登錄、JWKS、
+緩存穩定與刷新。（打點審批流已棄用，`punctuate`/`punctuate_audit` 路由與模型已移除。）
+
 - `SafeEntityTrait` + `impl_safe_operation!` 宏穩定，新域套用模板即可。
 
 ## 已知差距（與 Java 的剩餘差異）
 
-- HS256 模式下 JWKS 爲空 key set（簽名密鑰不對外公佈）；JWK 輪換僅 RS256 模式提供（見批次 7，覆蓋於 `tests/rust/tests/jwks_rotation_test.rs`）。
-- 數據庫 schema 與真實庫的偏差待數據驗證（`marker_linkage` 空值列、
-  `sys_user_archive` 結構綁定等）。
-- 文檔翻譯：`docs/` 僅保留 en / zh-Hans / zh-Hant 三種語言並同步維護。
+- HS256 模式下 JWKS 為空 key set（簽名密鑰不對外公佈）；JWK 輪換僅 RS256 模式提供（見批次 7，覆蓋於 `tests/rust/tests/jwks_rotation_test.rs`）。
+- 資料庫 schema 與真實庫的偏差待資料驗證（`marker_linkage` 空值列、
+
+`sys_user_archive` 結構綁定等）。
+
+- 文件翻譯：`docs/` 僅保留 en / zh-Hans / zh-Hant 三種語言並同步維護。
+
+## 2026-10 對齊波次（Java 凍結倉 + map_register_v3 最新前端）
+
+對照 Java `dev-single`（2026-09 凍結）與 `map_register_v3` `origin/dev`
+（2026-09-23，alova + 靜態 protobuf 解碼器）逐端點復審後補齊的差異（詳見
+zh-Hans 版逐條記錄）：
+
+- `GET /api/marker_doc/list_markers`：全量點位導出（GZIP 的
+
+`MarkerVoList` protobuf + creator/updater 使用者小表）。
+
+- `GET /api/res/get` 與 `PUT /api/res/upload/image`：去重上傳契約
+
+（物件鍵 = 客戶端 filePath，重複上傳顯式報錯）。
+
+- `DELETE /api/cache/icon`：補齊 Java `CacheController` 契約；
+
+`iconTag` 舊通道保留。
+
+- icon 域 VO `name` → `tag` 並補齊全欄位。
+- `POST /api/marker/get/list_byid` 接受雙形態請求體。
+- 信封補齊：`users` 全欄位、item/icon 列表接入、分頁補 `size`。
+- oauth token 補 GET 方法與 urlencoded body 通道。
+- 邀請碼查詢返回精簡 VO；`HistoryOperationType` 補 IconTag=5；
+
+marker 新增請求欄位放寬為 serde 缺省。
+
+## 2026-10 第二波（遺留項落實）
+
+- **history 寫路徑補齊**：marker 更新/刪除/tweak 與 item 更新/刪除現在
+
+落 history 行（記錄**變更前**狀態的 camelCase DTO JSON，含 md5）。
+
+- **score 生成對齊 Java 演算法**：相鄰歷史對差分（fields 按欄位計次、
+
+chars 按 `markerTitle`/content 的 Levenshtein 距離）、首尾比對條目合成、
+記帳歸屬「前一條建立者 × Asia/Shanghai 日桶」。
+
+- **圖片直鏈統一改寫**：`ICON_PROXY_BASE` 現對 icon 響應、res 的
+
+`fileUrl` 與 `tag_doc` 一併生效。
+
+- **`item_type` 更新請求** hiddenFlag 放寬為 serde 缺省。
+- **WS 契約更新**：確認最新前端已遷 socket.io；遷移前本地樹的
+
+`?token=` 補丁在前端倉 `fix/ws-token-query` 分支。
 
 ## 跟進事項
 
 - 上述差距項排入迭代 backlog（見根目錄 `PLAN.md`），
-  隨 master-based PR 流程逐項合入。
+
+隨 master-based PR 流程逐項合入。

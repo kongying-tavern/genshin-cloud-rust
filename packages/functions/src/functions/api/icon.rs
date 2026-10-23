@@ -32,6 +32,21 @@ pub async fn do_add(
     auth.require_non_anonymous()?;
     let now = Utc::now().naive_utc();
 
+    // Java createIcon：标签不能为空，且同标签不可重复（唯一性在业务层，
+    // 库表无唯一索引——与线上 Java 行为一致）。
+    let tag = payload.tag.trim().to_string();
+    if tag.is_empty() {
+        return Err(DomainError::Business("图标标签不能为空".into()).into());
+    }
+    if icon_model::Entity::find_safety()
+        .filter(icon_model::Column::Tag.eq(tag.clone()))
+        .one(&db.pg_conn)
+        .await?
+        .is_some()
+    {
+        return Err(DomainError::Business(format!("图标标签 [{tag}]已存在")).into());
+    }
+
     let active = icon_model::ActiveModel {
         version: Set(1),
         id: NotSet,
@@ -42,10 +57,10 @@ pub async fn do_add(
         updater_id: Set(Some(auth.info.id)),
         del_flag: Set(false),
 
-        tag: Set(payload.name),
-        description: Set("".into()),
+        tag: Set(tag),
+        description: Set(payload.description.unwrap_or_default()),
         url: Set(payload.url),
-        url_variants: Set(None),
+        url_variants: Set(payload.url_variants),
     };
 
     let res = active.insert(&db.pg_conn).await?;
@@ -119,8 +134,8 @@ pub async fn do_list(
     {
         query = query.filter(icon_model::Column::Id.is_in(ids));
     }
-    if let Some(name) = payload.name {
-        query = query.filter(icon_model::Column::Tag.like(format!("%{}%", escape_like(&name))));
+    if let Some(tag) = payload.tag {
+        query = query.filter(icon_model::Column::Tag.like(format!("%{}%", escape_like(&tag))));
     }
     // 按图标分类（icon_type_link）过滤：icon_id IN (SELECT icon_id FROM icon_type_link WHERE type_id IN ...)
     // typeIdList 有值时恒执行过滤：空命中集也必须过滤（返回空页），
@@ -148,20 +163,22 @@ pub async fn do_list(
     }
 
     let items = select.all(&db.pg_conn).await?;
+    let type_map = icon_type_map(&db.pg_conn).await?;
     let mut arr = Vec::with_capacity(items.len());
-    for it in items {
-        arr.push(IconVO {
-            id: it.id,
-            version: it.version,
-            name: it.tag,
-            url: it.url,
-        });
+    for it in &items {
+        arr.push(icon_to_vo(it, &type_map));
     }
-    let payload = IconListResponse {
+    // 前端图标管理页读取信封 users 显示创建者昵称（与 marker/history 一致）。
+    let creator_ids: std::collections::HashSet<i64> =
+        items.iter().filter_map(|it| it.creator_id).collect();
+    let users = super::sys_user_map(&db.pg_conn, &creator_ids).await?;
+    let size = payload.page.size.unwrap_or(10).min(200);
+    let resp = IconListResponse {
         total: total as i64,
+        size: size as i64,
         items: arr,
     };
-    Ok(CommonResponse::new(Ok(payload)))
+    Ok(CommonResponse::new(Ok(resp)).with_users(users))
 }
 
 // 获取单个图标（前端契约 RIconVo：data 直接是 IconVO）
@@ -174,12 +191,8 @@ pub async fn do_get_single(
         .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
-    Ok(CommonResponse::new(Ok(IconVO {
-        id: item.id,
-        version: item.version,
-        name: item.tag,
-        url: item.url,
-    })))
+    let type_map = icon_type_map(&db.pg_conn).await?;
+    Ok(CommonResponse::new(Ok(icon_to_vo(&item, &type_map))))
 }
 
 // 删除（软删除）
@@ -226,11 +239,19 @@ pub async fn do_update(
         .one(&db.pg_conn)
         .await?;
     let item = item.ok_or_else(|| DomainError::Business("Icon not found".into()))?;
+    let old_url_variants = item.url_variants.clone();
     let mut am: icon_model::ActiveModel = item.into();
     // 审计字段：修改时设置 update 组（update_time 由 before_save 钩子刷新）
     am.updater_id = Set(Some(auth.info.id));
-    am.tag = Set(payload.base.name.clone());
+    am.tag = Set(payload.base.tag.clone());
     am.url = Set(payload.base.url.clone());
+    am.description = Set(payload.base.description.clone().unwrap_or_default());
+    // Java JsonUtils.merge：urlVariants 按 map 合并——新值为 null 的键删除，
+    // 其余覆盖；未提交该字段则保持原值（不是整体替换）。
+    am.url_variants = Set(merge_url_variants(
+        old_url_variants.as_ref(),
+        payload.base.url_variants.as_ref(),
+    ));
     icon_model::Entity::update_safety(am)?
         .exec(&db.pg_conn)
         .await?;
@@ -241,6 +262,39 @@ pub async fn do_update(
     }
     super::binary_doc::invalidate_doc_cache(db).await;
     Ok(CommonResponse::new(Ok(true)))
+}
+
+/// icon_id -> [type_id] 反查映射（IconVO.typeIdList 数据源）。
+pub(crate) async fn icon_type_map(
+    db: &sea_orm::DatabaseConnection,
+) -> Result<std::collections::HashMap<i64, Vec<i64>>> {
+    let mut map: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
+    for l in icon_type_link_model::Entity::find_safety().all(db).await? {
+        map.entry(l.icon_id).or_default().push(l.type_id);
+    }
+    Ok(map)
+}
+
+/// 实体行 → 完整 `IconVO`（Java `IconVo` 全字段契约）。
+fn icon_to_vo(
+    it: &icon_model::Model,
+    type_map: &std::collections::HashMap<i64, Vec<i64>>,
+) -> IconVO {
+    IconVO {
+        id: it.id,
+        version: it.version,
+        creator_id: it.creator_id,
+        create_time: it.create_time.and_utc().timestamp_millis() as f64,
+        updater_id: it.updater_id,
+        update_time: it
+            .update_time
+            .map(|dt| dt.and_utc().timestamp_millis() as f64),
+        tag: it.tag.clone(),
+        type_id_list: type_map.get(&it.id).cloned().unwrap_or_default(),
+        url: super::rewrite_image_url(&it.url),
+        url_variants: it.url_variants.clone(),
+        description: it.description.clone(),
+    }
 }
 
 /// icon_id -> tag.tag 映射（前端 sprite 的 tagCoordMap key 是 tag 表的
@@ -267,4 +321,27 @@ pub(crate) async fn icon_id_by_tag(
         .one(db)
         .await?;
     Ok(t.map(|t| t.icon_id))
+}
+
+/// `urlVariants` 的 Java `JsonUtils.merge` 语义：以旧 map 为底，逐键应用
+/// 新 map（null 表示删除该键）；新值非对象时整体替换。
+fn merge_url_variants(
+    old: Option<&serde_json::Value>,
+    new: Option<&serde_json::Value>,
+) -> Option<serde_json::Value> {
+    match new {
+        None => old.cloned(),
+        Some(serde_json::Value::Object(new_map)) => {
+            let mut merged = old.and_then(|v| v.as_object().cloned()).unwrap_or_default();
+            for (k, v) in new_map {
+                if v.is_null() {
+                    merged.remove(k);
+                } else {
+                    merged.insert(k.clone(), v.clone());
+                }
+            }
+            Some(serde_json::Value::Object(merged))
+        },
+        Some(other) => Some(other.clone()),
+    }
 }

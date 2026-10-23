@@ -25,6 +25,14 @@ user_t, _ = login("regress_user")
 CREATED = {"area_ids": [], "icon_ids": [], "icon_type_ids": [], "item_type_ids": [], "item_ids": []}
 
 
+def paged_records(pr):
+    """分页封套 {record,total,size} 取记录数组（Java PageListVo 契约）。"""
+    data = pr.get("data") if isinstance(pr, dict) else None
+    if isinstance(data, dict):
+        rec = data.get("record")
+        return rec if isinstance(rec, list) else []
+    return data if isinstance(data, list) else []
+
 def wrap_ok(pr):
     return isinstance(pr, dict) and pr.get("error") is False
 
@@ -100,7 +108,8 @@ CREATED["area_ids"].append(reg_sub)
 
 # permission: MAP_USER cannot add area
 st, pr = call("PUT", "/api/area/add", token=user_t, body={
-    "name": "regress_forbidden", "parentId": -1, "isFinal": True, "iconId": 0,
+    "name": "regress_forbidden",
+    "code": "REGRESS_FORB", "parentId": -1, "isFinal": True, "iconId": 0,
 })
 check("MAP_USER area add forbidden (403)", st == 403, f"st={st}")
 
@@ -118,7 +127,7 @@ check("icon_type list 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:100]}
 
 # icon add with urlVariants custom keys
 st, pr = call("PUT", "/api/icon/add", token=manager, body={
-    "typeIdList": [itype], "name": "regress_icon_a", "tag": "regress_tag_a",
+    "typeIdList": [itype], "tag": "regress_tag_a",
     "urlVariants": {"hd": "https://example.com/a_hd.png", "mobile": "https://example.com/a_m.png", "custom_key": "https://example.com/a_ck.png"},
 })
 check("icon add 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
@@ -126,27 +135,44 @@ icon_a = pr.get("data") if wrap_ok(pr) else None
 CREATED["icon_ids"].append(icon_a)
 
 st, pr = call("PUT", "/api/icon/add", token=manager, body={
-    "typeIdList": [itype], "name": "regress_icon_b", "tag": "regress_tag_a",
+    "typeIdList": [itype], "tag": "regress_tag_a",
     "urlVariants": {"hd": "https://example.com/b_hd.png"},
 })
 check("duplicate tag rejected", isinstance(pr, dict) and pr.get("error") is True, f"st={st} {str(pr)[:150]}")
 
-st, pr = call("GET", f"/api/icon/get/single/{icon_a}", token=manager)
+st, pr = call("POST", f"/api/icon/get/single/{icon_a}", token=manager)
 check("icon get single 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:150]}")
 if wrap_ok(pr) and isinstance(pr.get("data"), dict):
     uv = pr["data"].get("urlVariants") or {}
     check("urlVariants roundtrip hd", uv.get("hd") == "https://example.com/a_hd.png", str(uv)[:120])
     check("urlVariants roundtrip custom key", uv.get("custom_key") == "https://example.com/a_ck.png", str(uv)[:120])
+    vo = pr["data"]
+    # Java IconVo 全字段契约：tag（非 name）/审计字段/typeIdList/description
+    check("icon VO uses tag field", vo.get("tag") == "regress_tag_a", str(vo)[:150])
+    check("icon VO carries creatorId", isinstance(vo.get("creatorId"), int), str(vo)[:150])
+    check("icon VO carries typeIdList", itype in (vo.get("typeIdList") or []), str(vo)[:150])
+    check("icon VO carries createTime", isinstance(vo.get("createTime"), (int, float)), str(vo)[:150])
+    check("icon VO carries description", "description" in vo, str(vo)[:150])
+
+# icon list：tag 搜索 + 信封 users + PageListVo {record,total,size}
+st, pr = call("POST", "/api/icon/get/list", token=manager, body={"tag": "regress_tag_a", "current": 1, "size": 10})
+check("icon list by tag 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
+if wrap_ok(pr) and isinstance(pr.get("data"), dict):
+    d = pr["data"]
+    check("icon list envelope has record/total/size",
+          all(k in d for k in ("record", "total", "size")), str(list(d.keys())))
+    check("icon list finds regress icon", any(r.get("id") == icon_a for r in d.get("record") or []), str(d)[:150])
+    check("icon list envelope users map populated",
+          isinstance(pr.get("users"), dict) and len(pr.get("users") or {}) > 0, str(pr.get("users"))[:120])
 
 # icon update: Map-merge semantics — key-level patch
-st, pr = call("GET", f"/api/icon/get/single/{icon_a}", token=manager)
+st, pr = call("POST", f"/api/icon/get/single/{icon_a}", token=manager)
 ver = pr["data"]["version"] if wrap_ok(pr) and isinstance(pr.get("data"), dict) else 0
 st, pr = call("POST", "/api/icon/update", token=manager, body={
-    "id": icon_a, "version": ver, "typeIdList": [itype], "name": "regress_icon_a",
-    "tag": "regress_tag_a", "urlVariants": {"mobile": None, "new_key": "https://example.com/new.png"},
+    "id": icon_a, "version": ver, "typeIdList": [itype], "tag": "regress_tag_a", "urlVariants": {"mobile": None, "new_key": "https://example.com/new.png"},
 })
 check("icon update 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
-st, pr = call("GET", f"/api/icon/get/single/{icon_a}", token=manager)
+st, pr = call("POST", f"/api/icon/get/single/{icon_a}", token=manager)
 if wrap_ok(pr) and isinstance(pr.get("data"), dict):
     uv = pr["data"].get("urlVariants") or {}
     check("urlVariants null deletes key", "mobile" not in uv, str(uv)[:150])
@@ -177,7 +203,7 @@ st, pr = call("PUT", "/api/item_type/add", token=manager, body={
 })
 print(f"  info: item_type add parentId==id -> st={st} {str(pr)[:120]}")
 
-st, pr = call("POST", "/api/item_type/get/list", token=manager, body={"parentIdList": [it_root]})
+st, pr = call("POST", "/api/item_type/get/list_all", token=manager, body={})
 check("item_type list by parent 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:150]}")
 
 # item add in regression sub area
@@ -201,53 +227,55 @@ check("item add bad type id -> R error", isinstance(pr, dict) and pr.get("error"
 # item list by area
 st, pr = call("POST", "/api/item/get/list", token=manager, body={"areaIdList": [reg_sub]})
 check("item list by area 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:150]}")
-if wrap_ok(pr) and isinstance(pr.get("data"), list):
-    names = [i.get("name") for i in pr["data"]]
+item_rows = paged_records(pr)
+if item_rows:
+    names = [i.get("name") for i in item_rows]
     check("created item visible in list", "regress_item_a" in names, str(names)[:150])
-    mine = next((i for i in pr["data"] if i.get("name") == "regress_item_a"), None)
+    mine = next((i for i in item_rows if i.get("name") == "regress_item_a"), None)
     if mine:
         check("item specialFlag roundtrip", mine.get("specialFlag") == 10, str(mine.get("specialFlag")))
-        check("item refreshTime roundtrip", mine.get("refreshTime") == 456, str(mine.get("refreshTime")))
+        check("item defaultRefreshTime roundtrip", mine.get("defaultRefreshTime") == 123, str(mine.get("defaultRefreshTime")))
         check("item countSplit present", "countSplit" in mine, str(list(mine.keys())))
 
 # item update editSame=0 (self only)
 st, pr = call("POST", "/api/item/get/list", token=manager, body={"areaIdList": [reg_sub]})
-mine = next((i for i in pr["data"] if i.get("name") == "regress_item_a"), None)
-ver = mine["version"]
-st, pr = call("POST", "/api/item/update/0", token=manager, body={
+rows = paged_records(pr)
+check("item list by area returns records", isinstance(rows, list) and bool(rows), str(pr)[:160])
+mine = next((i for i in (rows or []) if isinstance(i, dict) and i.get("name") == "regress_item_a"), None)
+ver = (mine or {}).get("version", 0)
+# Java updateItem：body 为 ItemVo 数组（批量）
+st, pr = call("POST", "/api/item/update/0", token=manager, body=[{
     "id": item_a, "version": ver, "areaId": reg_sub, "name": "regress_item_a_v2",
     "iconId": icon_a, "typeIdList": [it_child], "iconStyleType": 0,
     "defaultContent": "rc2", "defaultCount": 2, "defaultRefreshTime": 111,
     "hiddenFlag": 0, "priority": 0, "refreshTime": 789, "specialFlag": 10,
-})
+}])
 check("item update/0 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
 st, pr = call("POST", "/api/item/get/list", token=manager, body={"areaIdList": [reg_sub]})
-names = [i.get("name") for i in (pr.get("data") or [])]
+names = [i.get("name") for i in paged_records(pr)]
 check("item renamed after update/0", "regress_item_a_v2" in names, str(names)[:150])
 
 # item copy into another regression area
 st, pr = call("PUT", "/api/area/add", token=manager, body={
-    "name": "regress_sub_area2", "parentId": reg_root, "isFinal": True, "iconId": 0, "hiddenFlag": 0,
+    "name": "regress_sub_area2", "code": "RGXS2", "parentId": reg_root, "isFinal": True,
+    "iconId": 0, "hiddenFlag": 0,
 })
 reg_sub2 = pr.get("data") if wrap_ok(pr) else None
 CREATED["area_ids"].append(reg_sub2)
 st, pr = call("PUT", f"/api/item/copy/{reg_sub2}", token=manager, body=[item_a])
 check("item copy 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
 st, pr = call("POST", "/api/item/get/list", token=manager, body={"areaIdList": [reg_sub2]})
-names = [i.get("name") for i in (pr.get("data") or [])]
+names = [i.get("name") for i in paged_records(pr)]
 check("copied item exists in target area", "regress_item_a_v2" in names, str(names)[:150])
 
 section("B item_common")
-st, pr = call("PUT", "/api/item_common/add", token=manager, body={
-    "defaultContent": "rcc", "defaultCount": 1, "defaultRefreshTime": 1,
-    "hiddenFlag": 0, "iconStyleType": 0, "iconId": icon_a, "name": "regress_common_item",
-    "priority": 0, "refreshTime": 1, "specialFlag": 0,
-})
+# Java ItemCommonController.add：body 为 itemId 数组（List<Long>）
+st, pr = call("PUT", "/api/item_common/add", token=manager, body=[item_a])
 check("item_common add 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:200]}")
 common_id = pr.get("data") if wrap_ok(pr) else None
 
-st, pr = call("POST", "/api/item_common/get/list_all", token=manager, body={})
-check("item_common list_all 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:120]}")
+st, pr = call("POST", "/api/item_common/get/list", token=manager, body={"current": 1, "size": 10})
+check("item_common list 200", st == 200 and wrap_ok(pr), f"st={st} {str(pr)[:120]}")
 
 section("B permission matrix (writes)")
 st, _ = call("PUT", "/api/item/add", token=user_t, body={"areaId": reg_sub, "name": "x", "typeIdList": [it_child], "iconId": 0})
@@ -277,6 +305,6 @@ check("recursive area delete 200", st == 200, f"st={st} {str(pr)[:120]}")
 st, pr = call("POST", f"/api/area/get/{reg_root}", token=admin)
 check("area gone after delete", isinstance(pr, dict) and pr.get("error") is True, f"st={st} {str(pr)[:120]}")
 st, pr = call("POST", "/api/item/get/list", token=admin, body={"areaIdList": [reg_sub]})
-check("items in deleted area gone", wrap_ok(pr) and not pr.get("data"), f"st={st} {str(pr)[:150]}")
+check("items in deleted area gone", wrap_ok(pr) and not paged_records(pr), f"st={st} {str(pr)[:150]}")
 
 sys.exit(summary())

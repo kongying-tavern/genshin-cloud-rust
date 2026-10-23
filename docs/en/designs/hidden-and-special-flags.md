@@ -109,6 +109,24 @@ the player's progress, the server does not.
 The hard boundary — preventing vandalism — is handled upstream by the
 contributor audit queue, not by `hidden_flag`.
 
+### Where the field lives
+
+`hidden_flag` sits on every content-domain entity, and it is inherited
+automatically when a punctuate suggestion is promoted:
+
+- `marker.hidden_flag` — marker visibility
+- `item.hidden_flag` — item visibility
+- `area.hidden_flag` — area visibility
+- `marker_punctuate.hidden_flag` — the staging table for punctuate
+
+suggestions carries the field too (the review workflow is deprecated;
+the staging table survives for schema compatibility). On promotion or
+import it is copied verbatim into the live `marker`, so a published
+marker keeps exactly the visibility its contributor chose.
+
+All of these columns are annotated `#[sea_orm(indexed)]`, because the
+archive grouping queries filter on `hidden_flag`.
+
 ## `special_flag` — the bitmask filter
 
 `special_flag` is an `Option<i32>` on `item` (nullable) and a non-nullable `i32` on `area`. Its bits are
@@ -118,6 +136,24 @@ area requires a quest to access") and the server treats them as opaque bits.
 It is *not* an audience gate. Two `Visible` items that differ only in
 `special_flag` are both visible to everyone; `special_flag` just lets the
 client's filter UI show or hide them.
+
+### What bit 0 means
+
+The model comment in `item.rs` (`packages/database/src/models/item/item.rs`)
+fixes the meaning of the lowest bit:
+
+```rust
+/// 特殊物品标记
+/// 低位第一位: 前台是否显示
+```
+
+("Special-item flag. The lowest bit: whether the front end displays it.")
+In other words, bit 0 (value `1`) marks an item as special and hidden
+from the front end by default. The item filter panel in the top-right
+corner of the map client lists only plain items — `special_flag = 0`, no
+special bits set — until the player ticks "show special items", at which
+point items carrying any special bit are queried too. Typical cases:
+event-limited items, debug items, and extremely rare hidden collectibles.
 
 ### The query contract
 
@@ -155,6 +191,13 @@ matches the Java MyBatis query byte-for-byte.
 
 The `area` table carries the same `special_flag` column and follows the same
 contract.
+
+### special_flag on area
+
+On `area` (`area.rs`) the column is a plain non-nullable `i32` rather than
+an `Option`, and bit 0 carries the same meaning — whether the front end
+shows the row by default. It hides debug areas and event areas from the
+area-selection tree.
 
 ## Interaction with soft delete
 
@@ -208,3 +251,19 @@ Use `find_safety()` always.
 
 and DB contract with the Java implementation and every shipped client. The
 misspelling of `Suprise` is likewise intentional parity with the Java enum.
+
+## Alignment with the Java implementation
+
+| Java (`genshin-map-cloud`) | Rust |
+| --- | --- |
+| `HiddenFlag` enum (0–3) | `HiddenFlag` enum (`Visible/Hidden/Beta/Suprise`; `Beta` formerly `Spy`) |
+| `userDataLevel` request-header bitmask | Composed bit-wise by the front end; the backend groups the archive by flag |
+| `selectPageItemByCondition` (special_flag bitmask) | `item::do_get_list` (two branches: `bit_and` + `eq(0)`) |
+| `BaseEntity.del_flag` (MyBatis-Plus logical delete) | `SafeEntityTrait::find_safety` (`del_flag = false` filter) |
+
+The `Suprise` spelling deserves one final note: the Easter-egg variant is
+missing an `r` (`packages/utils/src/types/common.rs`) on purpose, to stay
+byte-identical with the historical Java spelling so deserialization keeps
+matching. "Fixing" it would break compatibility with the stock data
+already stored by the Java database — the misspelling is part of the
+compatibility contract, not a typo.

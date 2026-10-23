@@ -1,4 +1,5 @@
 mod list_diff_snapshot;
+mod list_markers;
 mod list_page_bin;
 mod list_page_md5;
 
@@ -13,7 +14,8 @@ pub async fn router() -> Result<Router<crate::routes::SharedDb>> {
         .route(
             "/list_diff_snapshot",
             get(list_diff_snapshot::list_diff_snapshot),
-        );
+        )
+        .route("/list_markers", get(list_markers::list_markers));
 
     Ok(ret)
 }

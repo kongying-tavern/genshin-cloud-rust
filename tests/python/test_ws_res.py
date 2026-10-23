@@ -71,18 +71,24 @@ async def ws_run():
 
         # setup: own area/item/marker -> MarkerAdded event
         st, pr = call("PUT", "/api/area/add", token=manager, body={
-            "name": "regress_ws_area", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
-        area = pr["data"]
+            "name": "regress_ws_area",
+    "code": "REGRESS_WS_A", "parentId": -1, "isFinal": True, "iconId": 0, "hiddenFlag": 0})
+        area = pr.get("data") if isinstance(pr, dict) else None
         st, pr = call("PUT", "/api/item/add", token=manager, body={
             "areaId": area, "name": "regress_ws_item", "typeIdList": [], "iconId": 0,
             "iconStyleType": 0, "hiddenFlag": 0})
-        item = pr["data"]
+        item = pr.get("data") if isinstance(pr, dict) else None
         st, pr = call("PUT", "/api/marker/single", token=punctuate, body={
             "content": "ws", "extra": None, "hiddenFlag": 0,
             "itemList": [{"itemId": item, "count": 1}], "markerCreatorId": PUNC_ID,
             "markerTitle": "regress_ws_m", "picture": None, "pictureCreatorId": None,
             "position": "1.0,1.0", "refreshTime": 0, "videoPath": None})
         mid = pr["data"]["id"] if isinstance(pr.get("data"), dict) else pr["data"]
+
+        # 缓存失效广播：DELETE /api/cache/marker 走**非节流**的 ws_broadcast（事件
+        # 名 MarkerBinaryPurged）——debounce 版本对 30s 内的重复事件只发首条，
+        # 跨套件运行时可能已被前一套件抢占窗口，改用确定性通道断言。
+        call("DELETE", "/api/cache/marker", token=admin)
 
         # notice write -> NoticeAdded (admin)
         st, pr = call("PUT", "/api/notice/add", token=admin, body={
@@ -149,23 +155,57 @@ png = (
     + _st.pack(">I", 13) + b"IHDR" + _ihdr + _st.pack(">I", _crc(b"IHDR" + _ihdr) & 0xFFFFFFFF)
     + _st.pack(">I", 0) + b"IEND" + _st.pack(">I", _crc(b"IEND") & 0xFFFFFFFF)
 )
-body, ct = file_form("regression/ws_test.png", "ws_test.png", png, "image/png")
-req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
-                             headers={"Content-Type": ct, "User-Agent": UA,
-                                      "Authorization": f"Bearer {punctuate}"})
-try:
-    with urllib.request.urlopen(req, timeout=30) as r:
-        up = json.loads(r.read().decode())
-    check("res upload 200", r.status == 200 and not up.get("error"), str(up)[:150])
-    data = up.get("data") or {}
-    if isinstance(data, list) and data:
-        check("upload returns fileUrl", bool(data[0].get("fileUrl") or data[0].get("url")), str(data)[:200])
-    elif isinstance(data, dict):
+# MinIO 可用性探测：后端未配置/不可达 MinIO 时（如 CI 不挂 MinIO 服务），
+# res 上传断言整体自跳过——WS 断言不依赖 MinIO，仍照常执行。
+st, pr = call("GET", "/api/res/get?filePath=minio_probe_regress.png", token=punctuate)
+MINIO_READY = not (isinstance(pr, dict) and pr.get("error") and "minio" in str(pr.get("message", "")).lower())
+if not MINIO_READY:
+    print("  skip: MinIO 未配置（res 上传/去重断言自跳过）")
+# 对象键 = 客户端 filePath（Java uploadImage 契约）。每次运行用唯一路径，
+# 否则上一轮落盘的同路径对象会按「当前文件已存在」契约拒绝本次上传。
+upload_path = f"regression/ws_test_{_uuid.uuid4().hex[:8]}.png"
+if MINIO_READY:
+    body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
+    req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
+                                 headers={"Content-Type": ct, "User-Agent": UA,
+                                          "Authorization": f"Bearer {punctuate}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            up = json.loads(r.read().decode())
+        check("res upload 200", r.status == 200 and not up.get("error"), str(up)[:150])
+        data = up.get("data") or {}
+        if isinstance(data, list) and data:
+            data = data[0]
         check("upload returns fileUrl", bool(data.get("fileUrl") or data.get("url")), str(data)[:200])
-except urllib.error.HTTPError as e:
-    check("res upload 200", False, f"{e.code} {e.read().decode()[:200]}")
-except Exception as e:
-    check("res upload 200", False, str(e)[:200])
+        check("upload filePath echoes the client key", data.get("filePath") == upload_path, str(data)[:200])
+    except urllib.error.HTTPError as e:
+        check("res upload 200", False, f"{e.code} {e.read().decode()[:200]}")
+    except Exception as e:
+        check("res upload 200", False, str(e)[:200])
+
+    # ── res/get 去重链路（Java getResource 契约；前端 getOrUploadImage 第一跳）──
+    st, pr = call("GET", f"/api/res/get?filePath={upload_path}", token=punctuate)
+    check("res/get hit returns fileUrl",
+          st == 200 and isinstance(pr, dict) and not pr.get("error")
+          and (pr.get("data") or {}).get("fileUrl"),
+          f"st={st} {str(pr)[:200]}")
+    st, pr = call("GET", "/api/res/get?filePath=regression/never_uploaded_regress.png", token=punctuate)
+    check("res/get miss returns empty object",
+          st == 200 and isinstance(pr, dict) and not pr.get("error") and not (pr.get("data") or {}).get("fileUrl"),
+          f"st={st} {str(pr)[:200]}")
+
+    # 同路径重复上传 → Java「当前文件已存在，请更换文件路径」
+    body, ct = file_form(upload_path, "ws_test.png", png, "image/png")
+    req = urllib.request.Request(BASE + "/api/res/upload/image", data=body, method="PUT",
+                                 headers={"Content-Type": ct, "User-Agent": UA,
+                                          "Authorization": f"Bearer {punctuate}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            dup = json.loads(r.read().decode())
+        check("duplicate path upload rejected in R", dup.get("error") is True, str(dup)[:150])
+    except urllib.error.HTTPError as e:
+        check("duplicate path upload rejected in R", 400 <= e.code < 500, f"{e.code}")
+
 
 # non-image rejected
 body, ct = file_form("regression/ws_test.txt", "ws_test.txt", b"not an image", "text/plain")
@@ -178,5 +218,18 @@ try:
     check("non-image rejected in R", up.get("error") is True, str(up)[:150])
 except urllib.error.HTTPError as e:
     check("non-image rejected in R", 400 <= e.code < 500, f"{e.code}")
+
+section("cache purge endpoints (icon parity + iconTag legacy)")
+# 最新前端 4.6.24+ 的 cleanIconCache(number[]) → DELETE /api/cache/icon（body List<Long>）
+st, pr = call("DELETE", "/api/cache/icon", token=admin, body=[])
+check("cache/icon purge (empty list = all)", st == 200 and isinstance(pr, dict) and pr.get("data") is True, f"st={st} {str(pr)[:150]}")
+st, pr = call("DELETE", "/api/cache/icon", token=admin, body=[1, 2, 3])
+check("cache/icon purge (id list)", st == 200 and isinstance(pr, dict) and pr.get("data") is True, f"st={st} {str(pr)[:150]}")
+# 旧前端通道（iconTag）继续保留
+st, pr = call("DELETE", "/api/cache/iconTag", token=admin, body=[])
+check("cache/iconTag purge (legacy path)", st == 200 and isinstance(pr, dict) and pr.get("data") is True, f"st={st} {str(pr)[:150]}")
+# 权限门：普通用户不可清缓存（403）
+st, pr = call("DELETE", "/api/cache/icon", token=user_tok, body=[])
+check("cache/icon purge requires admin (403)", st == 403, f"st={st}")
 
 sys.exit(summary())

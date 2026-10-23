@@ -31,6 +31,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20260927_000001_baseline;
 mod m20261001_000001_marker_visibility_index;
+mod m20261023_000001_drop_parent_fk;
 
 /// 全部 24 个实体的唯一清单，顺序即外键依赖顺序（被引用表在前：sys_user
 /// → 独立主表 → 链接表 → 系统辅助表），与建表的 FOREIGN KEY 约束要求一致。
@@ -91,6 +92,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260927_000001_baseline::Migration),
             Box::new(m20261001_000001_marker_visibility_index::Migration),
+            Box::new(m20261023_000001_drop_parent_fk::Migration),
         ]
     }
 }

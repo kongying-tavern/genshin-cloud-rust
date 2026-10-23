@@ -30,28 +30,78 @@ pub struct UploadedFile {
     pub bytes: Vec<u8>,
 }
 
-/// `GET /res/get` 桩（**死代码**，保留仅为不破坏路由面）：
-///
-/// - Java 侧（`ResourceController`）只有 `PUT /upload/image`，无对应 GET 端点；
-/// - 前端（`vue_map_register_v3`）只调用 `uploadImage`（`/api/res/upload/image`），
-///   无 `res/get` 调用方。
-///
-/// 若未来协议侧定义该端点（如返回资源服务健康/配置信息），再按契约实现；
-/// 当前恒返回空成功，不产生任何副作用。
-pub async fn do_get() -> Result<CommonResponse<()>> {
-    Ok(CommonResponse::new(Ok(())))
+/// 客户端提供的对象键安全校验（Java 无此防御；Rust 侧加固）：
+/// 允许 `2025-09-09/abcdefg.png` 形式的相对子路径（字母/数字/`._-/`），
+/// 拒绝绝对路径、`..` 穿越、反斜杠、控制字符与空键。返回规范化键。
+fn sanitize_object_key(raw: &str) -> Option<String> {
+    let key = raw.trim().trim_start_matches('/');
+    if key.is_empty() || key.len() > 512 {
+        return None;
+    }
+    if key.contains("..") || key.contains('\\') || key.contains('\u{0}') {
+        return None;
+    }
+    if !key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '/'))
+    {
+        return None;
+    }
+    Some(key.to_string())
 }
 
-/// Extension for an upload, derived from the *content type* (never from the
-/// client-supplied file name) so stored keys can't smuggle odd extensions.
-fn ext_for_content_type(content_type: &str) -> &'static str {
-    match content_type {
-        "image/png" => "png",
-        "image/jpeg" => "jpg",
-        "image/gif" => "gif",
-        "image/webp" => "webp",
-        _ => "bin",
-    }
+/// 公开访问 URL 模板（Java `image.minio.static-url-template` 的直译：
+/// 空模板回退 `[[entrypoint]]/[[bucket]]/[[path]]`）。
+fn public_url(public_base: &str, bucket: &str, key: &str) -> String {
+    format!("{}/{}/{}", public_base.trim_end_matches('/'), bucket, key)
+}
+
+/// `GET /res/get?filePath=...`（Java `ResourceService.getResource`）：
+/// 查询对象存储中同路径资源是否已存在；存在则返回其公开访问 URL，
+/// 不存在返回空对象（前端 `getOrUploadImage` 以 `data.fileUrl` 判定，
+/// 空对象即「未命中 → 走上传」）。
+///
+/// 前端把该端点用作**去重上传**的第一跳：命中则直接复用 URL，未命中才
+/// `PUT /res/upload/image`。请求失败时前端自动降级为直接上传，因此
+/// MinIO 未配置/不可达按业务错误返回（HTTP 200 + R 包装）而非 500。
+pub async fn do_get(
+    db: &DatabaseConnectionMap,
+    file_path: Option<String>,
+) -> Result<CommonResponse<serde_json::Value>> {
+    let Some(raw_path) = file_path else {
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
+    let Some(key) = sanitize_object_key(&raw_path) else {
+        // 非法路径按「不存在」处理（Java 无此分支；Rust 侧路径校验的
+        // 只读镜像——不把非法键回显给客户端）。
+        return Ok(CommonResponse::new(Ok(serde_json::json!({}))));
+    };
+    let client = db.minio_conn.clone().ok_or_else(|| {
+        DomainError::Business(
+            "MinIO is not configured (set MINIO_BASE_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY)"
+                .into(),
+        )
+    })?;
+    let public_base = std::env::var("MINIO_PUBLIC_BASE_URL").unwrap_or_else(|_| {
+        std::env::var("MINIO_BASE_URL").unwrap_or_else(|_| "http://localhost:9000".into())
+    });
+
+    // 对象不存在（S3 NoSuchKey / 404）→ 未命中；其他错误（网络/凭据）
+    // 按业务错误上抛，前端降级为直接上传。
+    let stat = client
+        .stat_object("images", &key)
+        .map_err(|e| anyhow!("stat build failed: {e}"))?;
+    let exists = stat_build_send(stat).await?;
+
+    let body = if exists {
+        serde_json::json!({
+            "filePath": key,
+            "fileUrl": super::rewrite_image_url(&public_url(&public_base, "images", &key)),
+        })
+    } else {
+        serde_json::json!({})
+    };
+    Ok(CommonResponse::new(Ok(body)))
 }
 
 /// Verify the file-header magic number matches the declared content type.
@@ -69,6 +119,23 @@ fn magic_matches_content_type(content_type: &str, bytes: &[u8]) -> bool {
         // WEBP: RIFF....WEBP
         "image/webp" => bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP",
         _ => true,
+    }
+}
+
+/// `stat_object(...)?` 后的 builder 需要 S3Api trait 在作用域内才能
+/// `build().send()`；两处调用共用的小封装，返回对象是否存在。
+async fn stat_build_send(stat: minio::s3::builders::StatObjectBldr) -> anyhow::Result<bool> {
+    use minio::s3::types::S3Api;
+    match stat.build().send().await {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            let msg = format!("{e}").to_lowercase();
+            if msg.contains("nosuchkey") || msg.contains("not found") || msg.contains("404") {
+                Ok(false)
+            } else {
+                Err(DomainError::Business(format!("读取文件失败：{e}")).into())
+            }
+        },
     }
 }
 
@@ -114,11 +181,29 @@ pub async fn do_upload_image(
         .into());
     }
 
-    let key = format!(
-        "uploads/{}.{}",
-        uuid::Uuid::new_v4(),
-        ext_for_content_type(&f.content_type)
-    );
+    // 对象键 = 客户端提供的 filePath（Java `uploadImage` 契约：同路径
+    // 复用、重复上传显式报错）。这是前端 `getOrUploadImage` 去重语义的
+    // 另一半——`GET /res/get` 未命中后按原路径落盘，下次同路径即命中。
+    let raw_path = file_path.as_deref().map(str::trim).unwrap_or_default();
+    if raw_path.is_empty() {
+        return Err(DomainError::Business("文件路径不能为空".into()).into());
+    }
+    let Some(key) = sanitize_object_key(raw_path) else {
+        return Err(DomainError::Business(
+            "文件路径仅允许字母、数字与 . _ - / 组成的相对子路径".into(),
+        )
+        .into());
+    };
+
+    // 同路径已存在 → 显式拒绝（Java「当前文件已存在，请更换文件路径」）。
+    // 前端依赖该报错兜底 `GET /res/get` 未命中后的并发/重试重复上传。
+    let stat = client
+        .stat_object("images", &key)
+        .map_err(|e| anyhow!("stat build failed: {e}"))?;
+    if stat_build_send(stat).await? {
+        return Err(DomainError::Business("当前文件已存在，请更换文件路径".into()).into());
+    }
+
     client
         .put_object_content("images", &key, f.bytes)
         .map_err(|e| anyhow!("upload build failed: {e}"))?
@@ -128,9 +213,9 @@ pub async fn do_upload_image(
         .await
         .context("upload to MinIO failed")?;
 
-    let file_url = format!("{}/images/{}", public_base.trim_end_matches('/'), key);
+    let file_url = super::rewrite_image_url(&public_url(&public_base, "images", &key));
     Ok(CommonResponse::new(Ok(serde_json::json!({
-        "filePath": file_path.unwrap_or_else(|| file_url.clone()),
+        "filePath": key,
         "fileUrl": file_url,
     }))))
 }

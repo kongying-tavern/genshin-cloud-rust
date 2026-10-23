@@ -50,15 +50,15 @@ server {
 }
 ```
 
-> 使用 nginx 反代时：`.env` 里 `HOST_PORT=127.0.0.1:8101`，并开启 `TRUST_PROXY_HEADERS=true`（否则 access_policy 的 IP 判定会拿到反代地址）。
+> 使用 nginx 反代时：`.env` 里 `HOST_PORT=127.0.0.1:8101`，并开启 `TRUST_PROXY_HEADERS=true`（否则 `access_policy` 的 IP 判定会拿到反代地址）。
 
 ## 四、健康检查
 
 - 容器 healthcheck：`GET /.well-known/jwks.json` 返回 200 即健康
 - 手动验证：
+
   ```bash
   curl -s http://127.0.0.1:8101/.well-known/jwks.json
   curl -s -X POST http://127.0.0.1:8101/oauth/token \
     -F grant_type=password -F username=<user> -F password=<pass>
   ```
-
